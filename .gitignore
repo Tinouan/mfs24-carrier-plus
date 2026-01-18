@@ -1,9 +1,17 @@
-cat > .gitignore <<'EOF'
+cat >> .gitignore <<'EOF'
+
+# secrets
 .env
-*.bak
+
+# python
 __pycache__/
 *.pyc
+
+# backups / temp
+*.bak
+*.log
+
+# mac/windows
 .DS_Store
+Thumbs.db
 EOF
-.env
-.env
