@@ -1,0 +1,741 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MSFS Airports Map (Directus + Clusters + Side Panel)</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+
+  <style>
+    :root{
+      --hud-bg: rgba(0,0,0,.72);
+      --hud-border: rgba(255,255,255,.12);
+      --text: #fff;
+      --muted: rgba(255,255,255,.75);
+
+      --panel-bg: rgba(14,14,16,.92);
+      --panel-border: rgba(255,255,255,.10);
+      --panel-shadow: 0 20px 50px rgba(0,0,0,.45);
+
+      --btn-bg: rgba(255,255,255,.08);
+      --btn-bg-hover: rgba(255,255,255,.12);
+      --btn-border: rgba(255,255,255,.10);
+      --btn-primary-bg: rgba(255,255,255,.90);
+      --btn-primary-text: #111;
+    }
+
+    html, body { height: 100%; margin: 0; }
+    #map { height: 100%; }
+
+    /* HUD (top-left) */
+    .hud {
+      position: absolute;
+      z-index: 1000;
+      top: 10px; left: 10px;
+      background: var(--hud-bg);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 12px;
+      font: 13px/1.3 system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      max-width: 440px;
+      box-shadow: 0 10px 25px rgba(0,0,0,.35);
+      backdrop-filter: blur(6px);
+      border: 1px solid var(--hud-border);
+    }
+    .hud b { font-weight: 700; }
+    .hud input, .hud select {
+      width: 100%;
+      margin-top: 6px;
+      padding: 10px 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.35);
+      color: #fff;
+      outline: none;
+      font-size: 14px; /* tablette */
+    }
+    .row { display:flex; gap:8px; }
+    .row > * { flex: 1; }
+    .small { opacity: .90; font-size: 12px; margin-top: 8px; }
+    .muted { opacity: .78; }
+    .line { height: 1px; background: rgba(255,255,255,.12); margin: 10px 0; }
+    .checks { display:flex; gap:12px; align-items:center; flex-wrap: wrap; margin-top: 8px; }
+    .checks label { display:flex; gap:8px; align-items:center; cursor:pointer; user-select:none; }
+    .checks input[type="checkbox"]{ width: 18px; height: 18px; margin: 0; }
+
+    .legend { display:flex; flex-wrap: wrap; gap:10px; margin-top: 8px; font-size: 12px; opacity: .9; }
+    .chip { display:inline-flex; align-items:center; gap:6px; padding: 4px 8px; border-radius: 999px; background: rgba(255,255,255,.10); }
+    .dot {
+      width: 12px; height: 12px; border-radius: 999px;
+      background: rgba(255,255,255,.85);
+      border: 1px solid rgba(0,0,0,.35);
+      display:flex; align-items:center; justify-content:center;
+      font-size: 10px; line-height: 1;
+    }
+    .right { float: right; opacity: .85; }
+
+    /* Side Panel (right) */
+    .panel {
+      position: absolute;
+      z-index: 1200;
+      top: 0; right: 0;
+      height: 100%;
+      width: min(420px, 92vw); /* tablette-friendly */
+      background: var(--panel-bg);
+      color: var(--text);
+      border-left: 1px solid var(--panel-border);
+      box-shadow: var(--panel-shadow);
+      transform: translateX(100%);
+      transition: transform .18s ease-out;
+      display: flex;
+      flex-direction: column;
+      backdrop-filter: blur(10px);
+    }
+    .panel.open { transform: translateX(0); }
+
+    .panel-header {
+      padding: 14px 14px 10px 14px;
+      border-bottom: 1px solid rgba(255,255,255,.10);
+      display:flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .panel-title { font-weight: 750; font-size: 15px; line-height: 1.2; }
+    .panel-sub { margin-top: 4px; color: var(--muted); font-size: 13px; }
+    .panel-close {
+      margin-left: auto;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.06);
+      color: #fff;
+      border-radius: 10px;
+      padding: 8px 10px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .panel-close:hover { background: rgba(255,255,255,.10); }
+
+    .panel-body {
+      padding: 14px;
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+      flex: 1;
+    }
+
+    .kv {
+      display:grid;
+      grid-template-columns: 120px 1fr;
+      gap: 10px 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+    }
+    .k { color: rgba(255,255,255,.70); font-size: 12px; }
+    .v { font-weight: 650; font-size: 13px; }
+
+    .panel-actions {
+      padding: 12px 14px;
+      border-top: 1px solid rgba(255,255,255,.10);
+      display:flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      border: 1px solid var(--btn-border);
+      background: var(--btn-bg);
+      color: #fff;
+      padding: 10px 12px;
+      border-radius: 12px;
+      cursor: pointer;
+      font: 650 13px/1 system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      touch-action: manipulation;
+    }
+    .btn:hover { background: var(--btn-bg-hover); }
+    .btn.primary {
+      background: var(--btn-primary-bg);
+      color: var(--btn-primary-text);
+      border-color: rgba(255,255,255,.25);
+    }
+    .btn.primary:hover { filter: brightness(.96); }
+
+    /* Overlay (when panel open, to close on tap) */
+    .overlay {
+      position: absolute;
+      z-index: 1100;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,.25);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .18s ease-out;
+    }
+    .overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    /* Small highlight pulse for search */
+    .pulse {
+      width: 22px; height: 22px;
+      border-radius: 999px;
+      border: 2px solid rgba(255,255,255,.9);
+      background: rgba(255,255,255,.2);
+      box-shadow: 0 0 0 0 rgba(255,255,255,.35);
+      animation: pulse 1.2s ease-out 3;
+    }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(255,255,255,.35); transform: scale(0.9); }
+      100% { box-shadow: 0 0 0 18px rgba(255,255,255,0); transform: scale(1.0); }
+    }
+
+    /* Leaflet controls spacing (panel) */
+    .leaflet-top.leaflet-right { right: 8px; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <!-- HUD -->
+  <div class="hud">
+    <div>
+      <b>Airports</b> <span class="muted">(bbox + clusters)</span>
+      <span class="right muted" id="zoomInfo">—</span>
+    </div>
+
+    <div class="row" style="margin-top:8px;">
+      <input id="q" placeholder="Recherche ICAO/IATA/IDENT (ex: LFRK, CDG)" />
+      <select id="type">
+        <option value="">Tous types</option>
+        <option value="large_airport">large_airport</option>
+        <option value="medium_airport">medium_airport</option>
+        <option value="small_airport">small_airport</option>
+        <option value="heliport">heliport</option>
+        <option value="seaplane_base">seaplane_base</option>
+        <option value="balloonport">balloonport</option>
+        <option value="closed">closed</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <select id="country">
+        <option value="">Tous pays</option>
+      </select>
+      <input id="countryFallback" style="display:none;" placeholder="Pays ISO (ex: FR, US)" />
+    </div>
+
+    <div class="checks">
+      <label title="Masquer les aéroports fermés">
+        <input id="hideClosed" type="checkbox" checked />
+        Hide closed
+      </label>
+      <label title="Affiche uniquement les aéroports qui ont un code IATA">
+        <input id="onlyIata" type="checkbox" />
+        IATA only
+      </label>
+      <label title="Affiche uniquement les aéroports qui ont un code ICAO">
+        <input id="onlyIcao" type="checkbox" />
+        ICAO only
+      </label>
+    </div>
+
+    <div class="line"></div>
+
+    <div class="legend">
+      <span class="chip"><span class="dot">✈</span> large/medium</span>
+      <span class="chip"><span class="dot">•</span> small</span>
+      <span class="chip"><span class="dot">H</span> heliport</span>
+      <span class="chip"><span class="dot"></span> seaplane</span>
+      <span class="chip"><span class="dot">×</span> closed</span>
+    </div>
+
+    <div class="small" id="status">—</div>
+    <div class="small muted" id="hint"></div>
+  </div>
+
+  <!-- Overlay + Side Panel -->
+  <div id="overlay" class="overlay"></div>
+
+  <aside id="panel" class="panel" aria-hidden="true">
+    <div class="panel-header">
+      <div>
+        <div class="panel-title" id="panelTitle">—</div>
+        <div class="panel-sub" id="panelSub">—</div>
+      </div>
+      <button class="panel-close" id="panelClose" aria-label="Fermer">✕</button>
+    </div>
+
+    <div class="panel-body" id="panelBody">
+      <!-- injected -->
+    </div>
+
+    <div class="panel-actions">
+      <button class="btn primary" data-action="plan">Plan de vol</button>
+      <button class="btn" data-action="factories">Usines</button>
+      <button class="btn" data-action="set-home">Définir hub</button>
+    </div>
+  </aside>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+  <script>
+    // =========================
+    // CONFIG
+    // =========================
+    const DIRECTUS_BASE = "http://192.168.1.15:8080"; // sans slash final
+    const COLLECTION = "airports";
+
+    const LIMIT = 2000;
+    const MIN_ZOOM = 5;
+    const DEBOUNCE_MS = 250;
+
+    // "Enter" search jump: centre sans changer le zoom
+    const SEARCH_JUMP_MIN_LEN = 2;
+    const SEARCH_LIMIT = 1;
+
+    // =========================
+    // UI
+    // =========================
+    const statusEl = document.getElementById("status");
+    const hintEl = document.getElementById("hint");
+    const zoomInfoEl = document.getElementById("zoomInfo");
+
+    const qEl = document.getElementById("q");
+    const typeEl = document.getElementById("type");
+    const countryEl = document.getElementById("country");
+    const countryFallbackEl = document.getElementById("countryFallback");
+    const hideClosedEl = document.getElementById("hideClosed");
+    const onlyIataEl = document.getElementById("onlyIata");
+    const onlyIcaoEl = document.getElementById("onlyIcao");
+
+    const overlayEl = document.getElementById("overlay");
+    const panelEl = document.getElementById("panel");
+    const panelCloseEl = document.getElementById("panelClose");
+    const panelTitleEl = document.getElementById("panelTitle");
+    const panelSubEl = document.getElementById("panelSub");
+    const panelBodyEl = document.getElementById("panelBody");
+
+    function setStatus(msg) { statusEl.textContent = msg; }
+    function setHint(msg) { hintEl.textContent = msg || ""; }
+    function zoomInfo() { zoomInfoEl.textContent = `zoom ${map.getZoom()}`; }
+
+    // =========================
+    // MAP
+    // =========================
+    const map = L.map("map", { preferCanvas: true }).setView([49.18, -0.36], 8);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 18,
+      attribution: "© OpenStreetMap"
+    }).addTo(map);
+
+    const layer = L.markerClusterGroup({
+      chunkedLoading: true,
+      chunkInterval: 50,
+      chunkDelay: 10,
+      maxClusterRadius: 60,
+      spiderfyOnMaxZoom: true,
+      showCoverageOnHover: false,
+      removeOutsideVisibleBounds: true
+    });
+    map.addLayer(layer);
+
+    // Search highlight overlay marker
+    let highlightMarker = null;
+    function showHighlight(lat, lon) {
+      if (highlightMarker) {
+        map.removeLayer(highlightMarker);
+        highlightMarker = null;
+      }
+      highlightMarker = L.marker([lat, lon], {
+        icon: L.divIcon({
+          className: "",
+          html: `<div class="pulse"></div>`,
+          iconSize: [22, 22],
+          iconAnchor: [11, 11]
+        }),
+        interactive: false
+      }).addTo(map);
+
+      setTimeout(() => {
+        if (highlightMarker) {
+          map.removeLayer(highlightMarker);
+          highlightMarker = null;
+        }
+      }, 4200);
+    }
+
+    // =========================
+    // Side Panel helpers
+    // =========================
+    let selectedAirport = null;
+
+    function openPanel() {
+      panelEl.classList.add("open");
+      overlayEl.classList.add("open");
+      panelEl.setAttribute("aria-hidden", "false");
+    }
+    function closePanel() {
+      panelEl.classList.remove("open");
+      overlayEl.classList.remove("open");
+      panelEl.setAttribute("aria-hidden", "true");
+    }
+
+    overlayEl.addEventListener("click", closePanel);
+    panelCloseEl.addEventListener("click", closePanel);
+
+    // close on ESC (desktop)
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closePanel();
+    });
+
+    function esc(s) {
+      return String(s ?? "").replace(/[&<>"']/g, m => ({
+        "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+      }[m]));
+    }
+
+    function renderPanel(a) {
+      selectedAirport = a;
+
+      const ident = a.icao_code || a.ident || "—";
+      const iata = a.iata_code ? ` (${a.iata_code})` : "";
+      const name = a.name || "—";
+      const type = a.type || "—";
+      const country = a.iso_country || "—";
+      const city = a.municipality || "—";
+
+      panelTitleEl.textContent = `${ident}${iata} — ${name}`;
+      panelSubEl.textContent = `${type} · ${country} · ${city}`;
+
+      const lat = (typeof a.latitude_deg === "number") ? a.latitude_deg.toFixed(4) : "—";
+      const lon = (typeof a.longitude_deg === "number") ? a.longitude_deg.toFixed(4) : "—";
+
+      panelBodyEl.innerHTML = `
+        <div class="kv">
+          <div class="k">ICAO/IDENT</div><div class="v">${esc(ident)}</div>
+          <div class="k">IATA</div><div class="v">${esc(a.iata_code || "—")}</div>
+          <div class="k">Type</div><div class="v">${esc(type)}</div>
+          <div class="k">Pays</div><div class="v">${esc(country)}</div>
+          <div class="k">Ville</div><div class="v">${esc(city)}</div>
+          <div class="k">Latitude</div><div class="v">${esc(lat)}</div>
+          <div class="k">Longitude</div><div class="v">${esc(lon)}</div>
+        </div>
+
+        <div style="margin-top:12px; color: rgba(255,255,255,.75); font-size: 12px;">
+          Les boutons ci-dessous seront branchés plus tard sur les modules (usines, plan de vol, etc.).
+        </div>
+      `;
+
+      openPanel();
+    }
+
+    // Panel actions (placeholder hooks)
+    panelEl.addEventListener("click", (ev) => {
+      const btn = ev.target.closest("button[data-action]");
+      if (!btn) return;
+
+      const action = btn.dataset.action;
+      const a = selectedAirport;
+      if (!a) return;
+
+      const ident = a.icao_code || a.ident || a.iata_code || "—";
+      const id = a.id;
+
+      // TODO: brancher sur tes futures features
+      if (action === "plan") alert(`Plan de vol: ${ident} (id=${id})`);
+      if (action === "factories") alert(`Usines: ${ident} (id=${id})`);
+      if (action === "set-home") alert(`Hub défini: ${ident} (id=${id})`);
+    });
+
+    // =========================
+    // ICONS
+    // =========================
+    function iconForType(t) {
+      let size = 10, label = "•";
+      if (t === "large_airport") { size = 14; label = "✈"; }
+      else if (t === "medium_airport") { size = 12; label = "✈"; }
+      else if (t === "small_airport") { size = 10; label = "•"; }
+      else if (t === "heliport") { size = 12; label = "H"; }
+      else if (t === "seaplane_base") { size = 12; label = ""; }
+      else if (t === "closed") { size = 10; label = "×"; }
+
+      return L.divIcon({
+        className: "",
+        html: `<div style="
+          width:${size}px;height:${size}px;
+          border-radius:999px;
+          background:rgba(255,255,255,.86);
+          border:1px solid rgba(0,0,0,.35);
+          display:flex;align-items:center;justify-content:center;
+          font-size:${Math.max(10, size-2)}px; line-height:1;
+          box-shadow: 0 2px 8px rgba(0,0,0,.15);
+        ">${label}</div>`,
+        iconSize: [size, size],
+        iconAnchor: [size/2, size/2]
+      });
+    }
+
+    // =========================
+    // DIRECTUS URL BUILDING (bbox)
+    // =========================
+    function buildParamsForBBox(bounds, lonBetweenStr) {
+      const sw = bounds.getSouthWest();
+      const ne = bounds.getNorthEast();
+
+      const fields = [
+        "id","ident","name","type","icao_code","iata_code",
+        "latitude_deg","longitude_deg","iso_country","municipality"
+      ].join(",");
+
+      const params = new URLSearchParams();
+      params.set("fields", fields);
+      params.set("limit", String(LIMIT));
+
+      // bbox filters
+      params.set("filter[latitude_deg][_between]", `${sw.lat},${ne.lat}`);
+      params.set("filter[longitude_deg][_between]", lonBetweenStr);
+
+      // optional filters
+      const t = typeEl.value.trim();
+      if (t) params.set("filter[type][_eq]", t);
+
+      if (hideClosedEl.checked) params.set("filter[type][_neq]", "closed");
+
+      const selectedCountry = countryEl.value.trim();
+      const fallbackCountry = countryFallbackEl.value.trim().toUpperCase();
+      const countryCode = selectedCountry || fallbackCountry;
+      if (countryCode) params.set("filter[iso_country][_eq]", countryCode);
+
+      if (onlyIataEl.checked && !onlyIcaoEl.checked) {
+        params.set("filter[iata_code][_nnull]", "true");
+      } else if (onlyIcaoEl.checked && !onlyIataEl.checked) {
+        params.set("filter[icao_code][_nnull]", "true");
+      } else if (onlyIataEl.checked && onlyIcaoEl.checked) {
+        params.set("filter[iata_code][_nnull]", "true");
+        params.set("filter[icao_code][_nnull]", "true");
+      }
+
+      // If user typed a code, keep bbox results focused (exact match)
+      const q = qEl.value.trim().toUpperCase();
+      if (q.length >= 2) {
+        params.set("filter[_or][0][icao_code][_eq]", q);
+        params.set("filter[_or][1][iata_code][_eq]", q);
+        params.set("filter[_or][2][ident][_eq]", q);
+      }
+
+      return params;
+    }
+
+    // Antimeridian-safe: returns 1 or 2 URLs depending on bbox
+    function buildUrlsBBox(bounds) {
+      const sw = bounds.getSouthWest();
+      const ne = bounds.getNorthEast();
+
+      if (sw.lng <= ne.lng) {
+        const params = buildParamsForBBox(bounds, `${sw.lng},${ne.lng}`);
+        return [`${DIRECTUS_BASE}/items/${COLLECTION}?${params.toString()}`];
+      }
+
+      // Crosses antimeridian: split into two longitude ranges
+      const paramsA = buildParamsForBBox(bounds, `${sw.lng},180`);
+      const paramsB = buildParamsForBBox(bounds, `-180,${ne.lng}`);
+      return [
+        `${DIRECTUS_BASE}/items/${COLLECTION}?${paramsA.toString()}`,
+        `${DIRECTUS_BASE}/items/${COLLECTION}?${paramsB.toString()}`
+      ];
+    }
+
+    // =========================
+    // DIRECTUS SEARCH (jump)
+    // =========================
+    function buildUrlSearchExact(code) {
+      const fields = [
+        "id","ident","name","type","icao_code","iata_code",
+        "latitude_deg","longitude_deg","iso_country","municipality"
+      ].join(",");
+
+      const params = new URLSearchParams();
+      params.set("fields", fields);
+      params.set("limit", String(SEARCH_LIMIT));
+
+      if (hideClosedEl.checked) params.set("filter[type][_neq]", "closed");
+
+      params.set("filter[_or][0][icao_code][_eq]", code);
+      params.set("filter[_or][1][iata_code][_eq]", code);
+      params.set("filter[_or][2][ident][_eq]", code);
+
+      return `${DIRECTUS_BASE}/items/${COLLECTION}?${params.toString()}`;
+    }
+
+    async function searchAndCenter(openDetails = true) {
+      const code = qEl.value.trim().toUpperCase();
+      if (code.length < SEARCH_JUMP_MIN_LEN) return;
+
+      setHint("");
+      setStatus(`Recherche ${code}…`);
+
+      try {
+        const url = buildUrlSearchExact(code);
+        const json = await fetchJson(url);
+        const row = (json?.data && json.data[0]) ? json.data[0] : null;
+
+        if (!row || typeof row.latitude_deg !== "number" || typeof row.longitude_deg !== "number") {
+          setStatus(`Aucun résultat exact pour ${code}.`);
+          return;
+        }
+
+        map.panTo([row.latitude_deg, row.longitude_deg], { animate: true, duration: 0.6 });
+        showHighlight(row.latitude_deg, row.longitude_deg);
+
+        setStatus(`Centré sur ${row.ident || row.icao_code || row.iata_code || code} — ${row.name || ""}`);
+
+        // recharge bbox autour du centre
+        scheduleLoad();
+
+        // ouvre le panneau (optionnel)
+        if (openDetails) renderPanel(row);
+
+      } catch (err) {
+        console.error(err);
+        setStatus("Erreur recherche (Directus/CORS/permissions).");
+        setHint(String(err && err.message ? err.message : err));
+      }
+    }
+
+    // =========================
+    // FETCH + RENDER
+    // =========================
+    async function fetchJson(url) {
+      const res = await fetch(url);
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(`HTTP ${res.status}: ${txt.slice(0, 200)}`);
+      }
+      return res.json();
+    }
+
+    async function loadAirports() {
+      zoomInfo();
+
+      if (map.getZoom() < MIN_ZOOM) {
+        layer.clearLayers();
+        setStatus(`Zoom trop faible (>= ${MIN_ZOOM}) pour charger des points.`);
+        setHint("Astuce: zoome puis déplace la map. Entrée dans la recherche recentre et peut ouvrir le panneau.");
+        return;
+      }
+
+      const urls = buildUrlsBBox(map.getBounds());
+      setStatus("Chargement…");
+      setHint(urls.length === 2 ? "BBox traverse l’antéméridien: requête splittée." : "");
+
+      const t0 = performance.now();
+
+      try {
+        const results = await Promise.all(urls.map(u => fetchJson(u)));
+        const rows = results.flatMap(r => r?.data ?? []);
+
+        // de-dup by id (utile quand split antimeridian)
+        const byId = new Map();
+        for (const a of rows) if (a && a.id != null) byId.set(a.id, a);
+        const uniq = Array.from(byId.values());
+
+        layer.clearLayers();
+
+        for (const a of uniq) {
+          const lat = a.latitude_deg, lon = a.longitude_deg;
+          if (typeof lat !== "number" || typeof lon !== "number") continue;
+
+          // marker
+          const m = L.marker([lat, lon], { icon: iconForType(a.type) });
+
+          // click => open side panel
+          m.on("click", () => renderPanel(a));
+
+          m.addTo(layer);
+        }
+
+        const ms = Math.round(performance.now() - t0);
+        setStatus(`${uniq.length} points (limit ${LIMIT}) · ${ms} ms · zoom ${map.getZoom()}`);
+
+      } catch (err) {
+        console.error(err);
+        layer.clearLayers();
+        setStatus("Erreur de chargement (permissions/CORS/Directus).");
+        setHint(String(err && err.message ? err.message : err));
+      }
+    }
+
+    // =========================
+    // COUNTRIES (optional)
+    // =========================
+    async function loadCountries() {
+      const params = new URLSearchParams();
+      params.set("fields", "iso_country");
+      params.set("groupBy[]", "iso_country");
+      params.set("sort", "iso_country");
+      params.set("limit", "-1");
+
+      const url = `${DIRECTUS_BASE}/items/${COLLECTION}?${params.toString()}`;
+
+      try {
+        const json = await fetchJson(url);
+        const rows = json?.data ?? [];
+        const codes = rows
+          .map(r => (r?.iso_country || "").trim().toUpperCase())
+          .filter(Boolean);
+
+        if (codes.length < 20) throw new Error("groupBy iso_country returned too few rows");
+
+        countryEl.innerHTML = `<option value="">Tous pays</option>` +
+          codes.map(c => `<option value="${c}">${c}</option>`).join("");
+
+        countryEl.style.display = "";
+        countryFallbackEl.style.display = "none";
+      } catch (e) {
+        console.warn("Countries load failed, using fallback input:", e);
+        countryEl.style.display = "none";
+        countryFallbackEl.style.display = "";
+      }
+    }
+
+    // =========================
+    // EVENTS (debounce)
+    // =========================
+    let timer = null;
+    function scheduleLoad() {
+      clearTimeout(timer);
+      timer = setTimeout(loadAirports, DEBOUNCE_MS);
+    }
+
+    map.on("moveend", scheduleLoad);
+    map.on("zoomend", scheduleLoad);
+
+    qEl.addEventListener("input", scheduleLoad);
+    typeEl.addEventListener("change", scheduleLoad);
+    countryEl.addEventListener("change", scheduleLoad);
+    countryFallbackEl.addEventListener("input", scheduleLoad);
+    hideClosedEl.addEventListener("change", scheduleLoad);
+    onlyIataEl.addEventListener("change", scheduleLoad);
+    onlyIcaoEl.addEventListener("change", scheduleLoad);
+
+    // ENTER => search jump + open panel
+    qEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        searchAndCenter(true);
+      }
+    });
+
+    // Optional: click on map background closes panel (nice on tablet)
+    map.on("click", () => closePanel());
+
+    // =========================
+    // INIT
+    // =========================
+    zoomInfo();
+    loadCountries();
+    loadAirports();
+  </script>
+</body>
+</html>

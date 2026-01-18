@@ -1,0 +1,58 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: msfs_db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - db_data_fresh:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  directus:
+    image: directus/directus:10.13.4
+    container_name: msfs_directus
+    depends_on:
+      - db
+    environment:
+      KEY: ${DIRECTUS_KEY}
+      SECRET: ${DIRECTUS_SECRET}
+      DB_CLIENT: pg
+      DB_CONNECTION_STRING: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      ADMIN_EMAIL: ${DIRECTUS_ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${DIRECTUS_ADMIN_PASSWORD}
+    ports:
+      - "8055:8055"
+    restart: unless-stopped
+
+  msfs_game_api:
+    container_name: msfs_game_api
+    build:
+      context: ./game-api
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: ${GAME_API_DATABASE_URL}
+      JWT_SECRET: ${GAME_API_JWT_SECRET}
+    volumes:
+      - ./game-api:/app
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: msfs_nginx
+    depends_on:
+      - directus
+      - msfs_game_api
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /volume1/docker/msfs-directus/webmap:/var/www/map:ro
+    restart: unless-stopped
+
+volumes:
+  db_data_fresh:
