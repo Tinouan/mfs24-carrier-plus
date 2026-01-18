@@ -1,33 +1,36 @@
 import uuid
-from sqlalchemy import String, Integer, DateTime, func, ForeignKey, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
+from datetime import datetime
+
+from sqlalchemy import String, Boolean, DateTime, func
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
+
 from app.core.db import Base
+
 
 class Company(Base):
     __tablename__ = "companies"
-    __table_args__ = (
-        UniqueConstraint("world_id", "slug", name="uq_companies_world_slug"),
-        {"schema": "game"},
-    )
+    __table_args__ = {"schema": "game"}
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    world_id: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
-    name: Mapped[str] = mapped_column(String, nullable=False)
-    slug: Mapped[str] = mapped_column(String, nullable=False)
+    # Core fields (already used)
+    name: Mapped[str] = mapped_column(String(80), nullable=False)
+    home_airport_ident: Mapped[str] = mapped_column(String(8), nullable=False)
 
-    owner_user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("game.users.id"),
-        nullable=False
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # V0.3 Company Profile
+    display_name: Mapped[str | None] = mapped_column(String(48), nullable=True)
+    description: Mapped[str | None] = mapped_column(String(400), nullable=True)
+    logo_url: Mapped[str | None] = mapped_column(String(300), nullable=True)
+
+    is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    settings: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )
-
-    # NEW: airport "maison" obligatoire côté gameplay
-    home_airport_ident: Mapped[str] = mapped_column(
-        String,
-        ForeignKey("public.airports.ident"),
-        nullable=True,  # on passera en NOT NULL après backfill si besoin
-    )
-
-    created_at: Mapped[str] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
