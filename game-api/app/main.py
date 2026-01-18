@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from sqlalchemy import text
 
 from app.core.db import engine, Base
-from app.routers import auth, company, users, inventory
+from app.routers import auth, company, users, inventory, profile
 from app.routers.fleet import router as fleet_router
 
 
@@ -29,4 +29,5 @@ app.include_router(users.router)
 app.include_router(company.router)
 app.include_router(inventory.router)
 app.include_router(fleet_router)
+app.include_router(profile.router)
 
