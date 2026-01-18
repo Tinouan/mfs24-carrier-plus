@@ -35,6 +35,7 @@ services:
     environment:
       DATABASE_URL: ${GAME_API_DATABASE_URL}
       JWT_SECRET: ${GAME_API_JWT_SECRET}
+      ROOT_PATH: /api
     volumes:
       - ./game-api:/app
     ports:

@@ -2,42 +2,46 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.deps import get_db, get_current_user
+from app.models.user import User
 from app.models.player_profile import PlayerProfile
-from app.schemas.profile import PlayerProfileOut, PlayerProfileUpdateIn
+from app.schemas.profile import ProfileOut, ProfilePatchIn
 
-router = APIRouter(prefix="/profile", tags=["Profile"])
+router = APIRouter(prefix="/profile", tags=["profile"])
 
 
-@router.get("/me", response_model=PlayerProfileOut)
-def get_my_profile(
-    db: Session = Depends(get_db),
-    user=Depends(get_current_user),
-):
-    profile = db.query(PlayerProfile).filter(PlayerProfile.user_id == user.id).first()
-    if not profile:
-        profile = PlayerProfile(user_id=user.id)
-        db.add(profile)
-        db.commit()
-        db.refresh(profile)
+def _get_or_create_profile(db: Session, user_id) -> PlayerProfile:
+    profile = db.query(PlayerProfile).filter(PlayerProfile.user_id == user_id).one_or_none()
+    if profile:
+        return profile
+
+    profile = PlayerProfile(user_id=user_id)
+    db.add(profile)
+    db.commit()
+    db.refresh(profile)
     return profile
 
 
-@router.patch("/me", response_model=PlayerProfileOut)
-def update_my_profile(
-    payload: PlayerProfileUpdateIn,
+@router.get("/me", response_model=ProfileOut)
+def get_my_profile(
     db: Session = Depends(get_db),
-    user=Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
-    profile = db.query(PlayerProfile).filter(PlayerProfile.user_id == user.id).first()
-    if not profile:
-        profile = PlayerProfile(user_id=user.id)
-        db.add(profile)
-        db.flush()
+    return _get_or_create_profile(db, user.id)
 
+
+@router.patch("/me", response_model=ProfileOut)
+def patch_my_profile(
+    payload: ProfilePatchIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    profile = _get_or_create_profile(db, user.id)
+
+    # Only update fields that are provided
     if payload.display_name is not None:
-        val = payload.display_name.strip()
-        profile.display_name = val if val else None
+        profile.display_name = payload.display_name
 
+    db.add(profile)
     db.commit()
     db.refresh(profile)
     return profile
