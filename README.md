@@ -1,80 +1,60 @@
-# Mfs Carrier+
+# Mfs Carrier+ (MSFS 2024)
 
-Un mod / backend pour Microsoft Flight Simulator 2024 visant à gérer des entreprises, des flottes, de l’inventaire et des opérations logistiques via une API FastAPI, un CMS Directus, et une interface tablette in-game.
+Backend modulaire pour **Microsoft Flight Simulator 2024** : Auth, Company, Inventory, Fleet, Market, Usines, Missions.
+Stack Docker avec **FastAPI + PostgreSQL + Directus + Nginx**.
 
----
-
-## 🧠 Vision
-
-Mfs Carrier+ est un backend modulaire destiné à fournir des services d’entreprise dans un environnement MSFS :
-- Authentification JWT
-- Gestion de profils utilisateur & sociétés
-- Inventaire & localisation d’items
-- Gestion de flotte d’aéronefs
-- Extensible (usines, marchés, missions, admin panel)
-
-L’objectif est de proposer une **stack complète, évolutive et open-source**, prête pour intégration dans une tablette IG ou application cliente.
+> Repo : https://github.com/Tinouan/mfs24-carrier-plus
 
 ---
 
-## 🧱 Architecture
+## Objectif
 
-Le projet se compose de plusieurs couches :
+Mfs Carrier+ fournit un socle “game backend” utilisable par :
+- une **tablette in-game** (UI intégrée MSFS)
+- un **admin panel web**
+- des services gameplay (marché, usines, missions, logs)
 
-
-- **Directus** : gestion du contenu global (liste d’aéroports, assets, etc.)
-- **FastAPI** : backend de logique de jeu (auth, companies, inventory, fleet…)
-- **PostgreSQL** : base de données partagée avec 2 schémas (`public`, `game`)
-- **Nginx** : reverse proxy pour exposer l’API
-- **Clients** : interfaces consommatrices (MSFS mod, tablette, web)
+Le backend est **source de vérité** : inventaires, flotte, économie, règles, audit.
 
 ---
 
-## 📦 Roadmap / Versions
+## Architecture
 
-### 📌 V0.1 — Core (Terminé)
-- Auth JWT
-- Company CRUD
-- Inventory CRUD
-- Fleet CRUD
-- Endpoints de base
-- Docker Compose + Directus + FastAPI
+### Services
+- **PostgreSQL** : base unique
+  - schéma `public` : données “world / Directus” (ex: airports)
+  - schéma `game` : gameplay (users, companies, inventory, fleet…)
 
-### 📌 V0.2 — Player Profile
-- Endpoint `GET /profile/me`
-- Gestion des préférences & crédits
+- **FastAPI** (`game-api/`)
+  - Auth JWT
+  - endpoints gameplay
+  - tables SQLAlchemy (MVP) créées au startup (migration Alembic plus tard)
 
-### 📌 V0.3 — Company Profile
-- Ajout de métadonnées pour les compagnies
-- Logo, description, politique
+- **Directus**
+  - gestion world data / admin content
 
-### 📌 V0.4 — HV/Market
-- Places de marché pour acheter/vendre items/avions
-- Modèle pricing & taxes
-
-### 📌 V0.5 — Usines
-- Création d’entités “usine”
-- Production d’items en temps réel
-
-### 📌 V0.6 — Missions / Logistics
-- Système de missions
-- Transfert d’inventaire entre joueurs/compagnies
-
-### 📌 V0.7 — Admin Panel MVP
-- Interface administration
-- Monitoring, logs, audits
+- **Nginx**
+  - reverse proxy `/api/` → FastAPI
+  - static `/map/`
 
 ---
 
-## 🚀 Démarrage rapide (dev)
+## URLs
 
-### ⛴️ Prérequis
-- Docker & Docker Compose
-- Accès au repository
-- variables d’environnement (cf `.env.example`)
+- API docs : `http://<host>:8080/api/docs`
+- API health : `http://<host>:8080/api/health`
+- Directus : `http://<host>:8055`
+- Web map : `http://<host>:8080/map/`
 
-### 🧩 Installer
-Copier les secrets :
+---
+
+## Démarrage rapide
+
+### Prérequis
+- Docker + Docker Compose
+- un fichier `.env` local (non versionné)
+
+### Run
 ```bash
 cp .env.example .env
-
+docker compose up -d
