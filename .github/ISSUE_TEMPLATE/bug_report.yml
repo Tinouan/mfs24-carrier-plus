@@ -1,0 +1,52 @@
+name: Bug report
+description: Signaler un bug
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Décris le bug clairement.
+      placeholder: "Ex: L'endpoint /api/company/me renvoie 500..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Étapes pour reproduire
+      description: Liste les étapes exactes.
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Résultat attendu
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Résultat obtenu
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / erreurs
+      render: shell
+
+  - type: input
+    id: commit
+    attributes:
+      label: Commit SHA
+      description: (optionnel) `git rev-parse HEAD`
+      placeholder: "ex: a1b2c3d"

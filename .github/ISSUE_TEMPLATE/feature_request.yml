@@ -1,0 +1,49 @@
+name: Feature request
+description: Proposer une nouvelle feature
+title: "[Feature] "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Objectif
+      description: Décris la feature en 2-3 phrases.
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Pourquoi c'est nécessaire ?
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Critères d’acceptation
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: breaking
+    attributes:
+      label: Breaking change ?
+      options:
+        - Non
+        - Oui
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact (DB/API/Client)
+      placeholder: |
+        DB:
+        API:
+        Client:
