@@ -7,6 +7,8 @@ from app.core.db import engine, Base
 from app.routers import auth, company, users, inventory, profile
 from app.routers.fleet import router as fleet_router
 from app.routers.company_profile import router as company_profile_router
+from app.routers.market import router as market_router
+
 
 ROOT_PATH = os.getenv("ROOT_PATH", "")
 
@@ -41,3 +43,5 @@ app.include_router(inventory.router)
 app.include_router(fleet_router)
 app.include_router(profile.router)
 app.include_router(company_profile_router)
+app.include_router(market_router)
+

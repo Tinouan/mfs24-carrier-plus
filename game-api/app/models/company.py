@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, Boolean, DateTime, func
+from sqlalchemy import String, Boolean, DateTime, Numeric, func
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -14,8 +14,10 @@ class Company(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
-    # Core fields (already used)
+    # Core
     name: Mapped[str] = mapped_column(String(80), nullable=False)
+
+    # IMPORTANT: Some older rows may still be NULL; we backfilled it earlier.
     home_airport_ident: Mapped[str] = mapped_column(String(8), nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -34,3 +36,7 @@ class Company(Base):
         onupdate=func.now(),
         nullable=False,
     )
+
+    # V0.4 Wallet
+    balance: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, server_default="0")
+
