@@ -106,7 +106,7 @@ class EngineerOut(BaseModel):
     """Engineer output."""
     id: uuid.UUID
     company_id: uuid.UUID
-    airport_ident: str
+    factory_id: uuid.UUID | None
     name: str
     specialization: str
     bonus_percentage: int
@@ -119,8 +119,8 @@ class EngineerOut(BaseModel):
 
 
 class EngineerCreateIn(BaseModel):
-    """Create engineer input."""
-    airport_ident: str = Field(..., min_length=3, max_length=4)
+    """Create engineer input (hired for a specific factory)."""
+    factory_id: uuid.UUID
     name: str = Field(..., min_length=1, max_length=100)
     specialization: str = Field(..., pattern="^(food_processing|metal_smelting|chemical_refining|construction|electronics|medical|fuel_production|general)$")
 

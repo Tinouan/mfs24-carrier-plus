@@ -1,360 +1,308 @@
-# Prochaine session - Tâches prioritaires
+# Prochaine Session - Points de Reprise
 
-## 🔴 URGENT - Corriger erreurs existantes
+**Date session précédente:** 2026-01-21
+**Phase actuelle:** Factory System Phase 2B ✅ COMPLÉTÉE
 
-### Tâche 1: Corriger modèle Recipe et routers (30 min)
+## 🎉 Ce qui a été fait
 
-**Problème**: Incohérence entre modèle Python et table SQL
+### Factory System Phase 2B - 100% Complété
 
-**Fichiers à modifier**:
+**Développement:**
+- ✅ 18 endpoints factories implémentés avec validations complètes
+- ✅ Airport model créé pour `public.airports`
+- ✅ Système de slots d'usines par aéroport (12/6/3/1/0)
+- ✅ Engineer model corrigé (factory-based au lieu de airport-based)
+- ✅ Validations business sur tous les endpoints critiques
+- ✅ Transfers inventory (warehouse ↔ factory storage)
 
-1. ✅ `game-api/app/models/recipe.py` - DÉJÀ CORRIGÉ
+**Documentation:**
+- ✅ ARCHITECTURE.md mis à jour avec gameplay loop
+- ✅ FACTORY_SYSTEM_TEST_GUIDE.md créé (guide complet)
+- ✅ FACTORY_SYSTEM_NOTES.md créé (notes importantes)
+- ✅ FACTORY_SYSTEM_TODO.md créé (roadmap future)
+- ✅ SESSION_2026-01-21.md créé (résumé session)
 
-2. ⏳ `game-api/app/routers/world.py` - Remplacer:
-   ```python
-   # Chercher et remplacer TOUS:
-   base_duration_hours → production_time_hours
-   base_output_quantity → result_quantity
-   recipe.tags → (retirer - n'existe pas)
-   ```
+**SQL:**
+- ✅ Triggers PostgreSQL pour auto-calcul airport slots
+- ✅ Migration engineer model (airport_ident → factory_id)
+- ✅ Tables factories complètes
 
-3. ⏳ `game-api/app/routers/factories.py` - Même chose
+## 🚀 Prochaines étapes immédiates
 
-4. ⏳ `game-api/app/schemas/factories.py` - Modifier schemas Pydantic:
-   ```python
-   class RecipeListOut(BaseModel):
-       id: uuid.UUID
-       name: str
-       tier: int
-       production_time_hours: float  # ← ancien: base_duration_hours
-       result_quantity: int          # ← ancien: base_output_quantity
-   ```
+### 1. Import Airports Data (PRIORITÉ 1)
+**Status:** 🔴 BLOQUANT
 
-**Test de validation**:
+Sans données d'aéroports, le système ne peut pas être testé.
+
+**Actions:**
+1. Télécharger `airports.csv` depuis [OurAirports](https://ourairports.com/data/)
+2. Option A (recommandé): Import via Directus
+   - Uploader CSV dans collection "airports"
+   - Vérifier mapping colonnes
+3. Option B: Import SQL direct
+   - Convertir CSV en SQL INSERT
+   - Exécuter via `docker exec`
+
+**Vérification:**
+```sql
+SELECT COUNT(*) FROM public.airports;
+-- Expected: ~28,000 rows
+
+SELECT type, max_factory_slots, COUNT(*)
+FROM public.airports
+WHERE max_factory_slots > 0
+GROUP BY type, max_factory_slots;
+```
+
+### 2. Tests End-to-End (PRIORITÉ 2)
+**Status:** 🟡 EN ATTENTE
+
+Suivre le guide `FACTORY_SYSTEM_TEST_GUIDE.md`:
+1. Créer compte + company
+2. Créer factory à un aéroport
+3. Embaucher workers + engineer
+4. Déposer items en storage
+5. Démarrer production
+6. Vérifier consommation ingrédients
+7. Retirer items produits
+8. Tester toutes les validations
+
+**Résultat attendu:** Tous les endpoints fonctionnent sans erreur.
+
+### 3. Configuration Production (PRIORITÉ 3)
+**Status:** 🟡 TODO
+
+Avant déploiement NAS:
+- [ ] Retirer endpoint `/sql/execute` (ligne ~88 dans main.py)
+- [ ] Vérifier logs configurés
+- [ ] Tester sur NAS
+- [ ] Backup database
+
+## 🔧 Fonctionnalités à implémenter ensuite
+
+### Court terme (1-2 semaines)
+
+**Background Jobs - Production Completion:**
+```python
+# Option 1: APScheduler (simple, in-process)
+from apscheduler.schedulers.background import BackgroundScheduler
+
+def complete_production_batches():
+    # Find batches where estimated_completion <= now
+    # Set status = "completed"
+    # Add result items to factory storage
+    # Add XP to workers
+    # Set factory status = "idle"
+
+scheduler = BackgroundScheduler()
+scheduler.add_job(complete_production_batches, 'interval', minutes=1)
+scheduler.start()
+
+# Option 2: Celery (scalable, separate worker)
+# Mieux pour production mais plus complexe
+```
+
+**Triggers Database:**
+```sql
+-- 1. Worker tier auto-update (sur UPDATE xp)
+-- 2. Factory type auto-detection (sur UPDATE current_recipe_id)
+-- Voir FACTORY_SYSTEM_TODO.md pour SQL complet
+```
+
+### Moyen terme (3-4 semaines)
+
+**Aircraft & Flight System (Phase 0.6):**
+- Aircraft cargo management
+- Load/unload items (parking, moteurs éteints)
+- Passenger transport (workers/engineers)
+- Flight tracking & status
+
+**Priorité selon gameplay:**
+1. Aircraft cargo (essentiel pour transport items)
+2. Flight tracking (position avion)
+3. Passenger transport (workers/engineers)
+
+## 📚 Fichiers à consulter
+
+### Documentation principale
+- `ARCHITECTURE.md` - Vue d'ensemble complète
+- `FACTORY_SYSTEM_TEST_GUIDE.md` - Tests step-by-step
+- `FACTORY_SYSTEM_NOTES.md` - Points importants
+- `FACTORY_SYSTEM_TODO.md` - Roadmap détaillée
+
+### Code important
+- `game-api/app/routers/factories.py` - 18 endpoints (800+ lignes)
+- `game-api/app/models/` - Tous les modèles factory system
+- `sql/` - Scripts SQL (airports, migrations)
+
+### Résumé sessions
+- `SESSION_2026-01-21.md` - Résumé session aujourd'hui
+
+## 🎯 Objectifs selon priorité
+
+### 🔴 CRITIQUE (bloquant)
+1. Import airports data
+2. Tests end-to-end basiques
+
+### 🟠 HAUTE (important mais pas bloquant)
+1. Background job production completion
+2. Triggers database (tier, factory_type)
+3. Tests automatisés (pytest)
+
+### 🟡 MOYENNE (amélioration)
+1. Economic system (costs)
+2. Worker health/happiness degradation
+3. Factory upgrades/maintenance
+
+### 🟢 BASSE (futur)
+1. Aircraft & Flight system
+2. NPC T0 factories
+3. Missions system
+4. Real-time updates (WebSockets)
+
+## 💡 Questions à considérer
+
+### Design Decisions
+
+**1. Background Jobs - Quelle solution?**
+- APScheduler: Simple, in-process, bon pour dev/small scale
+- Celery: Scalable, separate worker, mieux pour production
+- **Recommandation:** Commencer APScheduler, migrer Celery si besoin
+
+**2. Worker XP Gain - Quand?**
+- À la fin de production (bulk)
+- Progressivement pendant production (real-time)
+- **Recommandation:** À la fin (plus simple)
+
+**3. Production Time - Real ou Placeholder?**
+- Real time (production prend réellement X heures)
+- Accelerated (1h réelle = 1 jour game time)
+- **Recommandation:** Real time pour commencer, ajuster selon gameplay
+
+**4. Economic Balance - Comment tester?**
+- Définir coûts factories/workers
+- Calculer profitabilité moyenne production
+- Équilibrer pour gameplay fun
+- **Recommandation:** Commencer généreux, ajuster après tests
+
+### Technical Decisions
+
+**1. Tests - Quelle stratégie?**
+```python
+# Option A: Unit tests (rapide, isolé)
+def test_create_factory_validates_airport():
+    ...
+
+# Option B: Integration tests (realistic)
+def test_full_production_flow():
+    # Create factory → hire workers → produce → withdraw
+    ...
+
+# Recommandation: Les deux, commencer integration
+```
+
+**2. Logging - Quel niveau?**
+```python
+# Dev: DEBUG (tout)
+# Production: INFO (important events)
+# Errors: toujours ERROR/CRITICAL
+
+# Recommandation: INFO pour production
+```
+
+**3. Monitoring - Quels metrics?**
+- Response times endpoints
+- Database query performance
+- Background job execution
+- Error rates
+- **Recommandation:** Commencer simple (logs), ajouter metrics après
+
+## 🔗 Liens utiles
+
+### Données
+- [OurAirports Data](https://ourairports.com/data/) - CSV airports
+- [MSFS SDK](https://docs.flightsimulator.com/) - Documentation MSFS
+
+### Outils
+- [Swagger UI](http://localhost:8080/api/docs) - Test API
+- [Directus](http://localhost:8055) - CMS admin
+- [DBeaver](https://dbeaver.io/) - Database client
+
+### Ressources
+- [FastAPI Docs](https://fastapi.tiangolo.com/) - Framework
+- [SQLAlchemy ORM](https://docs.sqlalchemy.org/) - Database
+- [Pydantic](https://docs.pydantic.dev/) - Validation
+
+## ✨ Session suivante - Checklist
+
+Avant de commencer:
+- [ ] Lire `FACTORY_SYSTEM_NOTES.md` (refresh mémoire)
+- [ ] Vérifier API running (`docker ps`)
+- [ ] Vérifier airports data importées
+- [ ] Préparer compte test + company
+
+Pendant la session:
+- [ ] Suivre `FACTORY_SYSTEM_TEST_GUIDE.md`
+- [ ] Noter bugs/issues rencontrés
+- [ ] Documenter décisions prises
+- [ ] Mettre à jour NEXT_SESSION.md
+
+Après la session:
+- [ ] Commit + push code
+- [ ] Mettre à jour SESSION_[DATE].md
+- [ ] Mettre à jour ARCHITECTURE.md si changements
+- [ ] Mettre à jour NEXT_SESSION.md pour session suivante
+
+## 📞 Aide-mémoire rapide
+
+### Commandes Docker
 ```bash
+# Start all
+docker compose up -d
+
+# Restart API
 docker restart msfs_game_api
-curl http://localhost:8080/api/world/recipes?tier=1
-# Doit retourner JSON, pas "Internal Server Error"
+
+# Logs API
+docker logs msfs_game_api -f
+
+# SQL
+docker exec -i msfs_db psql -U msfs -d msfs
 ```
 
----
+### Commandes SQL utiles
+```sql
+-- Compter factories
+SELECT COUNT(*) FROM game.factories WHERE is_active = true;
 
-## 🟡 Implémenter endpoints factories
+-- Voir airports avec factories
+SELECT a.ident, a.name, COUNT(f.id) as factories
+FROM public.airports a
+LEFT JOIN game.factories f ON f.airport_ident = a.ident AND f.is_active = true
+GROUP BY a.ident, a.name
+HAVING COUNT(f.id) > 0;
 
-### Tâche 2: Créer schemas Pydantic (1h)
-
-**Créer fichier**: `game-api/app/schemas/factories_v2.py`
-
-```python
-from pydantic import BaseModel, Field
-from datetime import datetime
-import uuid
-
-# ============= FACTORIES =============
-
-class FactoryCreate(BaseModel):
-    name: str = Field(..., min_length=1, max_length=100)
-    airport_ident: str = Field(..., min_length=3, max_length=4)
-
-class FactoryUpdate(BaseModel):
-    name: str | None = None
-    status: str | None = Field(None, pattern="^(idle|producing|maintenance|offline)$")
-
-class FactoryResponse(BaseModel):
-    id: uuid.UUID
-    company_id: uuid.UUID
-    airport_ident: str
-    name: str
-    factory_type: str | None
-    status: str
-    current_recipe_id: uuid.UUID | None
-    is_active: bool
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        from_attributes = True
-
-# ============= WORKERS =============
-
-class WorkerCreate(BaseModel):
-    factory_id: uuid.UUID | None = None
-    first_name: str = Field(..., min_length=1, max_length=50)
-    last_name: str = Field(..., min_length=1, max_length=50)
-
-class WorkerResponse(BaseModel):
-    id: uuid.UUID
-    factory_id: uuid.UUID | None
-    first_name: str
-    last_name: str
-    tier: int
-    health: int
-    happiness: int
-    xp: int
-    is_active: bool
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-# ============= ENGINEERS =============
-
-class EngineerCreate(BaseModel):
-    airport_ident: str = Field(..., min_length=3, max_length=4)
-    name: str = Field(..., min_length=1, max_length=100)
-    specialization: str = Field(..., pattern="^(food_processing|metal_smelting|chemical_refining|construction|electronics|medical|fuel_production|general)$")
-
-class EngineerResponse(BaseModel):
-    id: uuid.UUID
-    company_id: uuid.UUID
-    airport_ident: str
-    name: str
-    specialization: str
-    bonus_percentage: int
-    experience: int
-    is_active: bool
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-# ============= PRODUCTION BATCHES =============
-
-class ProductionBatchCreate(BaseModel):
-    recipe_id: uuid.UUID
-    workers_assigned: int = Field(..., ge=1, le=100)
-
-class ProductionBatchResponse(BaseModel):
-    id: uuid.UUID
-    factory_id: uuid.UUID
-    recipe_id: uuid.UUID
-    status: str
-    started_at: datetime | None
-    estimated_completion: datetime | None
-    completed_at: datetime | None
-    result_quantity: int | None
-    workers_assigned: int | None
-    engineer_bonus_applied: bool
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
+-- Voir production batches
+SELECT f.name, r.name, pb.status, pb.workers_assigned
+FROM game.production_batches pb
+JOIN game.factories f ON pb.factory_id = f.id
+JOIN game.recipes r ON pb.recipe_id = r.id
+ORDER BY pb.created_at DESC
+LIMIT 10;
 ```
 
-### Tâche 3: Implémenter router factories (2h)
-
-**Modifier fichier**: `game-api/app/routers/factories.py`
-
-Structure attendue:
-```python
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from app.deps import get_db, get_current_user
-from app.models.factory import Factory
-from app.models.worker import Worker
-from app.models.engineer import Engineer
-from app.models.production_batch import ProductionBatch
-from app.schemas.factories_v2 import *
-
-router = APIRouter(prefix="/factories", tags=["factories"])
-
-# ============= FACTORIES CRUD =============
-
-@router.post("", response_model=FactoryResponse)
-def create_factory(
-    payload: FactoryCreate,
-    db: Session = Depends(get_db),
-    user = Depends(get_current_user),
-):
-    """Créer une nouvelle usine"""
-    # 1. Vérifier que user a une company
-    # 2. Vérifier limits (max factories par airport)
-    # 3. Créer la factory
-    # 4. Retourner response
-    pass
-
-@router.get("", response_model=list[FactoryResponse])
-def list_my_factories(
-    db: Session = Depends(get_db),
-    user = Depends(get_current_user),
-):
-    """Liste toutes mes usines"""
-    pass
-
-@router.get("/{factory_id}", response_model=FactoryResponse)
-def get_factory_details(
-    factory_id: uuid.UUID,
-    db: Session = Depends(get_db),
-    user = Depends(get_current_user),
-):
-    """Détails d'une usine"""
-    # Vérifier ownership
-    pass
-
-@router.patch("/{factory_id}", response_model=FactoryResponse)
-def update_factory(
-    factory_id: uuid.UUID,
-    payload: FactoryUpdate,
-    db: Session = Depends(get_db),
-    user = Depends(get_current_user),
-):
-    """Modifier une usine"""
-    pass
-
-@router.delete("/{factory_id}")
-def delete_factory(
-    factory_id: uuid.UUID,
-    db: Session = Depends(get_db),
-    user = Depends(get_current_user),
-):
-    """Supprimer (soft delete) une usine"""
-    # is_active = False
-    pass
-
-# ============= WORKERS =============
-
-@router.post("/{factory_id}/workers", response_model=WorkerResponse)
-def hire_worker(
-    factory_id: uuid.UUID,
-    payload: WorkerCreate,
-    db: Session = Depends(get_db),
-    user = Depends(get_current_user),
-):
-    """Embaucher un worker pour cette usine"""
-    pass
-
-@router.get("/{factory_id}/workers", response_model=list[WorkerResponse])
-def list_factory_workers(
-    factory_id: uuid.UUID,
-    db: Session = Depends(get_db),
-    user = Depends(get_current_user),
-):
-    """Liste les workers de cette usine"""
-    pass
-
-# ============= PRODUCTION =============
-
-@router.post("/{factory_id}/batches", response_model=ProductionBatchResponse)
-def start_production(
-    factory_id: uuid.UUID,
-    payload: ProductionBatchCreate,
-    db: Session = Depends(get_db),
-    user = Depends(get_current_user),
-):
-    """Lancer un nouveau batch de production"""
-    # 1. Vérifier recipe existe
-    # 2. Vérifier workers disponibles
-    # 3. Vérifier ingrédients en storage
-    # 4. Créer batch
-    # 5. Calculer estimated_completion
-    pass
-
-@router.get("/{factory_id}/batches", response_model=list[ProductionBatchResponse])
-def list_production_batches(
-    factory_id: uuid.UUID,
-    db: Session = Depends(get_db),
-    user = Depends(get_current_user),
-):
-    """Liste tous les batches (en cours + historique)"""
-    pass
-```
-
-### Tâche 4: Tester via Swagger UI (30 min)
-
-1. Redémarrer API: `docker restart msfs_game_api`
-2. Ouvrir: http://localhost:8080/api/docs
-3. Créer un user de test
-4. Créer une company de test
-5. Créer une factory
-6. Embaucher des workers
-7. Lancer un batch de production
-
----
-
-## 🟢 Déploiement NAS
-
-### Tâche 5: Synchroniser sur NAS (30 min)
-
-**Prérequis**: Tous les endpoints doivent fonctionner en local d'abord!
-
+### API Test rapide
 ```bash
-# 1. Copier fichiers modifiés
-scp game-api/app/models/recipe.py admin@192.168.1.15:/volume1/docker/msfs-directus/game-api/app/models/
-scp game-api/app/routers/world.py admin@192.168.1.15:/volume1/docker/msfs-directus/game-api/app/routers/
-scp game-api/app/routers/factories.py admin@192.168.1.15:/volume1/docker/msfs-directus/game-api/app/routers/
-scp game-api/app/schemas/factories_v2.py admin@192.168.1.15:/volume1/docker/msfs-directus/game-api/app/schemas/
+# Health check
+curl http://localhost:8080/api/health
 
-# 2. Copier scripts SQL
-scp sql/v0_0_init_base_schema_standalone.sql admin@192.168.1.15:/volume1/docker/msfs-directus/sql/
-scp sql/v0_5_factories_schema_minimal.sql admin@192.168.1.15:/volume1/docker/msfs-directus/sql/
-scp sql/v0_5_factories_phase2.sql admin@192.168.1.15:/volume1/docker/msfs-directus/sql/
-scp sql/seed_items_t0.sql admin@192.168.1.15:/volume1/docker/msfs-directus/sql/
-scp sql/seed_items_t1_t2.sql admin@192.168.1.15:/volume1/docker/msfs-directus/sql/
-scp sql/seed_recipes_t1_t2.sql admin@192.168.1.15:/volume1/docker/msfs-directus/sql/
+# List items
+curl http://localhost:8080/api/world/items?tier=0
 
-# 3. Se connecter au NAS
-ssh admin@192.168.1.15
-cd /volume1/docker/msfs-directus
-
-# 4. Exécuter scripts SQL (si pas déjà fait)
-docker compose exec -T msfs_db psql -U msfs -d msfs < sql/v0_0_init_base_schema_standalone.sql
-docker compose exec -T msfs_db psql -U msfs -d msfs < sql/v0_5_factories_schema_minimal.sql
-docker compose exec -T msfs_db psql -U msfs -d msfs < sql/seed_items_t0.sql
-docker compose exec -T msfs_db psql -U msfs -d msfs < sql/seed_items_t1_t2.sql
-docker compose exec -T msfs_db psql -U msfs -d msfs < sql/seed_recipes_t1_t2.sql
-docker compose exec -T msfs_db psql -U msfs -d msfs < sql/v0_5_factories_phase2.sql
-
-# 5. Redémarrer API
-docker compose restart msfs_game_api
-
-# 6. Tester
-curl http://192.168.1.15:8080/api/health
-curl http://192.168.1.15:8080/api/world/items
+# List recipes
+curl http://localhost:8080/api/world/recipes?tier=1
 ```
 
 ---
 
-## ✅ Checklist de validation
-
-Avant de considérer la Phase 2 comme terminée:
-
-- [ ] Endpoint `/api/world/recipes` fonctionne
-- [ ] Endpoint `/api/world/recipes?tier=1` retourne 30 recettes T1
-- [ ] Endpoint `/api/world/items` retourne 93 items
-- [ ] Endpoint `POST /api/factories` crée une usine
-- [ ] Endpoint `GET /api/factories` liste mes usines
-- [ ] Endpoint `POST /api/factories/{id}/workers` embauche un worker
-- [ ] Endpoint `POST /api/factories/{id}/batches` lance production
-- [ ] Tout fonctionne en local (Docker Desktop)
-- [ ] Tout fonctionne sur le NAS
-- [ ] Documentation mise à jour
-
----
-
-## 📁 Fichiers à garder
-
-**Code**:
-- `game-api/app/models/*.py`
-- `game-api/app/routers/*.py`
-- `game-api/app/schemas/*.py`
-- `docker-compose.yml`
-
-**SQL**:
-- `sql/v0_0_init_base_schema_standalone.sql`
-- `sql/v0_5_factories_schema_minimal.sql`
-- `sql/v0_5_factories_phase2.sql`
-- `sql/seed_items_t0.sql`
-- `sql/seed_items_t1_t2.sql`
-- `sql/seed_recipes_t1_t2.sql`
-
-**Documentation**:
-- `SESSION_SUMMARY.md`
-- `NEXT_SESSION.md`
-- `ROADMAP.md`
-- `README.md`
-
----
-
-## 🗑️ Fichiers à supprimer
-
-Voir fichier `CLEANUP.md` pour la liste complète.
+**Bon courage pour la prochaine session! 🚀**

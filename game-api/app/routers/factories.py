@@ -20,6 +20,9 @@ from app.models.engineer import Engineer
 from app.models.factory_storage import FactoryStorage
 from app.models.production_batch import ProductionBatch
 from app.models.factory_transaction import FactoryTransaction
+from app.models.airport import Airport
+from app.models.inventory_location import InventoryLocation
+from app.models.inventory_item import InventoryItem
 from app.schemas.factories import (
     FactoryOut,
     FactoryListOut,
@@ -110,9 +113,35 @@ def create_factory(
     if not c:
         raise HTTPException(status_code=404, detail="No company")
 
-    # TODO: Check if airport exists (validate airport_ident against public.airports)
-    # TODO: Check max factory slots for this airport
-    # TODO: Deduct construction cost from company balance
+    # Validate airport exists
+    airport = db.query(Airport).filter(Airport.ident == data.airport_ident).first()
+    if not airport:
+        raise HTTPException(status_code=404, detail=f"Airport {data.airport_ident} not found")
+
+    # Check if airport has factory slots available
+    if airport.max_factory_slots == 0:
+        raise HTTPException(status_code=400, detail=f"Airport {data.airport_ident} does not support factories")
+
+    # Count existing T1+ factories at this airport (T0 NPC factories don't count)
+    # For now, all player-owned factories are T1+ (T0 will be NPC-only in future)
+    occupied_count = db.query(func.count(Factory.id)).filter(
+        Factory.airport_ident == data.airport_ident,
+        Factory.is_active == True
+    ).scalar()
+
+    if occupied_count >= airport.max_factory_slots:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Airport {data.airport_ident} has no available factory slots ({occupied_count}/{airport.max_factory_slots})"
+        )
+
+    # Construction cost - TODO: Define factory construction cost system
+    # When implemented, should:
+    # 1. Define base cost (e.g., in a config or factory_types table)
+    # 2. Check if company balance >= cost
+    # 3. Deduct cost from c.balance
+    # 4. Log transaction in company_transactions
+    # For now, factories are free to build
 
     # Create factory with defaults
     factory = Factory(
@@ -231,11 +260,43 @@ def delete_factory(
 
     factory = _get_factory_or_404(db, c.id, factory_id)
 
-    # TODO: Check if factory has active production
-    # TODO: Refund partial cost to company balance
-    # TODO: Return items from factory storage to company inventory
+    # Check if factory has active production
+    active_batch = db.query(ProductionBatch).filter(
+        ProductionBatch.factory_id == factory.id,
+        ProductionBatch.status.in_(["pending", "in_progress"]),
+        ProductionBatch.completed_at == None
+    ).first()
 
-    # Soft delete
+    if active_batch:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete factory with active production. Stop production first."
+        )
+
+    # Return items from factory storage to company inventory
+    # TODO: Implement when company inventory system is ready
+    # For now, check if storage has items and warn
+    storage_items = db.query(FactoryStorage).filter(
+        FactoryStorage.factory_id == factory.id,
+        FactoryStorage.quantity > 0
+    ).count()
+
+    if storage_items > 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete factory with items in storage. Withdraw all items first."
+        )
+
+    # Release workers (soft delete)
+    db.query(Worker).filter(
+        Worker.factory_id == factory.id,
+        Worker.is_active == True
+    ).update({"is_active": False})
+
+    # Refund partial cost - TODO: Define when construction cost system is implemented
+    # Should refund a percentage based on factory age/condition
+
+    # Soft delete factory
     factory.is_active = False
     db.commit()
 
@@ -267,14 +328,72 @@ def start_production(
     if not recipe:
         raise HTTPException(status_code=404, detail="Recipe not found")
 
-    # TODO: Check if factory has enough inputs in storage
-    # TODO: Check if workers assigned <= available workers
-    # TODO: Check engineer bonus (if specialization matches factory_type)
+    # Check if factory has enough ingredients in storage
+    recipe_ingredients = db.query(RecipeIngredient).filter(
+        RecipeIngredient.recipe_id == recipe.id
+    ).all()
+
+    for ingredient in recipe_ingredients:
+        storage = db.query(FactoryStorage).filter(
+            FactoryStorage.factory_id == factory.id,
+            FactoryStorage.item_id == ingredient.item_id
+        ).first()
+
+        available_qty = storage.quantity if storage else 0
+        if available_qty < ingredient.quantity:
+            # Get item name for error message
+            item = db.query(Item).filter(Item.id == ingredient.item_id).first()
+            item_name = item.name if item else str(ingredient.item_id)
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient {item_name} in storage. Required: {ingredient.quantity}, Available: {available_qty}"
+            )
+
+    # Check if workers assigned <= available workers in factory
+    available_workers = db.query(func.count(Worker.id)).filter(
+        Worker.factory_id == factory.id,
+        Worker.is_active == True
+    ).scalar()
+
+    if data.workers_assigned > available_workers:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot assign {data.workers_assigned} workers. Only {available_workers} available."
+        )
+
+    # Check for engineer bonus (1 engineer per factory)
+    engineer = db.query(Engineer).filter(
+        Engineer.factory_id == factory.id,
+        Engineer.is_active == True
+    ).first()
+
+    engineer_bonus = engineer is not None
 
     # Calculate estimated completion
     production_time = float(recipe.production_time_hours)
     # In a real implementation, this would be: now + production_time hours
     estimated_completion = datetime.utcnow()  # Placeholder
+
+    # Consume ingredients from storage
+    for ingredient in recipe_ingredients:
+        storage = db.query(FactoryStorage).filter(
+            FactoryStorage.factory_id == factory.id,
+            FactoryStorage.item_id == ingredient.item_id
+        ).first()
+
+        storage.quantity -= ingredient.quantity
+        if storage.quantity == 0:
+            db.delete(storage)
+
+        # Log consumption transaction
+        transaction = FactoryTransaction(
+            factory_id=factory.id,
+            item_id=ingredient.item_id,
+            transaction_type="consumed",
+            quantity=-ingredient.quantity,
+            notes=f"Production batch started: {recipe.name}"
+        )
+        db.add(transaction)
 
     # Create production batch
     batch = ProductionBatch(
@@ -282,8 +401,8 @@ def start_production(
         recipe_id=data.recipe_id,
         status="pending",
         workers_assigned=data.workers_assigned,
-        result_quantity=recipe.result_quantity,  # From recipe
-        engineer_bonus_applied=False,  # TODO: Check if engineer available
+        result_quantity=recipe.result_quantity,
+        engineer_bonus_applied=engineer_bonus,
         started_at=datetime.utcnow(),
         estimated_completion=estimated_completion,
     )
@@ -395,8 +514,29 @@ def hire_worker(
 
     factory = _get_factory_or_404(db, c.id, factory_id)
 
-    # TODO: Check company balance for hiring cost
-    # TODO: Limit max workers per factory
+    # Limit max workers per factory (reasonable limit)
+    # TODO: Define this in config or based on factory tier
+    MAX_WORKERS_PER_FACTORY = 10
+
+    current_workers = db.query(func.count(Worker.id)).filter(
+        Worker.factory_id == factory.id,
+        Worker.is_active == True
+    ).scalar()
+
+    if current_workers >= MAX_WORKERS_PER_FACTORY:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Factory has reached maximum worker capacity ({MAX_WORKERS_PER_FACTORY})"
+        )
+
+    # Check company balance for hiring cost
+    # TODO: Define worker hiring cost system (may vary by tier, location, etc.)
+    # For now, workers are free to hire
+    # When implemented:
+    # HIRING_COST = 1000  # Example base cost
+    # if c.balance < HIRING_COST:
+    #     raise HTTPException(status_code=400, detail="Insufficient funds to hire worker")
+    # c.balance -= HIRING_COST
 
     # Create worker with T0 defaults
     worker = Worker(
@@ -498,19 +638,39 @@ def hire_engineer(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Hire an engineer for an airport (not tied to specific factory)."""
+    """Hire an engineer for a specific factory (1 engineer per factory max)."""
     c, _cm = _get_my_company(db, user.id)
     if not c:
         raise HTTPException(status_code=404, detail="No company")
 
-    # TODO: Check if airport exists
-    # TODO: Check company balance for hiring cost
-    # TODO: Limit engineers per airport
+    # Validate factory exists and belongs to company
+    factory = _get_factory_or_404(db, c.id, data.factory_id)
+
+    # Check if factory already has an engineer (1 per factory max)
+    existing_engineer = db.query(Engineer).filter(
+        Engineer.factory_id == factory.id,
+        Engineer.is_active == True
+    ).first()
+
+    if existing_engineer:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Factory already has an engineer: {existing_engineer.name}"
+        )
+
+    # Check company balance for hiring cost
+    # TODO: Define engineer hiring cost system (likely higher than workers)
+    # For now, engineers are free to hire
+    # When implemented:
+    # HIRING_COST = 5000  # Example base cost
+    # if c.balance < HIRING_COST:
+    #     raise HTTPException(status_code=400, detail="Insufficient funds to hire engineer")
+    # c.balance -= HIRING_COST
 
     # Create engineer
     engineer = Engineer(
         company_id=c.id,
-        airport_ident=data.airport_ident,
+        factory_id=factory.id,
         name=data.name,
         specialization=data.specialization,
         bonus_percentage=10,  # Default 10%
@@ -524,7 +684,7 @@ def hire_engineer(
     return EngineerOut(
         id=engineer.id,
         company_id=engineer.company_id,
-        airport_ident=engineer.airport_ident,
+        factory_id=engineer.factory_id,
         name=engineer.name,
         specialization=engineer.specialization,
         bonus_percentage=engineer.bonus_percentage,
@@ -553,7 +713,7 @@ def list_my_engineers(
         EngineerOut(
             id=e.id,
             company_id=e.company_id,
-            airport_ident=e.airport_ident,
+            factory_id=e.factory_id,
             name=e.name,
             specialization=e.specialization,
             bonus_percentage=e.bonus_percentage,
@@ -641,11 +801,37 @@ def deposit_to_storage(
 
     factory = _get_factory_or_404(db, c.id, factory_id)
 
-    # TODO: Check if item exists in company inventory at factory airport
-    # TODO: Remove from company inventory
-    # TODO: Add to factory storage
+    # Check if item exists in company inventory at factory airport
+    warehouse = db.query(InventoryLocation).filter(
+        InventoryLocation.company_id == c.id,
+        InventoryLocation.kind == "warehouse",
+        InventoryLocation.airport_ident == factory.airport_ident
+    ).first()
 
-    # For now, just add to factory storage
+    if not warehouse:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No warehouse found at {factory.airport_ident}"
+        )
+
+    inventory = db.query(InventoryItem).filter(
+        InventoryItem.location_id == warehouse.id,
+        InventoryItem.item_id == data.item_id
+    ).first()
+
+    if not inventory or inventory.qty < data.quantity:
+        available_qty = inventory.qty if inventory else 0
+        raise HTTPException(
+            status_code=400,
+            detail=f"Insufficient items in warehouse. Available: {available_qty}, Requested: {data.quantity}"
+        )
+
+    # Remove from company inventory
+    inventory.qty -= data.quantity
+    if inventory.qty == 0:
+        db.delete(inventory)
+
+    # Add to factory storage
     storage = db.query(FactoryStorage).filter(
         FactoryStorage.factory_id == factory.id,
         FactoryStorage.item_id == data.item_id
@@ -704,7 +890,40 @@ def withdraw_from_storage(
     if storage.quantity == 0:
         db.delete(storage)
 
-    # TODO: Add to company inventory at factory airport
+    # Add to company inventory at factory airport
+    # Find or create warehouse location at factory airport
+    warehouse = db.query(InventoryLocation).filter(
+        InventoryLocation.company_id == c.id,
+        InventoryLocation.kind == "warehouse",
+        InventoryLocation.airport_ident == factory.airport_ident
+    ).first()
+
+    if not warehouse:
+        # Create warehouse location at this airport
+        warehouse = InventoryLocation(
+            company_id=c.id,
+            kind="warehouse",
+            airport_ident=factory.airport_ident,
+            name=f"Warehouse @ {factory.airport_ident}"
+        )
+        db.add(warehouse)
+        db.flush()  # Get the ID
+
+    # Add items to inventory
+    inventory = db.query(InventoryItem).filter(
+        InventoryItem.location_id == warehouse.id,
+        InventoryItem.item_id == data.item_id
+    ).first()
+
+    if inventory:
+        inventory.qty += data.quantity
+    else:
+        inventory = InventoryItem(
+            location_id=warehouse.id,
+            item_id=data.item_id,
+            qty=data.quantity
+        )
+        db.add(inventory)
 
     # Log transaction
     transaction = FactoryTransaction(

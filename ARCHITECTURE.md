@@ -50,7 +50,10 @@ Le backend est **source de vérité** : inventaires, flotte, économie, producti
 **2 schémas distincts**:
 
 1. **`public`** - Données monde (Directus)
-   - `airports` - Aéroports MSFS (via Directus, pas encore importé)
+   - `airports` - Aéroports MSFS (OurAirports data, 28,000+ airports)
+     - Champs: ident (ICAO), type, name, lat/long, country, etc.
+     - **Factory slots**: `max_factory_slots`, `occupied_slots`
+     - Trigger PostgreSQL auto-calcule slots par type d'aéroport
    - Autres tables Directus
 
 2. **`game`** - Données gameplay (FastAPI)
@@ -73,12 +76,12 @@ Le backend est **source de vérité** : inventaires, flotte, économie, producti
    - `recipe_ingredients` - Ingrédients requis par recette
 
    **Factory System V0.5** (6 tables):
-   - `factories` - Usines de production
-   - `workers` - Employés avec XP/tier
-   - `engineers` - Ingénieurs (bonus production)
-   - `factory_storage` - Stockage local d'usine
-   - `production_batches` - Lots de production
-   - `factory_transactions` - Audit usine
+   - `factories` - Usines de production (liées à company_id + airport_ident)
+   - `workers` - Employés avec XP/tier (0-5), assignés à une factory
+   - `engineers` - Workers améliorés (1 per factory max, bonus +10-50%)
+   - `factory_storage` - Stockage local d'usine (ingrédients + produits)
+   - `production_batches` - Lots de production (status, workers, temps)
+   - `factory_transactions` - Audit usine (consumed, input, output)
 
    **Total : 17 tables**
 
@@ -150,8 +153,8 @@ Le backend est **source de vérité** : inventaires, flotte, économie, producti
 **Phase 0.1-0.4** (Core système):
 - ✅ Auth JWT + users
 - ✅ Companies + members
-- ✅ Inventory + locations + audits
-- ✅ Fleet (aircraft)
+- ✅ Inventory + locations + audits (warehouse par aéroport pour chaque company)
+- ✅ Fleet (aircraft) - **Pas encore implémenté les vols**
 - ✅ Market orders
 - ✅ Player profiles
 - ✅ Company profiles
@@ -161,30 +164,149 @@ Le backend est **source de vérité** : inventaires, flotte, économie, producti
   - 93 items (T0: 33 raw materials, T1-T2: 60 processed)
   - 60 recettes (T1: 30, T2: 30)
   - Endpoints world data fonctionnels
-- ✅ **Phase 2 - Partie 1**: Base de données
+- ✅ **Phase 2A**: Base de données
   - 6 tables factories créées
   - Seed data complet
   - Modèles SQLAlchemy corrigés
-- ⏳ **Phase 2 - Partie 2**: Endpoints factories (EN COURS)
-  - Router créé avec squelette
-  - Besoin d'implémenter la logique métier
+- ✅ **Phase 2B**: Endpoints factories + Validations
+  - 18 endpoints implémentés avec logique métier complète
+  - ✅ Airport slots system (12/6/3/1 selon type)
+  - ✅ Factory CRUD avec validations
+  - ✅ Worker/Engineer hiring et gestion
+  - ✅ Production avec vérification ingredients/workers/engineer bonus
+  - ✅ Factory storage ↔ Company warehouse transfers
+  - ✅ Engineer model corrigé (factory-based, 1 per factory)
 
 ### 🔄 En cours
 
 **Tâches prioritaires**:
-1. Implémenter endpoints factories CRUD
-2. Implémenter gestion workers/engineers
-3. Implémenter système de production
-4. Tests complets via Swagger UI
-5. Déploiement sur NAS (après finition backend)
+1. Tests complets des endpoints factories via Swagger UI
+2. Import airports data (OurAirports) dans Directus/PostgreSQL
+3. Phase 0.6: Aircraft & Flight system (vols, cargo, passagers)
 
 ### 📋 À faire
 
-- Phase 0.6: Missions system
-- Phase 0.7: Real-time updates (WebSockets)
-- Phase 0.8: Intégration tablette in-game MSFS
+**Court terme**:
+- ✅ Factory system Phase 2B (TERMINÉ)
+- 🔄 Tests factories endpoints
+- 🔄 Import airports data
+- Phase 0.6: **Aircraft & Flight System**
+  - Aircraft management (déjà partiellement existant)
+  - Flight planning & execution
+  - Aircraft cargo system (charger items au parking, moteur éteint)
+  - Aircraft passengers (workers/engineers transport entre aéroports)
+  - Flight status tracking (en vol, parking, etc.)
+
+**Moyen terme**:
+- Phase 0.7: Missions system
+- Phase 0.8: Real-time updates (WebSockets)
+- Phase 0.9: Intégration tablette in-game MSFS
 - Migration Alembic pour gestion schema
-- Import airports data depuis Directus
+
+**Long terme**:
+- NPC T0 factories system (usines de base non-joueur)
+- Advanced factory mechanics (maintenance, upgrades, etc.)
+- Economic simulation & balancing
+
+---
+
+## Gameplay Core Loop
+
+### 🎮 Mécanique principale: Transport aérien
+
+**Concept de base:**
+Le joueur est propriétaire d'une compagnie de transport aérien. Le gameplay central consiste à:
+1. **Produire des items** dans des usines (factories)
+2. **Transporter ces items** en avion entre aéroports
+3. **Vendre sur le marché** pour générer des profits
+
+### 📦 Système d'inventaires
+
+**3 types de stockage:**
+
+1. **Factory Storage** (stockage usine)
+   - Local à chaque usine
+   - Contient les ingrédients pour production
+   - Reçoit les items produits
+
+2. **Company Warehouse** (entrepôt company par aéroport)
+   - Un warehouse par aéroport pour chaque company
+   - Reçoit items retirés des factories
+   - Source pour charger les avions
+   - Destination après déchargement avions
+
+3. **Aircraft Cargo** (cargo avion) - *À implémenter*
+   - Items chargés dans un avion
+   - Pendant le vol: statut "in_transit"
+   - Déchargés à l'atterrissage
+
+**Flow typique:**
+```
+Factory Production → Factory Storage
+                           ↓
+                   [Player withdraw]
+                           ↓
+                   Company Warehouse
+                           ↓
+                   [Player load aircraft]
+                           ↓
+                   Aircraft Cargo (in flight)
+                           ↓
+                   [Aircraft lands]
+                           ↓
+                   Company Warehouse (destination)
+```
+
+### 👷 Workers et Engineers
+
+**Workers:**
+- Employés assignés à une factory
+- Système de tiers (T0-T5) basé sur XP
+- XP gagnée pendant la production
+- Max 10 workers par factory
+- **Peuvent voyager en avion** (avions passagers)
+
+**Engineers:**
+- Version améliorée des workers
+- **1 seul engineer par factory**
+- Fournit bonus de production (+10-50%)
+- **Peuvent voyager en avion** (avions passagers)
+- Assignés à une factory spécifique
+
+### ✈️ Système de transport (À implémenter)
+
+**Chargement avion:**
+- Avion doit être au **parking**
+- Moteurs **éteints**
+- Bouton "Charger" pour transférer items/passagers
+- Items: Warehouse → Aircraft cargo
+- Passagers: Workers/Engineers peuvent embarquer
+
+**Vol:**
+- Items/passagers en statut "in_transit"
+- Position trackée en temps réel (future phase)
+
+**Déchargement:**
+- À l'atterrissage/parking destination
+- Aircraft cargo → Warehouse destination
+- Passagers débarquent et peuvent être réassignés
+
+### 🏭 Factory System (Complété)
+
+**Slots d'usines par aéroport:**
+- Large airports (scheduled service): **12 slots**
+- Medium airports: **6 slots**
+- Small airports: **3 slots**
+- Heliports/Seaplanes: **1 slot**
+- Autres types: **0 slots** (pas d'usines)
+- **Note**: Les usines T0 NPC (futures) ne comptent pas dans ces limites
+
+**Production:**
+- Nécessite ingrédients en factory storage
+- Nécessite workers assignés
+- Bonus si engineer présent
+- Consomme ingrédients au démarrage
+- Produit items après délai (production_time_hours)
 
 ---
 

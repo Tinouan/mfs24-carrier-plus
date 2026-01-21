@@ -14,8 +14,9 @@ from app.core.db import Base
 
 class Engineer(Base):
     """
-    V0.5 Factory System - Engineers with specialization bonuses
-    Bonus applies when specialization matches factory_type
+    V0.5 Factory System - Engineers (enhanced workers)
+    Engineers are assigned to a specific factory (1 per factory max)
+    They belong to the company, like regular workers
     """
     __tablename__ = "engineers"
     __table_args__ = (
@@ -38,14 +39,15 @@ class Engineer(Base):
         nullable=False,
         index=True
     )
+    factory_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("game.factories.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="Factory where engineer is assigned (1 per factory)"
+    )
 
     # Core Fields
-    airport_ident: Mapped[str] = mapped_column(
-        String(4),
-        nullable=False,
-        index=True,
-        comment="Airport ICAO code (no FK for now)"
-    )
     name: Mapped[str] = mapped_column(
         String(100),
         nullable=False
@@ -54,13 +56,13 @@ class Engineer(Base):
         String(50),
         nullable=False,
         index=True,
-        comment="Matches factory_type: food_processing, metal_smelting, etc."
+        comment="Specialization type (for future use)"
     )
     bonus_percentage: Mapped[int] = mapped_column(
         Integer,
         server_default="10",
         nullable=False,
-        comment="+10-50% output if specialization matches"
+        comment="+10-50% production bonus"
     )
     experience: Mapped[int] = mapped_column(
         Integer,
