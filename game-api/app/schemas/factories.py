@@ -95,7 +95,7 @@ class WorkerCreateIn(BaseModel):
 class WorkerUpdateIn(BaseModel):
     """Update worker input."""
     is_active: bool | None = None
-    hourly_salary: int | None = Field(None, ge=1, le=10000)
+    factory_id: uuid.UUID | None = None
 
 
 # =====================================================

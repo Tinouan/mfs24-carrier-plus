@@ -244,7 +244,7 @@ def delete_factory(
 # PRODUCTION CONTROL
 # =====================================================
 
-@router.post("/{factory_id}/start", response_model=ProductionBatchOut, status_code=201)
+@router.post("/{factory_id}/production", response_model=ProductionBatchOut, status_code=201)
 def start_production(
     factory_id: uuid.UUID,
     data: StartProductionIn,
@@ -259,7 +259,7 @@ def start_production(
     factory = _get_factory_or_404(db, c.id, factory_id)
 
     # Check factory status
-    if factory.status == FactoryStatus.PRODUCING:
+    if factory.status == "producing":
         raise HTTPException(status_code=400, detail="Factory already producing")
 
     # Check recipe exists
@@ -268,26 +268,30 @@ def start_production(
         raise HTTPException(status_code=404, detail="Recipe not found")
 
     # TODO: Check if factory has enough inputs in storage
-    # TODO: Calculate production rate multiplier (workers, engineer, health, food buff)
+    # TODO: Check if workers assigned <= available workers
+    # TODO: Check engineer bonus (if specialization matches factory_type)
+
+    # Calculate estimated completion
+    production_time = float(recipe.production_time_hours)
+    # In a real implementation, this would be: now + production_time hours
+    estimated_completion = datetime.utcnow()  # Placeholder
 
     # Create production batch
     batch = ProductionBatch(
         factory_id=factory.id,
         recipe_id=data.recipe_id,
-        quantity_to_produce=data.quantity_to_produce,
-        quantity_produced=0,
-        progress_percent=0.0,
-        hours_elapsed=0.0,
-        hours_required=float(recipe.production_time_hours) * data.quantity_to_produce,
-        production_rate_multiplier=1.0,  # TODO: Calculate
+        status="pending",
+        workers_assigned=data.workers_assigned,
+        result_quantity=recipe.result_quantity,  # From recipe
+        engineer_bonus_applied=False,  # TODO: Check if engineer available
         started_at=datetime.utcnow(),
+        estimated_completion=estimated_completion,
     )
     db.add(batch)
 
     # Update factory
-    factory.status = FactoryStatus.PRODUCING
-    factory.active_recipe_id = data.recipe_id
-    factory.last_tick_at = datetime.utcnow()
+    factory.status = "producing"
+    factory.current_recipe_id = data.recipe_id
 
     db.commit()
     db.refresh(batch)
@@ -296,25 +300,59 @@ def start_production(
         id=batch.id,
         factory_id=batch.factory_id,
         recipe_id=batch.recipe_id,
-        recipe_name=recipe.name,
-        quantity_to_produce=batch.quantity_to_produce,
-        quantity_produced=batch.quantity_produced,
-        progress_percent=float(batch.progress_percent),
-        hours_elapsed=float(batch.hours_elapsed),
-        hours_required=float(batch.hours_required),
-        production_rate_multiplier=float(batch.production_rate_multiplier),
+        status=batch.status,
         started_at=batch.started_at,
+        estimated_completion=batch.estimated_completion,
         completed_at=batch.completed_at,
+        result_quantity=batch.result_quantity,
+        workers_assigned=batch.workers_assigned,
+        engineer_bonus_applied=batch.engineer_bonus_applied,
+        created_at=batch.created_at,
     )
 
 
-@router.post("/{factory_id}/stop", status_code=200)
+@router.get("/{factory_id}/production", response_model=list[ProductionBatchOut])
+def list_production_batches(
+    factory_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """List production batches for this factory."""
+    c, _cm = _get_my_company(db, user.id)
+    if not c:
+        raise HTTPException(status_code=404, detail="No company")
+
+    factory = _get_factory_or_404(db, c.id, factory_id)
+
+    batches = db.query(ProductionBatch).filter(
+        ProductionBatch.factory_id == factory.id
+    ).order_by(ProductionBatch.created_at.desc()).limit(50).all()
+
+    return [
+        ProductionBatchOut(
+            id=b.id,
+            factory_id=b.factory_id,
+            recipe_id=b.recipe_id,
+            status=b.status,
+            started_at=b.started_at,
+            estimated_completion=b.estimated_completion,
+            completed_at=b.completed_at,
+            result_quantity=b.result_quantity,
+            workers_assigned=b.workers_assigned,
+            engineer_bonus_applied=b.engineer_bonus_applied,
+            created_at=b.created_at,
+        )
+        for b in batches
+    ]
+
+
+@router.post("/{factory_id}/production/stop", status_code=200)
 def stop_production(
     factory_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Stop production."""
+    """Stop current production."""
     c, _cm = _get_my_company(db, user.id)
     if not c:
         raise HTTPException(status_code=404, detail="No company")
@@ -322,14 +360,16 @@ def stop_production(
     factory = _get_factory_or_404(db, c.id, factory_id)
 
     # Update factory status
-    factory.status = FactoryStatus.IDLE
+    factory.status = "idle"
 
-    # Complete current batch (if any)
+    # Cancel current batch (if any)
     batch = db.query(ProductionBatch).filter(
         ProductionBatch.factory_id == factory.id,
+        ProductionBatch.status.in_(["pending", "in_progress"]),
         ProductionBatch.completed_at == None
     ).first()
     if batch:
+        batch.status = "cancelled"
         batch.completed_at = datetime.utcnow()
 
     db.commit()
@@ -358,15 +398,16 @@ def hire_worker(
     # TODO: Check company balance for hiring cost
     # TODO: Limit max workers per factory
 
+    # Create worker with T0 defaults
     worker = Worker(
         factory_id=factory.id,
-        name=data.name,
+        first_name=data.first_name,
+        last_name=data.last_name,
+        tier=0,  # Starts at T0
+        health=100,
+        happiness=80,
         xp=0,
-        tier=1,
-        hourly_salary=data.hourly_salary,
-        unpaid_hours=0,
         is_active=True,
-        hired_at=datetime.utcnow(),
     )
     db.add(worker)
     db.commit()
@@ -375,14 +416,14 @@ def hire_worker(
     return WorkerOut(
         id=worker.id,
         factory_id=worker.factory_id,
-        name=worker.name,
-        xp=worker.xp,
+        first_name=worker.first_name,
+        last_name=worker.last_name,
         tier=worker.tier,
-        hourly_salary=worker.hourly_salary,
-        unpaid_hours=worker.unpaid_hours,
+        health=worker.health,
+        happiness=worker.happiness,
+        xp=worker.xp,
         is_active=worker.is_active,
-        hired_at=worker.hired_at,
-        last_worked_at=worker.last_worked_at,
+        created_at=worker.created_at,
     )
 
 
@@ -399,20 +440,23 @@ def list_workers(
 
     factory = _get_factory_or_404(db, c.id, factory_id)
 
-    workers = db.query(Worker).filter(Worker.factory_id == factory.id).all()
+    workers = db.query(Worker).filter(
+        Worker.factory_id == factory.id,
+        Worker.is_active == True
+    ).all()
 
     return [
         WorkerOut(
             id=w.id,
             factory_id=w.factory_id,
-            name=w.name,
-            xp=w.xp,
+            first_name=w.first_name,
+            last_name=w.last_name,
             tier=w.tier,
-            hourly_salary=w.hourly_salary,
-            unpaid_hours=w.unpaid_hours,
+            health=w.health,
+            happiness=w.happiness,
+            xp=w.xp,
             is_active=w.is_active,
-            hired_at=w.hired_at,
-            last_worked_at=w.last_worked_at,
+            created_at=w.created_at,
         )
         for w in workers
     ]
@@ -425,7 +469,7 @@ def fire_worker(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Fire a worker."""
+    """Fire a worker (soft delete)."""
     c, _cm = _get_my_company(db, user.id)
     if not c:
         raise HTTPException(status_code=404, detail="No company")
@@ -439,85 +483,108 @@ def fire_worker(
     if not worker:
         raise HTTPException(status_code=404, detail="Worker not found")
 
-    # TODO: Pay unpaid salary before firing
-
-    db.delete(worker)
+    # Soft delete
+    worker.is_active = False
     db.commit()
 
 
 # =====================================================
-# ENGINEER
+# ENGINEERS
 # =====================================================
 
-@router.post("/{factory_id}/engineer", response_model=EngineerOut, status_code=201)
+@router.post("/engineers", response_model=EngineerOut, status_code=201)
 def hire_engineer(
-    factory_id: uuid.UUID,
     data: EngineerCreateIn,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Hire an engineer for this factory (max 1 per factory)."""
+    """Hire an engineer for an airport (not tied to specific factory)."""
     c, _cm = _get_my_company(db, user.id)
     if not c:
         raise HTTPException(status_code=404, detail="No company")
 
-    factory = _get_factory_or_404(db, c.id, factory_id)
-
-    # Check if engineer already exists
-    existing = db.query(Engineer).filter(Engineer.factory_id == factory.id).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Factory already has an engineer")
-
+    # TODO: Check if airport exists
     # TODO: Check company balance for hiring cost
+    # TODO: Limit engineers per airport
 
+    # Create engineer
     engineer = Engineer(
-        factory_id=factory.id,
+        company_id=c.id,
+        airport_ident=data.airport_ident,
         name=data.name,
-        hourly_salary=data.hourly_salary,
-        unpaid_hours=0,
+        specialization=data.specialization,
+        bonus_percentage=10,  # Default 10%
+        experience=0,
         is_active=True,
-        hired_at=datetime.utcnow(),
     )
     db.add(engineer)
-
-    factory.has_engineer = True
-
     db.commit()
     db.refresh(engineer)
 
     return EngineerOut(
         id=engineer.id,
-        factory_id=engineer.factory_id,
+        company_id=engineer.company_id,
+        airport_ident=engineer.airport_ident,
         name=engineer.name,
-        hourly_salary=engineer.hourly_salary,
-        unpaid_hours=engineer.unpaid_hours,
+        specialization=engineer.specialization,
+        bonus_percentage=engineer.bonus_percentage,
+        experience=engineer.experience,
         is_active=engineer.is_active,
-        hired_at=engineer.hired_at,
-        last_worked_at=engineer.last_worked_at,
+        created_at=engineer.created_at,
     )
 
 
-@router.delete("/{factory_id}/engineer", status_code=204)
-def fire_engineer(
-    factory_id: uuid.UUID,
+@router.get("/engineers", response_model=list[EngineerOut])
+def list_my_engineers(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Fire the factory engineer."""
+    """List all engineers for current company."""
     c, _cm = _get_my_company(db, user.id)
     if not c:
         raise HTTPException(status_code=404, detail="No company")
 
-    factory = _get_factory_or_404(db, c.id, factory_id)
+    engineers = db.query(Engineer).filter(
+        Engineer.company_id == c.id,
+        Engineer.is_active == True
+    ).all()
 
-    engineer = db.query(Engineer).filter(Engineer.factory_id == factory.id).first()
+    return [
+        EngineerOut(
+            id=e.id,
+            company_id=e.company_id,
+            airport_ident=e.airport_ident,
+            name=e.name,
+            specialization=e.specialization,
+            bonus_percentage=e.bonus_percentage,
+            experience=e.experience,
+            is_active=e.is_active,
+            created_at=e.created_at,
+        )
+        for e in engineers
+    ]
+
+
+@router.delete("/engineers/{engineer_id}", status_code=204)
+def fire_engineer(
+    engineer_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Fire an engineer (soft delete)."""
+    c, _cm = _get_my_company(db, user.id)
+    if not c:
+        raise HTTPException(status_code=404, detail="No company")
+
+    engineer = db.query(Engineer).filter(
+        Engineer.id == engineer_id,
+        Engineer.company_id == c.id
+    ).first()
     if not engineer:
-        raise HTTPException(status_code=404, detail="No engineer found")
+        raise HTTPException(status_code=404, detail="Engineer not found")
 
-    # TODO: Pay unpaid salary before firing
-
-    db.delete(engineer)
-    factory.has_engineer = False
+    # Soft delete
+    engineer.is_active = False
     db.commit()
 
 
@@ -598,7 +665,7 @@ def deposit_to_storage(
     transaction = FactoryTransaction(
         factory_id=factory.id,
         item_id=data.item_id,
-        transaction_type=TransactionType.DEPOSIT,
+        transaction_type="input",
         quantity=data.quantity,
         notes="Manual deposit"
     )
@@ -643,7 +710,7 @@ def withdraw_from_storage(
     transaction = FactoryTransaction(
         factory_id=factory.id,
         item_id=data.item_id,
-        transaction_type=TransactionType.WITHDRAW,
+        transaction_type="output",
         quantity=-data.quantity,
         notes="Manual withdrawal"
     )
@@ -669,47 +736,60 @@ def get_factory_stats(
         raise HTTPException(status_code=404, detail="No company")
 
     # Count factories by status
-    total = db.query(Factory).filter(Factory.company_id == c.id).count()
+    total = db.query(Factory).filter(
+        Factory.company_id == c.id,
+        Factory.is_active == True
+    ).count()
     idle = db.query(Factory).filter(
         Factory.company_id == c.id,
-        Factory.status == FactoryStatus.IDLE
+        Factory.status == "idle",
+        Factory.is_active == True
     ).count()
     producing = db.query(Factory).filter(
         Factory.company_id == c.id,
-        Factory.status == FactoryStatus.PRODUCING
+        Factory.status == "producing",
+        Factory.is_active == True
     ).count()
-    paused = db.query(Factory).filter(
+    maintenance = db.query(Factory).filter(
         Factory.company_id == c.id,
-        Factory.status == FactoryStatus.PAUSED
+        Factory.status == "maintenance",
+        Factory.is_active == True
     ).count()
-    broken = db.query(Factory).filter(
+    offline = db.query(Factory).filter(
         Factory.company_id == c.id,
-        Factory.status == FactoryStatus.BROKEN
+        Factory.status == "offline",
+        Factory.is_active == True
     ).count()
 
     # Count workers and engineers
-    factory_ids = [f.id for f in db.query(Factory.id).filter(Factory.company_id == c.id).all()]
+    factory_ids = [f.id for f in db.query(Factory.id).filter(
+        Factory.company_id == c.id,
+        Factory.is_active == True
+    ).all()]
+
     total_workers = db.query(Worker).filter(
         Worker.factory_id.in_(factory_ids),
         Worker.is_active == True
     ).count()
+
     total_engineers = db.query(Engineer).filter(
-        Engineer.factory_id.in_(factory_ids),
+        Engineer.company_id == c.id,
         Engineer.is_active == True
     ).count()
 
-    # Sum production hours
-    total_hours = db.query(func.sum(Factory.total_production_hours)).filter(
-        Factory.company_id == c.id
+    # Calculate total production hours from batches
+    total_hours = db.query(func.count(ProductionBatch.id)).filter(
+        ProductionBatch.factory_id.in_(factory_ids),
+        ProductionBatch.status == "completed"
     ).scalar() or 0
 
     return FactoryStatsOut(
         total_factories=total,
         idle_factories=idle,
         producing_factories=producing,
-        paused_factories=paused,
-        broken_factories=broken,
+        paused_factories=maintenance,  # Using maintenance for "paused"
+        broken_factories=offline,  # Using offline for "broken"
         total_workers=total_workers,
         total_engineers=total_engineers,
-        total_production_hours=int(total_hours),
+        total_production_hours=total_hours,
     )
