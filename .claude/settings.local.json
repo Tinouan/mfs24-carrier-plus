@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tree:*)",
+      "Bash(dir:*)",
+      "Bash(ssh:*)",
+      "Bash(chmod:*)",
+      "Bash(curl:*)",
+      "Bash(ls:*)",
+      "Bash(findstr:*)",
+      "Bash(docker exec:*)",
+      "Bash(docker compose:*)",
+      "Bash(docker logs:*)"
+    ]
+  }
+}

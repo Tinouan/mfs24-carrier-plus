@@ -5,3 +5,14 @@ from .item import Item
 from .inventory_location import InventoryLocation
 from .inventory_item import InventoryItem
 from .inventory_audit import InventoryAudit
+
+# V0.5 Factory System Models - Phase 1
+from .recipe import Recipe, RecipeIngredient
+
+# V0.5 Factory System Models - Phase 2 (ENABLED)
+from .factory import Factory
+from .worker import Worker
+from .engineer import Engineer
+from .factory_storage import FactoryStorage
+from .production_batch import ProductionBatch
+from .factory_transaction import FactoryTransaction

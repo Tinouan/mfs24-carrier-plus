@@ -1,0 +1,16 @@
+{
+  "recommendations": [
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "ms-python.debugpy",
+    "ms-azuretools.vscode-docker",
+    "ckolkman.vscode-postgres",
+    "eamodio.gitlens",
+    "usernamehw.errorlens",
+    "aaron-bond.better-comments",
+    "rangav.vscode-thunder-client",
+    "yzhang.markdown-all-in-one",
+    "redhat.vscode-yaml",
+    "anthropic.claude-code"
+  ]
+}

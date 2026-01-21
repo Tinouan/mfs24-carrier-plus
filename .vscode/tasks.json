@@ -1,0 +1,51 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "NAS: Start All Services",
+      "type": "shell",
+      "command": "ssh admin@192.168.1.15 'cd /volume1/docker/msfs-directus && docker-compose up -d'",
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "NAS: Stop All Services",
+      "type": "shell",
+      "command": "ssh admin@192.168.1.15 'cd /volume1/docker/msfs-directus && docker-compose down'",
+      "problemMatcher": []
+    },
+    {
+      "label": "NAS: Restart All Services",
+      "type": "shell",
+      "command": "ssh admin@192.168.1.15 'cd /volume1/docker/msfs-directus && docker-compose restart'",
+      "problemMatcher": []
+    },
+    {
+      "label": "NAS: View Logs",
+      "type": "shell",
+      "command": "ssh admin@192.168.1.15 'cd /volume1/docker/msfs-directus && docker-compose logs -f'",
+      "problemMatcher": []
+    },
+    {
+      "label": "NAS: Pull Latest Changes",
+      "type": "shell",
+      "command": "ssh admin@192.168.1.15 'cd /volume1/docker/msfs-directus && git pull'",
+      "problemMatcher": []
+    },
+    {
+      "label": "Python: Create Virtual Environment",
+      "type": "shell",
+      "command": "python -m venv .venv",
+      "problemMatcher": []
+    },
+    {
+      "label": "Python: Install Requirements",
+      "type": "shell",
+      "command": "pip install -r requirements.txt",
+      "problemMatcher": []
+    }
+  ]
+}

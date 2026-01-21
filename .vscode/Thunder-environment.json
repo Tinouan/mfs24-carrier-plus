@@ -1,0 +1,27 @@
+{
+  "client": "Thunder Client",
+  "collectionName": "MFS24 Carrier Plus",
+  "dateExported": "2025-01-21",
+  "version": "1.1",
+  "folders": [],
+  "requests": [
+    {
+      "name": "Health Check - FastAPI",
+      "method": "GET",
+      "url": "http://192.168.1.15:8000/api/health",
+      "headers": []
+    },
+    {
+      "name": "Health Check - Directus",
+      "method": "GET",
+      "url": "http://192.168.1.15:8055/server/health",
+      "headers": []
+    },
+    {
+      "name": "Get Webmap",
+      "method": "GET",
+      "url": "http://192.168.1.15:8080/",
+      "headers": []
+    }
+  ]
+}

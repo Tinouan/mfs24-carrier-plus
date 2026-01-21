@@ -1,5 +1,3 @@
-cat >> .gitignore <<'EOF'
-
 # secrets
 .env
 
@@ -14,4 +12,6 @@ __pycache__/
 # mac/windows
 .DS_Store
 Thumbs.db
-EOF
+
+# claude docs and scripts (optional - uncomment to ignore)
+# claude/
