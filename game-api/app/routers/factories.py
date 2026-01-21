@@ -67,19 +67,6 @@ def _get_factory_or_404(db: Session, company_id: uuid.UUID, factory_id: uuid.UUI
     return factory
 
 
-def _check_slot_available(db: Session, airport_ident: str, slot_index: int):
-    """Check if slot is available."""
-    existing = db.query(Factory).filter(
-        Factory.airport_ident == airport_ident,
-        Factory.slot_index == slot_index,
-    ).first()
-    if existing:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Slot {slot_index} at {airport_ident} is already occupied"
-        )
-
-
 # =====================================================
 # FACTORIES CRUD
 # =====================================================
@@ -94,39 +81,22 @@ def list_my_factories(
     if not c:
         raise HTTPException(status_code=404, detail="No company")
 
-    factories = db.query(Factory).filter(Factory.company_id == c.id).all()
+    factories = db.query(Factory).filter(
+        Factory.company_id == c.id,
+        Factory.is_active == True
+    ).all()
 
-    result = []
-    for f in factories:
-        # Get active recipe name
-        recipe_name = None
-        if f.active_recipe_id:
-            recipe = db.query(Recipe).filter(Recipe.id == f.active_recipe_id).first()
-            if recipe:
-                recipe_name = recipe.name
-
-        # Count workers
-        worker_count = db.query(Worker).filter(
-            Worker.factory_id == f.id,
-            Worker.is_active == True
-        ).count()
-
-        result.append(
-            FactoryListOut(
-                id=f.id,
-                airport_ident=f.airport_ident,
-                slot_index=f.slot_index,
-                factory_type=f.factory_type.value,
-                factory_icon=f.factory_icon,
-                status=f.status.value,
-                health=f.health,
-                active_recipe_name=recipe_name,
-                worker_count=worker_count,
-                has_engineer=f.has_engineer,
-            )
+    return [
+        FactoryListOut(
+            id=f.id,
+            name=f.name,
+            airport_ident=f.airport_ident,
+            factory_type=f.factory_type,
+            status=f.status,
+            is_active=f.is_active,
         )
-
-    return result
+        for f in factories
+    ]
 
 
 @router.post("", response_model=FactoryOut, status_code=201)
@@ -135,28 +105,22 @@ def create_factory(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Create a new factory at specified airport/slot."""
+    """Create a new factory at specified airport."""
     c, _cm = _get_my_company(db, user.id)
     if not c:
         raise HTTPException(status_code=404, detail="No company")
 
-    # Check slot availability
-    _check_slot_available(db, data.airport_ident, data.slot_index)
-
-    # TODO: Check if airport exists and has available slots
+    # TODO: Check if airport exists (validate airport_ident against public.airports)
+    # TODO: Check max factory slots for this airport
     # TODO: Deduct construction cost from company balance
 
-    # Create factory
+    # Create factory with defaults
     factory = Factory(
         company_id=c.id,
         airport_ident=data.airport_ident,
-        slot_index=data.slot_index,
-        status=FactoryStatus.IDLE,
-        factory_type=FactoryType.NONE,
-        health=100,
-        has_engineer=False,
-        food_buff_percent=0,
-        total_production_hours=0,
+        name=data.name,
+        status="idle",  # Default status
+        is_active=True,
     )
     db.add(factory)
     db.commit()
@@ -166,21 +130,13 @@ def create_factory(
         id=factory.id,
         company_id=factory.company_id,
         airport_ident=factory.airport_ident,
-        slot_index=factory.slot_index,
-        active_recipe_id=None,
-        active_recipe_name=None,
-        factory_type=factory.factory_type.value,
-        factory_icon=factory.factory_icon,
-        status=factory.status.value,
-        health=factory.health,
-        has_engineer=factory.has_engineer,
-        last_tick_at=factory.last_tick_at,
-        total_production_hours=factory.total_production_hours,
-        food_buff_percent=factory.food_buff_percent,
+        name=factory.name,
+        factory_type=factory.factory_type,
+        status=factory.status,
+        current_recipe_id=factory.current_recipe_id,
+        is_active=factory.is_active,
         created_at=factory.created_at,
         updated_at=factory.updated_at,
-        workers=[],
-        engineer=None,
     )
 
 
@@ -197,65 +153,17 @@ def get_factory_details(
 
     factory = _get_factory_or_404(db, c.id, factory_id)
 
-    # Get active recipe name
-    recipe_name = None
-    if factory.active_recipe_id:
-        recipe = db.query(Recipe).filter(Recipe.id == factory.active_recipe_id).first()
-        if recipe:
-            recipe_name = recipe.name
-
-    # Get workers
-    workers = db.query(Worker).filter(Worker.factory_id == factory.id).all()
-    workers_out = [
-        WorkerOut(
-            id=w.id,
-            factory_id=w.factory_id,
-            name=w.name,
-            xp=w.xp,
-            tier=w.tier,
-            hourly_salary=w.hourly_salary,
-            unpaid_hours=w.unpaid_hours,
-            is_active=w.is_active,
-            hired_at=w.hired_at,
-            last_worked_at=w.last_worked_at,
-        )
-        for w in workers
-    ]
-
-    # Get engineer
-    engineer = db.query(Engineer).filter(Engineer.factory_id == factory.id).first()
-    engineer_out = None
-    if engineer:
-        engineer_out = EngineerOut(
-            id=engineer.id,
-            factory_id=engineer.factory_id,
-            name=engineer.name,
-            hourly_salary=engineer.hourly_salary,
-            unpaid_hours=engineer.unpaid_hours,
-            is_active=engineer.is_active,
-            hired_at=engineer.hired_at,
-            last_worked_at=engineer.last_worked_at,
-        )
-
     return FactoryOut(
         id=factory.id,
         company_id=factory.company_id,
         airport_ident=factory.airport_ident,
-        slot_index=factory.slot_index,
-        active_recipe_id=factory.active_recipe_id,
-        active_recipe_name=recipe_name,
-        factory_type=factory.factory_type.value,
-        factory_icon=factory.factory_icon,
-        status=factory.status.value,
-        health=factory.health,
-        has_engineer=factory.has_engineer,
-        last_tick_at=factory.last_tick_at,
-        total_production_hours=factory.total_production_hours,
-        food_buff_percent=factory.food_buff_percent,
+        name=factory.name,
+        factory_type=factory.factory_type,
+        status=factory.status,
+        current_recipe_id=factory.current_recipe_id,
+        is_active=factory.is_active,
         created_at=factory.created_at,
         updated_at=factory.updated_at,
-        workers=workers_out,
-        engineer=engineer_out,
     )
 
 
@@ -266,31 +174,48 @@ def update_factory(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Update factory (set recipe or status)."""
+    """Update factory name, recipe, or status."""
     c, _cm = _get_my_company(db, user.id)
     if not c:
         raise HTTPException(status_code=404, detail="No company")
 
     factory = _get_factory_or_404(db, c.id, factory_id)
 
-    # Update active recipe
-    if data.active_recipe_id is not None:
+    # Update name
+    if data.name is not None:
+        factory.name = data.name
+
+    # Update current recipe
+    if data.current_recipe_id is not None:
         # Verify recipe exists
-        recipe = db.query(Recipe).filter(Recipe.id == data.active_recipe_id).first()
+        recipe = db.query(Recipe).filter(Recipe.id == data.current_recipe_id).first()
         if not recipe:
             raise HTTPException(status_code=404, detail="Recipe not found")
-        factory.active_recipe_id = data.active_recipe_id
-        # Factory type will be auto-updated by trigger
+        factory.current_recipe_id = data.current_recipe_id
+        # TODO: Factory type will be auto-updated by trigger (when implemented)
 
     # Update status
     if data.status is not None:
-        factory.status = FactoryStatus(data.status)
+        valid_statuses = ["idle", "producing", "maintenance", "offline"]
+        if data.status not in valid_statuses:
+            raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}")
+        factory.status = data.status
 
     db.commit()
     db.refresh(factory)
 
-    # Return updated factory (same as get_factory_details)
-    return get_factory_details(factory_id, db, user)
+    return FactoryOut(
+        id=factory.id,
+        company_id=factory.company_id,
+        airport_ident=factory.airport_ident,
+        name=factory.name,
+        factory_type=factory.factory_type,
+        status=factory.status,
+        current_recipe_id=factory.current_recipe_id,
+        is_active=factory.is_active,
+        created_at=factory.created_at,
+        updated_at=factory.updated_at,
+    )
 
 
 @router.delete("/{factory_id}", status_code=204)
@@ -299,17 +224,19 @@ def delete_factory(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Destroy factory (with cascading delete of workers, storage, etc.)."""
+    """Delete factory (soft delete via is_active=false)."""
     c, _cm = _get_my_company(db, user.id)
     if not c:
         raise HTTPException(status_code=404, detail="No company")
 
     factory = _get_factory_or_404(db, c.id, factory_id)
 
+    # TODO: Check if factory has active production
     # TODO: Refund partial cost to company balance
     # TODO: Return items from factory storage to company inventory
 
-    db.delete(factory)
+    # Soft delete
+    factory.is_active = False
     db.commit()
 
 
