@@ -1,3 +1,9 @@
+# MFS Carrier+
+
+Jeu de gestion de compagnie aérienne cargo pour Microsoft Flight Simulator 2024.
+
+---
+
 ## V0.1 — Core (DONE)
 
 - [x] Docker stack : Postgres + Directus + Nginx + FastAPI
@@ -6,43 +12,47 @@
 - [x] Inventory (vault + warehouses)
 - [x] Fleet (company_aircraft)
 - [x] API docs via `/api/docs`
+- [x] **84 000+ airports** importés avec système de slots
 
 ---
 
-## V0.2 — Player Profile
+## V0.2 — Player Profile (EN COURS)
 
 ### Objectif
 Créer un profil joueur persistant (préférences + progression minimale).
 
+### Frontend ✅
+- [x] Vue Profil avec header (avatar, username, email, date inscription)
+- [x] Système XP/Niveau pilote avec barre de progression
+- [x] Onglets: Aperçu, Licences, Messagerie, Transactions
+- [x] Cartes de licences avion (PPL, CPL, ATPL)
+- [x] Statistiques: vols, heures de vol, cargo livré, gains
+
 ### DB
 - [ ] Table `game.player_profiles`
-  - id (uuid, pk)
-  - user_id (uuid, unique, fk users)
-  - display_name
-  - home_airport_ident (optionnel)
-  - created_at / updated_at
 
 ### API
 - [ ] `GET /api/profile/me`
 - [ ] `PATCH /api/profile/me`
-- [ ] Validation Pydantic (tailles, formats)
-- [ ] Audit logs (create/update)
-
-### DoD
-- [ ] Tests API (happy path + erreurs)
-- [ ] Documentation endpoints (OpenAPI ok)
-- [ ] Aucun breaking change sur V0.1
 
 ---
 
-## V0.3 — Company Profile
+## V0.3 — Company Dashboard (EN COURS)
 
 ### Objectif
 Donner une identité et des paramètres à la company.
 
-- [ ] Champs company : name, description, logo_url, tax_rate (optionnel)
-- [ ] Endpoint update profil company (RBAC owner/admin)
-- [ ] Audit logs
+### Frontend ✅
+- [x] Dashboard Company avec header (nom, home airport, date création, solde)
+- [x] Onglets: Aperçu, Usines, Flotte, Employés
+- [x] Statistiques: usines, avions, membres, ouvriers
+- [x] Liste des usines de la company
+- [x] Liste des membres avec username/email
+- [x] Actions: créer usine, ajouter avion, inviter membre
+
+### API ✅
+- [x] `GET /api/company/members` - Retourne username + email des membres
+- [x] `POST /api/company/members/add` - Ajouter un membre
 
 ---
 
@@ -51,7 +61,8 @@ Donner une identité et des paramètres à la company.
 ### Objectif
 Mettre en place un hôtel des ventes central.
 
-- [ ] Tables : market_orders, market_trades, wallet_transactions
+- [x] Tables : market_orders, market_wallet
+- [ ] market_trades, wallet_transactions
 - [ ] Money model : wallet + taxes + fees
 - [ ] Pagination + filtres
 - [ ] Anti-abus : price bands, cooldowns, rate limiting
@@ -100,9 +111,9 @@ Système complet de production industrielle permettant aux joueurs de transforme
 
 ---
 
-### 🔄 PHASE 2: Factories Base System (EN COURS)
+### ✅ PHASE 2: Factories Base System (DONE)
 
-**Statut**: 🟡 50% - Base de données créée, endpoints à implémenter
+**Statut**: ✅ 100% Terminé
 
 #### Base de données (6 tables) ✅ CRÉÉES
 
@@ -212,19 +223,25 @@ CREATE TABLE game.factory_transactions (
 - [ ] `update_worker_tier()` - Calcul tier basé sur XP
 - [ ] `calculate_max_slots()` - Slots factory selon taille airport (large=10, medium=5, small=2)
 
-#### API Endpoints Phase 2A
-- ⏳ `POST /api/factories` - Créer une factory (router existe, logique à impl)
-- ⏳ `GET /api/factories` - Liste mes factories (router existe, logique à impl)
-- ⏳ `GET /api/factories/{id}` - Détails (router existe, logique à impl)
-- ⏳ `PATCH /api/factories/{id}` - Modifier (router existe, logique à impl)
-- ⏳ `DELETE /api/factories/{id}` - Supprimer (router existe, logique à impl)
-- ⏳ `GET /api/factories/{id}/storage` - Inventaire (router existe, logique à impl)
-- ⏳ `POST /api/factories/{id}/workers` - Embaucher (router existe, logique à impl)
-- ⏳ `GET /api/factories/{id}/workers` - Liste (router existe, logique à impl)
+#### API Endpoints Phase 2A ✅
+- ✅ `POST /api/factories` - Créer une factory
+- ✅ `GET /api/factories` - Liste mes factories
+- ✅ `GET /api/factories/{id}` - Détails factory
+- ✅ `PATCH /api/factories/{id}` - Modifier factory
+- ✅ `DELETE /api/factories/{id}` - Supprimer factory
+- ✅ `GET /api/factories/{id}/storage` - Inventaire factory
+- ✅ `POST /api/factories/{id}/workers` - Embaucher workers
+- ✅ `GET /api/factories/{id}/workers` - Liste workers
 
-#### Validations métier
-- [ ] Limites factories par airport (max_factory_slots)
-- [ ] Ownership check (company_id = user's company)
+#### API Endpoints Phase 2B ✅
+- ✅ `GET /api/world/factories` - Liste factories pour la carte (T0 + joueurs)
+- ✅ `GET /api/world/airports/{ident}/slots` - Slots disponibles par aéroport
+- ✅ Mapping T0 factories → produit/type pour icônes carte
+
+#### Validations métier ✅
+- ✅ Limites factories par airport (max_factory_slots selon type)
+- ✅ Ownership check (company_id = user's company)
+- ✅ Slot index unique par aéroport
 - [ ] Worker tier <= Recipe tier
 - [ ] Storage capacity limits
 
@@ -592,29 +609,36 @@ $$ LANGUAGE plpgsql;
 
 ### 🎯 État Actuel Projet
 
-**✅ Fonctionnel (2026-01-21)**
+**✅ Fonctionnel (2026-01-22)**
 - PostgreSQL avec **17 tables game** (Phase 1 + Phase 2)
+- **84 000+ airports** importés avec système de slots
+- **31 usines T0** (NPC) en France avec mapping produits
 - 93 items (T0: 33, T1: 30, T2: 30) insérés
 - 60 recettes (T1: 30, T2: 30) insérées
 - API FastAPI démarrée (Docker local)
-- 11 endpoints `/api/world/*` **100% opérationnels**
 - Auth JWT fonctionnelle
 - Docker containers stables
-- 6 tables factories Phase 2 créées en DB
-- Modèle Recipe corrigé (production_time_hours, result_quantity)
 
-**🔧 En cours (2026-01-21 - Session terminée)**
-- ✅ Phase 2: Modèles SQLAlchemy vérifiés et corrigés (100%)
-- ✅ Router factories.py: Imports décommentés, API stable
-- ✅ Schemas factories.py: Simplifiés, alignés avec vraie structure SQL
-- ✅ API fonctionnelle, tous endpoints world opérationnels
-- ⏳ **Prochaine session**: Implémenter logique métier endpoints factories
+**✅ Frontend Webmap (2026-01-22)**
+- Carte Leaflet avec clustering aéroports/usines
+- Icônes de production pour usines T0 (food, fuel, mineral, etc.)
+- Dashboard Company avec onglets (Aperçu, Usines, Flotte, Employés)
+- Vue Profil pilote avec XP, licences, messagerie
+- Modal création usine sur slots disponibles
+- Affichage membres company avec username/email
+
+**✅ API Endpoints Complets**
+- `/api/world/factories` - Liste factories pour carte
+- `/api/world/airports/{ident}/slots` - Slots disponibles
+- `/api/company/members` - Membres avec infos utilisateur
+- `/api/factories/*` - CRUD complet factories
+- `/api/factories/{id}/workers` - Gestion workers
 
 **⏳ À venir**
-- Implémentation système production complet
-- NPC factories + marché dynamique
+- Implémentation système production complet (Phase 3)
+- NPC factories + marché dynamique (Phase 4)
 - Items T3-T5 (~300 items total)
-- Frontend UI
+- Intégration MSFS 2024
 
 ---
 
