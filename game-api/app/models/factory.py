@@ -5,7 +5,7 @@ Company-owned production facilities with auto-detected type
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, String, ForeignKey, func
+from sqlalchemy import Boolean, DateTime, String, Integer, ForeignKey, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -50,6 +50,12 @@ class Factory(Base):
     name: Mapped[str] = mapped_column(
         String(100),
         nullable=False
+    )
+    tier: Mapped[int] = mapped_column(
+        Integer,
+        server_default="1",
+        nullable=False,
+        comment="T0=NPC raw materials, T1-T5=Player factories"
     )
     factory_type: Mapped[str | None] = mapped_column(
         String(50),

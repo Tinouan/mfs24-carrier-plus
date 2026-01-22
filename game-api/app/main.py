@@ -1,6 +1,7 @@
 import os
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from app.core.db import engine, Base
@@ -19,6 +20,15 @@ app = FastAPI(
     title="MSFS Game API",
     version="0.1",
     root_path=ROOT_PATH,
+)
+
+# CORS middleware for webmap access
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, restrict to specific origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 

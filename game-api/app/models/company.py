@@ -1,11 +1,20 @@
 import uuid
+import re
 from datetime import datetime
 
-from sqlalchemy import String, Boolean, DateTime, Numeric, func
+from sqlalchemy import String, Boolean, DateTime, Numeric, Integer, func
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
+
+
+def slugify(text: str) -> str:
+    """Convert text to URL-friendly slug."""
+    text = text.lower().strip()
+    text = re.sub(r'[^\w\s-]', '', text)
+    text = re.sub(r'[\s_-]+', '-', text)
+    return text[:50]
 
 
 class Company(Base):
@@ -14,8 +23,15 @@ class Company(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
+    # World (default 1)
+    world_id: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
+
     # Core
     name: Mapped[str] = mapped_column(String(80), nullable=False)
+    slug: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+
+    # Owner (optional, tracked via company_members)
+    owner_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
 
     # IMPORTANT: Some older rows may still be NULL; we backfilled it earlier.
     home_airport_ident: Mapped[str] = mapped_column(String(8), nullable=False)

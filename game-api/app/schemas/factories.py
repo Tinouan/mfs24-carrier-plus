@@ -261,6 +261,22 @@ class AirportSlotOut(BaseModel):
     available_slots: int
 
 
+class AirportOut(BaseModel):
+    """Airport output for map display."""
+    ident: str
+    name: str | None
+    type: str | None
+    latitude_deg: float | None
+    longitude_deg: float | None
+    iso_country: str | None
+    municipality: str | None
+    iata_code: str | None
+    max_factories_slots: int | None
+
+    class Config:
+        from_attributes = True
+
+
 class FactoryStatsOut(BaseModel):
     """Factory statistics for dashboard."""
     total_factories: int

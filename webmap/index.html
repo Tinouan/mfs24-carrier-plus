@@ -1,741 +1,1708 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>MSFS Airports Map (Directus + Clusters + Side Panel)</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MFS Carrier+ Admin Panel</title>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #1a1a1a;
+            --bg-darker: #0d0d0d;
+            --bg-card: #141414;
+            --accent: #ff6600;
+            --accent-light: #ff8533;
+            --text: #e5e5e5;
+            --text-dim: #888;
+            --text-dark: #666;
+            --success: #00ff00;
+            --warning: #ffc800;
+            --danger: #ff4444;
+            --border: #333;
+        }
 
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Barlow', sans-serif;
+            background: var(--bg-dark);
+            color: var(--text);
+            min-height: 100vh;
+        }
 
-  <style>
-    :root{
-      --hud-bg: rgba(0,0,0,.72);
-      --hud-border: rgba(255,255,255,.12);
-      --text: #fff;
-      --muted: rgba(255,255,255,.75);
+        /* Scanline effect */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(0,0,0,0.1) 2px,
+                rgba(0,0,0,0.1) 4px
+            );
+            pointer-events: none;
+            opacity: 0.4;
+            z-index: 1000;
+        }
 
-      --panel-bg: rgba(14,14,16,.92);
-      --panel-border: rgba(255,255,255,.10);
-      --panel-shadow: 0 20px 50px rgba(0,0,0,.45);
+        .app { display: flex; min-height: 100vh; position: relative; z-index: 1; }
 
-      --btn-bg: rgba(255,255,255,.08);
-      --btn-bg-hover: rgba(255,255,255,.12);
-      --btn-border: rgba(255,255,255,.10);
-      --btn-primary-bg: rgba(255,255,255,.90);
-      --btn-primary-text: #111;
-    }
+        /* ========== SIDEBAR ========== */
+        .sidebar {
+            width: 220px;
+            background: var(--bg-darker);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100vh;
+            z-index: 100;
+        }
 
-    html, body { height: 100%; margin: 0; }
-    #map { height: 100%; }
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1rem 1.25rem;
+            border-bottom: 3px solid var(--accent);
+        }
 
-    /* HUD (top-left) */
-    .hud {
-      position: absolute;
-      z-index: 1000;
-      top: 10px; left: 10px;
-      background: var(--hud-bg);
-      color: var(--text);
-      padding: 10px 12px;
-      border-radius: 12px;
-      font: 13px/1.3 system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      max-width: 440px;
-      box-shadow: 0 10px 25px rgba(0,0,0,.35);
-      backdrop-filter: blur(6px);
-      border: 1px solid var(--hud-border);
-    }
-    .hud b { font-weight: 700; }
-    .hud input, .hud select {
-      width: 100%;
-      margin-top: 6px;
-      padding: 10px 10px;
-      border-radius: 10px;
-      border: 1px solid rgba(255,255,255,.10);
-      background: rgba(0,0,0,.35);
-      color: #fff;
-      outline: none;
-      font-size: 14px; /* tablette */
-    }
-    .row { display:flex; gap:8px; }
-    .row > * { flex: 1; }
-    .small { opacity: .90; font-size: 12px; margin-top: 8px; }
-    .muted { opacity: .78; }
-    .line { height: 1px; background: rgba(255,255,255,.12); margin: 10px 0; }
-    .checks { display:flex; gap:12px; align-items:center; flex-wrap: wrap; margin-top: 8px; }
-    .checks label { display:flex; gap:8px; align-items:center; cursor:pointer; user-select:none; }
-    .checks input[type="checkbox"]{ width: 18px; height: 18px; margin: 0; }
+        .logo-icon {
+            width: 44px; height: 44px;
+            background: var(--accent);
+            clip-path: polygon(10% 0%, 100% 0%, 90% 100%, 0% 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.3rem;
+            color: #000;
+        }
 
-    .legend { display:flex; flex-wrap: wrap; gap:10px; margin-top: 8px; font-size: 12px; opacity: .9; }
-    .chip { display:inline-flex; align-items:center; gap:6px; padding: 4px 8px; border-radius: 999px; background: rgba(255,255,255,.10); }
-    .dot {
-      width: 12px; height: 12px; border-radius: 999px;
-      background: rgba(255,255,255,.85);
-      border: 1px solid rgba(0,0,0,.35);
-      display:flex; align-items:center; justify-content:center;
-      font-size: 10px; line-height: 1;
-    }
-    .right { float: right; opacity: .85; }
+        .logo-text {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.4rem;
+            letter-spacing: 2px;
+        }
+        .logo-text span { color: var(--accent); }
 
-    /* Side Panel (right) */
-    .panel {
-      position: absolute;
-      z-index: 1200;
-      top: 0; right: 0;
-      height: 100%;
-      width: min(420px, 92vw); /* tablette-friendly */
-      background: var(--panel-bg);
-      color: var(--text);
-      border-left: 1px solid var(--panel-border);
-      box-shadow: var(--panel-shadow);
-      transform: translateX(100%);
-      transition: transform .18s ease-out;
-      display: flex;
-      flex-direction: column;
-      backdrop-filter: blur(10px);
-    }
-    .panel.open { transform: translateX(0); }
+        .nav { flex: 1; padding: 1rem 0; overflow-y: auto; }
 
-    .panel-header {
-      padding: 14px 14px 10px 14px;
-      border-bottom: 1px solid rgba(255,255,255,.10);
-      display:flex;
-      align-items: flex-start;
-      gap: 10px;
-    }
-    .panel-title { font-weight: 750; font-size: 15px; line-height: 1.2; }
-    .panel-sub { margin-top: 4px; color: var(--muted); font-size: 13px; }
-    .panel-close {
-      margin-left: auto;
-      border: 1px solid rgba(255,255,255,.12);
-      background: rgba(255,255,255,.06);
-      color: #fff;
-      border-radius: 10px;
-      padding: 8px 10px;
-      cursor: pointer;
-      font-size: 14px;
-    }
-    .panel-close:hover { background: rgba(255,255,255,.10); }
+        .nav-section { margin-bottom: 0.5rem; }
 
-    .panel-body {
-      padding: 14px;
-      overflow: auto;
-      -webkit-overflow-scrolling: touch;
-      flex: 1;
-    }
+        .nav-title {
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            color: var(--text-dark);
+            padding: 0.75rem 1.25rem 0.5rem;
+            text-transform: uppercase;
+        }
 
-    .kv {
-      display:grid;
-      grid-template-columns: 120px 1fr;
-      gap: 10px 12px;
-      padding: 10px 0;
-      border-bottom: 1px solid rgba(255,255,255,.08);
-    }
-    .k { color: rgba(255,255,255,.70); font-size: 12px; }
-    .v { font-weight: 650; font-size: 13px; }
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1.25rem;
+            color: var(--text-dim);
+            border-left: 3px solid transparent;
+            cursor: pointer;
+            transition: all 0.15s;
+            font-weight: 500;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 1px;
+        }
 
-    .panel-actions {
-      padding: 12px 14px;
-      border-top: 1px solid rgba(255,255,255,.10);
-      display:flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-    .btn {
-      border: 1px solid var(--btn-border);
-      background: var(--btn-bg);
-      color: #fff;
-      padding: 10px 12px;
-      border-radius: 12px;
-      cursor: pointer;
-      font: 650 13px/1 system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      touch-action: manipulation;
-    }
-    .btn:hover { background: var(--btn-bg-hover); }
-    .btn.primary {
-      background: var(--btn-primary-bg);
-      color: var(--btn-primary-text);
-      border-color: rgba(255,255,255,.25);
-    }
-    .btn.primary:hover { filter: brightness(.96); }
+        .nav-item:hover {
+            background: rgba(255, 102, 0, 0.1);
+            color: var(--accent);
+            border-left-color: var(--accent);
+        }
 
-    /* Overlay (when panel open, to close on tap) */
-    .overlay {
-      position: absolute;
-      z-index: 1100;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      background: rgba(0,0,0,.25);
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity .18s ease-out;
-    }
-    .overlay.open {
-      opacity: 1;
-      pointer-events: auto;
-    }
+        .nav-item.active {
+            background: rgba(255, 102, 0, 0.15);
+            color: var(--accent);
+            border-left-color: var(--accent);
+        }
 
-    /* Small highlight pulse for search */
-    .pulse {
-      width: 22px; height: 22px;
-      border-radius: 999px;
-      border: 2px solid rgba(255,255,255,.9);
-      background: rgba(255,255,255,.2);
-      box-shadow: 0 0 0 0 rgba(255,255,255,.35);
-      animation: pulse 1.2s ease-out 3;
-    }
-    @keyframes pulse {
-      0% { box-shadow: 0 0 0 0 rgba(255,255,255,.35); transform: scale(0.9); }
-      100% { box-shadow: 0 0 0 18px rgba(255,255,255,0); transform: scale(1.0); }
-    }
+        .nav-item .badge {
+            margin-left: auto;
+            background: var(--accent);
+            color: #000;
+            font-size: 0.65rem;
+            padding: 0.15rem 0.4rem;
+            font-weight: 700;
+        }
 
-    /* Leaflet controls spacing (panel) */
-    .leaflet-top.leaflet-right { right: 8px; }
-  </style>
+        .nav-divider {
+            height: 1px;
+            background: var(--border);
+            margin: 0.5rem 1.25rem;
+        }
+
+        /* ========== MAIN CONTENT ========== */
+        .main {
+            flex: 1;
+            margin-left: 220px;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        /* ========== HEADER ========== */
+        .header {
+            background: var(--bg-darker);
+            border-bottom: 1px solid var(--border);
+            padding: 0.75rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        .breadcrumb {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--text-dim);
+        }
+        .breadcrumb span { color: var(--accent); }
+
+        .status-bar {
+            display: flex;
+            gap: 1.5rem;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.75rem;
+            color: var(--text-dim);
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .status-light {
+            width: 8px; height: 8px;
+            background: var(--success);
+            clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+            animation: pulse 2s infinite;
+        }
+        .status-light.warning { background: var(--warning); }
+        .status-light.danger { background: var(--danger); }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.4rem 0.75rem;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+        }
+
+        .user-avatar {
+            width: 32px; height: 32px;
+            background: var(--accent);
+            clip-path: polygon(15% 0%, 100% 0%, 85% 100%, 0% 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Bebas Neue', sans-serif;
+            color: #000;
+        }
+
+        .user-name {
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+
+        /* ========== CONTENT ========== */
+        .content {
+            flex: 1;
+            padding: 1.5rem;
+            background: linear-gradient(180deg, var(--bg-dark) 0%, var(--bg-card) 100%);
+        }
+
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .page-title {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 2rem;
+            letter-spacing: 4px;
+        }
+        .page-title span { color: var(--accent); }
+
+        .page-actions {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        /* ========== BUTTONS ========== */
+        .btn {
+            background: var(--accent);
+            color: #000;
+            border: none;
+            padding: 0.7rem 1.25rem;
+            font-family: 'Barlow', sans-serif;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn:hover {
+            background: var(--accent-light);
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: var(--bg-darker);
+            color: var(--text);
+            border: 1px solid var(--border);
+            clip-path: none;
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: var(--bg-darker);
+        }
+
+        /* ========== STATS ========== */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-card {
+            background: var(--bg-darker);
+            border: 1px solid var(--border);
+            padding: 1.25rem;
+            position: relative;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0;
+            width: 4px; height: 100%;
+            background: var(--accent);
+        }
+
+        .stat-card::after {
+            content: '';
+            position: absolute;
+            top: 0; right: 0;
+            width: 25px; height: 25px;
+            border-top: 1px solid var(--accent);
+            border-right: 1px solid var(--accent);
+        }
+
+        .stat-icon {
+            font-size: 1.25rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--text-dark);
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-value {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 1.75rem;
+            color: var(--accent);
+        }
+
+        .stat-meta {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--success);
+            margin-top: 0.25rem;
+        }
+        .stat-meta.negative { color: var(--danger); }
+
+        /* ========== GRID LAYOUT ========== */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+        }
+
+        /* ========== CARDS ========== */
+        .card {
+            background: var(--bg-darker);
+            border: 1px solid var(--border);
+        }
+
+        .card-header {
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid var(--border);
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1rem;
+            letter-spacing: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: linear-gradient(90deg, rgba(255,102,0,0.1) 0%, transparent 50%);
+        }
+
+        .card-header-title {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .card-header-title span { color: var(--accent); }
+
+        .card-body { padding: 0; }
+
+        .card-body.padded { padding: 1.25rem; }
+
+        /* ========== TABLES ========== */
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .table th {
+            text-align: left;
+            padding: 0.75rem 1rem;
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-dark);
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+        }
+
+        .table td {
+            padding: 0.875rem 1rem;
+            border-bottom: 1px solid #222;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.85rem;
+        }
+
+        .table tr:hover td {
+            background: rgba(255, 102, 0, 0.05);
+        }
+
+        .table tr:last-child td { border-bottom: none; }
+
+        .route { color: var(--accent); font-weight: 600; }
+        .amount { color: var(--success); font-weight: 600; }
+        .amount.negative { color: var(--danger); }
+
+        /* ========== BADGES ========== */
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.6rem;
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .badge-active {
+            background: rgba(0, 255, 0, 0.2);
+            color: var(--success);
+            border: 1px solid rgba(0, 255, 0, 0.3);
+        }
+
+        .badge-pending {
+            background: rgba(255, 200, 0, 0.2);
+            color: var(--warning);
+            border: 1px solid rgba(255, 200, 0, 0.3);
+        }
+
+        .badge-danger {
+            background: rgba(255, 68, 68, 0.2);
+            color: var(--danger);
+            border: 1px solid rgba(255, 68, 68, 0.3);
+        }
+
+        .badge-info {
+            background: rgba(0, 170, 255, 0.2);
+            color: #00aaff;
+            border: 1px solid rgba(0, 170, 255, 0.3);
+        }
+
+        /* ========== PROGRESS BARS ========== */
+        .progress-bar {
+            height: 6px;
+            background: #222;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            position: absolute;
+            top: 0; left: 0;
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent), var(--accent-light));
+            transition: width 0.5s ease;
+        }
+
+        /* ========== FACTORY ITEMS ========== */
+        .factory-item {
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid #222;
+        }
+        .factory-item:last-child { border-bottom: none; }
+
+        .factory-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+
+        .factory-name {
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .factory-status {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--accent);
+        }
+
+        /* ========== LIST ITEMS ========== */
+        .list-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.875rem 1.25rem;
+            border-bottom: 1px solid #222;
+            transition: background 0.15s;
+        }
+        .list-item:last-child { border-bottom: none; }
+        .list-item:hover { background: rgba(255, 102, 0, 0.05); }
+
+        .list-icon {
+            width: 40px; height: 40px;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+        }
+
+        .list-info { flex: 1; }
+
+        .list-title {
+            font-weight: 600;
+            margin-bottom: 0.15rem;
+        }
+
+        .list-meta {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+        }
+
+        .list-value {
+            text-align: right;
+        }
+
+        /* ========== ACTIVITY FEED ========== */
+        .activity-item {
+            display: flex;
+            gap: 1rem;
+            padding: 0.875rem 1.25rem;
+            border-bottom: 1px solid #222;
+        }
+        .activity-item:last-child { border-bottom: none; }
+
+        .activity-icon {
+            width: 32px; height: 32px;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+            flex-shrink: 0;
+        }
+
+        .activity-content { flex: 1; }
+
+        .activity-text {
+            font-size: 0.85rem;
+            margin-bottom: 0.2rem;
+        }
+        .activity-text strong { color: var(--accent); }
+
+        .activity-time {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--text-dark);
+        }
+
+        /* ========== FORMS ========== */
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-dim);
+            margin-bottom: 0.4rem;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.9rem;
+            transition: border-color 0.2s;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .form-input::placeholder {
+            color: var(--text-dark);
+        }
+
+        .form-select {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23ff6600' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 1rem center;
+            padding-right: 2.5rem;
+        }
+
+        /* ========== MODAL ========== */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1001;
+        }
+        .modal-overlay.active { display: flex; }
+
+        .modal {
+            background: var(--bg-darker);
+            border: 1px solid var(--border);
+            width: 90%;
+            max-width: 500px;
+            position: relative;
+        }
+
+        .modal::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 3px;
+            background: var(--accent);
+        }
+
+        .modal-header {
+            padding: 1.25rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-title {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.3rem;
+            letter-spacing: 2px;
+        }
+
+        .modal-close {
+            width: 32px; height: 32px;
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            transition: all 0.2s;
+        }
+        .modal-close:hover {
+            border-color: var(--danger);
+            color: var(--danger);
+        }
+
+        .modal-body { padding: 1.25rem; }
+
+        .modal-footer {
+            padding: 1rem 1.25rem;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+        }
+
+        /* ========== TOAST ========== */
+        .toast-container {
+            position: fixed;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            z-index: 1002;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .toast {
+            background: var(--bg-darker);
+            border: 1px solid var(--border);
+            padding: 1rem 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            animation: slideIn 0.3s ease;
+        }
+
+        .toast::before {
+            content: '';
+            width: 4px;
+            height: 100%;
+            position: absolute;
+            left: 0;
+            top: 0;
+        }
+        .toast.success::before { background: var(--success); }
+        .toast.error::before { background: var(--danger); }
+        .toast.warning::before { background: var(--warning); }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        /* ========== PAGE SECTIONS ========== */
+        .page { display: none; }
+        .page.active { display: block; }
+
+        /* ========== RESPONSIVE ========== */
+        @media (max-width: 1200px) {
+            .stats { grid-template-columns: repeat(2, 1fr); }
+            .grid-2 { grid-template-columns: 1fr; }
+            .grid-3 { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s;
+            }
+            .sidebar.open { transform: translateX(0); }
+            .main { margin-left: 0; }
+            .stats { grid-template-columns: 1fr; }
+        }
+    </style>
 </head>
 <body>
-  <div id="map"></div>
+    <div class="app">
+        <!-- SIDEBAR -->
+        <aside class="sidebar">
+            <div class="logo">
+                <div class="logo-icon">C+</div>
+                <div class="logo-text">MFS <span>CARRIER+</span></div>
+            </div>
+            <nav class="nav">
+                <div class="nav-section">
+                    <div class="nav-title">Principal</div>
+                    <div class="nav-item active" data-page="dashboard">
+                        <span>📊</span> Dashboard
+                    </div>
+                    <div class="nav-item" data-page="companies">
+                        <span>🏢</span> Companies
+                        <span class="badge">12</span>
+                    </div>
+                    <div class="nav-item" data-page="fleet">
+                        <span>✈️</span> Fleet
+                    </div>
+                </div>
+                <div class="nav-divider"></div>
+                <div class="nav-section">
+                    <div class="nav-title">Gameplay</div>
+                    <div class="nav-item" data-page="missions">
+                        <span>🎯</span> Missions
+                        <span class="badge">89</span>
+                    </div>
+                    <div class="nav-item" data-page="factories">
+                        <span>🏭</span> Usines
+                    </div>
+                    <div class="nav-item" data-page="market">
+                        <span>💰</span> Market
+                    </div>
+                    <div class="nav-item" data-page="inventory">
+                        <span>📦</span> Inventory
+                    </div>
+                </div>
+                <div class="nav-divider"></div>
+                <div class="nav-section">
+                    <div class="nav-title">Système</div>
+                    <div class="nav-item" data-page="users">
+                        <span>👤</span> Users
+                    </div>
+                    <div class="nav-item" data-page="logs">
+                        <span>📋</span> Logs
+                    </div>
+                    <div class="nav-item" data-page="settings">
+                        <span>⚙️</span> Config
+                    </div>
+                </div>
+            </nav>
+        </aside>
 
-  <!-- HUD -->
-  <div class="hud">
-    <div>
-      <b>Airports</b> <span class="muted">(bbox + clusters)</span>
-      <span class="right muted" id="zoomInfo">—</span>
+        <!-- MAIN CONTENT -->
+        <main class="main">
+            <!-- HEADER -->
+            <header class="header">
+                <div class="header-left">
+                    <div class="breadcrumb">
+                        ADMIN <span>▸</span> <span id="current-page">DASHBOARD</span>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <div class="status-bar">
+                        <div class="status-item">
+                            <span class="status-light"></span> API:OK
+                        </div>
+                        <div class="status-item">
+                            <span class="status-light"></span> DB:CONN
+                        </div>
+                        <div class="status-item">
+                            <span class="status-light warning"></span> 3 PENDING
+                        </div>
+                    </div>
+                    <div class="user-info">
+                        <div class="user-avatar">AD</div>
+                        <span class="user-name">Admin</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- CONTENT -->
+            <div class="content">
+                <!-- ==================== DASHBOARD ==================== -->
+                <div class="page active" id="page-dashboard">
+                    <div class="page-header">
+                        <h1 class="page-title">ADMIN <span>DASHBOARD</span></h1>
+                        <div class="page-actions">
+                            <button class="btn-secondary btn">⟳ Refresh</button>
+                            <button class="btn" onclick="openModal('mission-modal')">+ NEW MISSION</button>
+                        </div>
+                    </div>
+
+                    <div class="stats">
+                        <div class="stat-card">
+                            <div class="stat-icon">👤</div>
+                            <div class="stat-label">Active Players</div>
+                            <div class="stat-value">1,247</div>
+                            <div class="stat-meta">▲ +12% TODAY</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">✈️</div>
+                            <div class="stat-label">Flights Active</div>
+                            <div class="stat-value">342</div>
+                            <div class="stat-meta">▲ +8% TODAY</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">🎯</div>
+                            <div class="stat-label">Missions</div>
+                            <div class="stat-value">89</div>
+                            <div class="stat-meta">▲ +23% TODAY</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">💰</div>
+                            <div class="stat-label">Total Economy</div>
+                            <div class="stat-value">$2.4M</div>
+                            <div class="stat-meta">▲ +5% TODAY</div>
+                        </div>
+                    </div>
+
+                    <div class="grid-2">
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-header-title"><span>▶</span> ACTIVE MISSIONS</div>
+                                <button class="btn-secondary btn" style="padding: 0.4rem 0.75rem; font-size: 0.7rem;">VIEW ALL</button>
+                            </div>
+                            <div class="card-body">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Route</th>
+                                            <th>Type</th>
+                                            <th>Status</th>
+                                            <th>Reward</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td class="route">LFPG → KJFK</td>
+                                            <td>CARGO 12,500kg</td>
+                                            <td><span class="badge badge-active">ACTIVE</span></td>
+                                            <td class="amount">$45,000</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="route">EGLL → LEMD</td>
+                                            <td>PAX 180</td>
+                                            <td><span class="badge badge-pending">PENDING</span></td>
+                                            <td class="amount">$28,000</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="route">KLAX → PHNL</td>
+                                            <td>VIP CHARTER</td>
+                                            <td><span class="badge badge-active">ACTIVE</span></td>
+                                            <td class="amount">$120,000</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="route">EDDF → LEBL</td>
+                                            <td>CARGO 8,200kg</td>
+                                            <td><span class="badge badge-danger">DELAYED</span></td>
+                                            <td class="amount">$32,000</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-header-title"><span>▶</span> FACTORIES STATUS</div>
+                            </div>
+                            <div class="card-body">
+                                <div class="factory-item">
+                                    <div class="factory-header">
+                                        <span class="factory-name">🛢️ Raffinerie Paris</span>
+                                        <span class="factory-status">85%</span>
+                                    </div>
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" style="width: 85%"></div>
+                                    </div>
+                                </div>
+                                <div class="factory-item">
+                                    <div class="factory-header">
+                                        <span class="factory-name">🔧 Hangar MRO</span>
+                                        <span class="factory-status">62%</span>
+                                    </div>
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" style="width: 62%"></div>
+                                    </div>
+                                </div>
+                                <div class="factory-item">
+                                    <div class="factory-header">
+                                        <span class="factory-name">📦 Entrepôt CDG</span>
+                                        <span class="factory-status">91%</span>
+                                    </div>
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" style="width: 91%"></div>
+                                    </div>
+                                </div>
+                                <div class="factory-item">
+                                    <div class="factory-header">
+                                        <span class="factory-name">⚡ Centrale Elect.</span>
+                                        <span class="factory-status">45%</span>
+                                    </div>
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" style="width: 45%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid-3">
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-header-title"><span>▶</span> RECENT ACTIVITY</div>
+                            </div>
+                            <div class="card-body">
+                                <div class="activity-item">
+                                    <div class="activity-icon">✈️</div>
+                                    <div class="activity-content">
+                                        <div class="activity-text"><strong>PilotMax</strong> completed mission LFPG→KJFK</div>
+                                        <div class="activity-time">2 min ago</div>
+                                    </div>
+                                </div>
+                                <div class="activity-item">
+                                    <div class="activity-icon">🏢</div>
+                                    <div class="activity-content">
+                                        <div class="activity-text"><strong>SkyFreight</strong> purchased new aircraft</div>
+                                        <div class="activity-time">15 min ago</div>
+                                    </div>
+                                </div>
+                                <div class="activity-item">
+                                    <div class="activity-icon">💰</div>
+                                    <div class="activity-content">
+                                        <div class="activity-text"><strong>Market</strong> fuel price updated</div>
+                                        <div class="activity-time">1 hour ago</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-header-title"><span>▶</span> TOP COMPANIES</div>
+                            </div>
+                            <div class="card-body">
+                                <div class="list-item">
+                                    <div class="list-icon">🥇</div>
+                                    <div class="list-info">
+                                        <div class="list-title">SkyFreight Corp</div>
+                                        <div class="list-meta">45 aircraft • 12 pilots</div>
+                                    </div>
+                                    <div class="list-value amount">$1.2M</div>
+                                </div>
+                                <div class="list-item">
+                                    <div class="list-icon">🥈</div>
+                                    <div class="list-info">
+                                        <div class="list-title">AeroLogistics</div>
+                                        <div class="list-meta">32 aircraft • 8 pilots</div>
+                                    </div>
+                                    <div class="list-value amount">$890K</div>
+                                </div>
+                                <div class="list-item">
+                                    <div class="list-icon">🥉</div>
+                                    <div class="list-info">
+                                        <div class="list-title">FastCargo Inc</div>
+                                        <div class="list-meta">28 aircraft • 6 pilots</div>
+                                    </div>
+                                    <div class="list-value amount">$650K</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-header-title"><span>▶</span> MARKET PRICES</div>
+                            </div>
+                            <div class="card-body">
+                                <div class="list-item">
+                                    <div class="list-icon">⛽</div>
+                                    <div class="list-info">
+                                        <div class="list-title">Jet Fuel</div>
+                                        <div class="list-meta">per gallon</div>
+                                    </div>
+                                    <div class="list-value">
+                                        <span class="amount">$2.45</span>
+                                        <div class="stat-meta">▲ +3%</div>
+                                    </div>
+                                </div>
+                                <div class="list-item">
+                                    <div class="list-icon">🔧</div>
+                                    <div class="list-info">
+                                        <div class="list-title">Parts</div>
+                                        <div class="list-meta">average</div>
+                                    </div>
+                                    <div class="list-value">
+                                        <span class="amount">$1,250</span>
+                                        <div class="stat-meta negative">▼ -2%</div>
+                                    </div>
+                                </div>
+                                <div class="list-item">
+                                    <div class="list-icon">📦</div>
+                                    <div class="list-info">
+                                        <div class="list-title">Cargo Rate</div>
+                                        <div class="list-meta">per kg/nm</div>
+                                    </div>
+                                    <div class="list-value">
+                                        <span class="amount">$0.12</span>
+                                        <div class="stat-meta">▲ +1%</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ==================== COMPANIES ==================== -->
+                <div class="page" id="page-companies">
+                    <div class="page-header">
+                        <h1 class="page-title">MANAGE <span>COMPANIES</span></h1>
+                        <div class="page-actions">
+                            <button class="btn">+ NEW COMPANY</button>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-header-title"><span>▶</span> ALL COMPANIES</div>
+                        </div>
+                        <div class="card-body">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Company</th>
+                                        <th>Owner</th>
+                                        <th>Aircraft</th>
+                                        <th>Balance</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>SkyFreight Corp</strong></td>
+                                        <td>PilotMax</td>
+                                        <td>45</td>
+                                        <td class="amount">$1,245,000</td>
+                                        <td><span class="badge badge-active">ACTIVE</span></td>
+                                        <td><button class="btn-secondary btn" style="padding:0.3rem 0.6rem;font-size:0.7rem;">EDIT</button></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>AeroLogistics</strong></td>
+                                        <td>SkyKing</td>
+                                        <td>32</td>
+                                        <td class="amount">$890,000</td>
+                                        <td><span class="badge badge-active">ACTIVE</span></td>
+                                        <td><button class="btn-secondary btn" style="padding:0.3rem 0.6rem;font-size:0.7rem;">EDIT</button></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>FastCargo Inc</strong></td>
+                                        <td>AceFlyer</td>
+                                        <td>28</td>
+                                        <td class="amount">$650,000</td>
+                                        <td><span class="badge badge-pending">REVIEW</span></td>
+                                        <td><button class="btn-secondary btn" style="padding:0.3rem 0.6rem;font-size:0.7rem;">EDIT</button></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ==================== FLEET ==================== -->
+                <div class="page" id="page-fleet">
+                    <div class="page-header">
+                        <h1 class="page-title">FLEET <span>MANAGEMENT</span></h1>
+                        <div class="page-actions">
+                            <button class="btn">+ ADD AIRCRAFT</button>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-header-title"><span>▶</span> ALL AIRCRAFT</div>
+                        </div>
+                        <div class="card-body">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Registration</th>
+                                        <th>Type</th>
+                                        <th>Company</th>
+                                        <th>Location</th>
+                                        <th>Condition</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td class="route">F-GSKY</td>
+                                        <td>A320neo</td>
+                                        <td>SkyFreight Corp</td>
+                                        <td>LFPG</td>
+                                        <td>92%</td>
+                                        <td><span class="badge badge-active">FLYING</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="route">N-FAST</td>
+                                        <td>B737-800</td>
+                                        <td>FastCargo Inc</td>
+                                        <td>KJFK</td>
+                                        <td>87%</td>
+                                        <td><span class="badge badge-info">PARKED</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="route">G-AERO</td>
+                                        <td>A330-300F</td>
+                                        <td>AeroLogistics</td>
+                                        <td>EGLL</td>
+                                        <td>45%</td>
+                                        <td><span class="badge badge-danger">MAINT</span></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ==================== MISSIONS ==================== -->
+                <div class="page" id="page-missions">
+                    <div class="page-header">
+                        <h1 class="page-title">MISSION <span>CENTER</span></h1>
+                        <div class="page-actions">
+                            <button class="btn" onclick="openModal('mission-modal')">+ CREATE MISSION</button>
+                        </div>
+                    </div>
+                    <div class="stats">
+                        <div class="stat-card">
+                            <div class="stat-label">Total Missions</div>
+                            <div class="stat-value">247</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Active</div>
+                            <div class="stat-value">89</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Completed Today</div>
+                            <div class="stat-value">34</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Revenue Today</div>
+                            <div class="stat-value">$156K</div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-header-title"><span>▶</span> ALL MISSIONS</div>
+                        </div>
+                        <div class="card-body">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Route</th>
+                                        <th>Type</th>
+                                        <th>Cargo</th>
+                                        <th>Reward</th>
+                                        <th>Assigned</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>#M-001</td>
+                                        <td class="route">LFPG → KJFK</td>
+                                        <td>CARGO</td>
+                                        <td>12,500 kg</td>
+                                        <td class="amount">$45,000</td>
+                                        <td>SkyFreight</td>
+                                        <td><span class="badge badge-active">ACTIVE</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td>#M-002</td>
+                                        <td class="route">EGLL → LEMD</td>
+                                        <td>PAX</td>
+                                        <td>180 seats</td>
+                                        <td class="amount">$28,000</td>
+                                        <td>—</td>
+                                        <td><span class="badge badge-pending">PENDING</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td>#M-003</td>
+                                        <td class="route">KLAX → PHNL</td>
+                                        <td>VIP</td>
+                                        <td>Charter</td>
+                                        <td class="amount">$120,000</td>
+                                        <td>AeroLog</td>
+                                        <td><span class="badge badge-active">ACTIVE</span></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ==================== FACTORIES ==================== -->
+                <div class="page" id="page-factories">
+                    <div class="page-header">
+                        <h1 class="page-title">FACTORY <span>MANAGEMENT</span></h1>
+                        <div class="page-actions">
+                            <button class="btn">+ ADD FACTORY</button>
+                        </div>
+                    </div>
+                    <div class="grid-3">
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-header-title">🛢️ RAFFINERIE PARIS</div>
+                                <span class="badge badge-active">ONLINE</span>
+                            </div>
+                            <div class="card-body padded">
+                                <div class="factory-header">
+                                    <span>Production</span>
+                                    <span class="factory-status">85%</span>
+                                </div>
+                                <div class="progress-bar" style="margin-bottom:1rem">
+                                    <div class="progress-fill" style="width:85%"></div>
+                                </div>
+                                <div style="font-size:0.8rem;color:var(--text-dim)">
+                                    Output: <strong style="color:var(--accent)">1,200 gal/h</strong><br>
+                                    Location: LFPG<br>
+                                    Workers: 24
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-header-title">🔧 HANGAR MRO</div>
+                                <span class="badge badge-active">ONLINE</span>
+                            </div>
+                            <div class="card-body padded">
+                                <div class="factory-header">
+                                    <span>Capacity</span>
+                                    <span class="factory-status">62%</span>
+                                </div>
+                                <div class="progress-bar" style="margin-bottom:1rem">
+                                    <div class="progress-fill" style="width:62%"></div>
+                                </div>
+                                <div style="font-size:0.8rem;color:var(--text-dim)">
+                                    Bays: <strong style="color:var(--accent)">3/5 used</strong><br>
+                                    Location: LFPG<br>
+                                    Technicians: 18
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-header-title">📦 ENTREPÔT CDG</div>
+                                <span class="badge badge-pending">BUSY</span>
+                            </div>
+                            <div class="card-body padded">
+                                <div class="factory-header">
+                                    <span>Storage</span>
+                                    <span class="factory-status">91%</span>
+                                </div>
+                                <div class="progress-bar" style="margin-bottom:1rem">
+                                    <div class="progress-fill" style="width:91%"></div>
+                                </div>
+                                <div style="font-size:0.8rem;color:var(--text-dim)">
+                                    Capacity: <strong style="color:var(--accent)">45,000 kg</strong><br>
+                                    Location: LFPG<br>
+                                    Workers: 32
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ==================== MARKET ==================== -->
+                <div class="page" id="page-market">
+                    <div class="page-header">
+                        <h1 class="page-title">MARKET <span>PRICES</span></h1>
+                        <div class="page-actions">
+                            <button class="btn">UPDATE PRICES</button>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-header-title"><span>▶</span> COMMODITIES</div>
+                        </div>
+                        <div class="card-body">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Resource</th>
+                                        <th>Current Price</th>
+                                        <th>24h Change</th>
+                                        <th>7d Change</th>
+                                        <th>Supply</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>⛽ Jet Fuel (gal)</td>
+                                        <td class="amount">$2.45</td>
+                                        <td class="amount">+3.2%</td>
+                                        <td class="amount">+8.1%</td>
+                                        <td><span class="badge badge-active">HIGH</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td>🔧 Aircraft Parts</td>
+                                        <td class="amount">$1,250</td>
+                                        <td class="amount negative">-2.1%</td>
+                                        <td class="amount negative">-5.4%</td>
+                                        <td><span class="badge badge-pending">MEDIUM</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td>📦 Cargo Containers</td>
+                                        <td class="amount">$850</td>
+                                        <td class="amount">+1.5%</td>
+                                        <td class="amount">+3.2%</td>
+                                        <td><span class="badge badge-active">HIGH</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td>🛠️ Tools & Equipment</td>
+                                        <td class="amount">$3,400</td>
+                                        <td class="amount">+0.8%</td>
+                                        <td class="amount negative">-1.2%</td>
+                                        <td><span class="badge badge-danger">LOW</span></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ==================== INVENTORY ==================== -->
+                <div class="page" id="page-inventory">
+                    <div class="page-header">
+                        <h1 class="page-title">INVENTORY <span>MANAGEMENT</span></h1>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-header-title"><span>▶</span> GLOBAL INVENTORY</div>
+                        </div>
+                        <div class="card-body">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Item</th>
+                                        <th>Quantity</th>
+                                        <th>Location</th>
+                                        <th>Value</th>
+                                        <th>Last Update</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>⛽ Jet Fuel</td>
+                                        <td>125,000 gal</td>
+                                        <td>LFPG</td>
+                                        <td class="amount">$306,250</td>
+                                        <td>2 min ago</td>
+                                    </tr>
+                                    <tr>
+                                        <td>🔧 Engine Parts</td>
+                                        <td>342 units</td>
+                                        <td>KJFK</td>
+                                        <td class="amount">$427,500</td>
+                                        <td>15 min ago</td>
+                                    </tr>
+                                    <tr>
+                                        <td>📦 Cargo Pallets</td>
+                                        <td>89 units</td>
+                                        <td>EGLL</td>
+                                        <td class="amount">$75,650</td>
+                                        <td>1 hour ago</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ==================== USERS ==================== -->
+                <div class="page" id="page-users">
+                    <div class="page-header">
+                        <h1 class="page-title">USER <span>MANAGEMENT</span></h1>
+                        <div class="page-actions">
+                            <button class="btn">+ ADD USER</button>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-header-title"><span>▶</span> ALL USERS</div>
+                        </div>
+                        <div class="card-body">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>User</th>
+                                        <th>Email</th>
+                                        <th>Company</th>
+                                        <th>Role</th>
+                                        <th>Last Active</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>PilotMax</strong></td>
+                                        <td>pilot@example.com</td>
+                                        <td>SkyFreight Corp</td>
+                                        <td>Owner</td>
+                                        <td>Online</td>
+                                        <td><span class="badge badge-active">ACTIVE</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>SkyKing</strong></td>
+                                        <td>sky@example.com</td>
+                                        <td>AeroLogistics</td>
+                                        <td>Owner</td>
+                                        <td>2h ago</td>
+                                        <td><span class="badge badge-active">ACTIVE</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>AceFlyer</strong></td>
+                                        <td>ace@example.com</td>
+                                        <td>FastCargo Inc</td>
+                                        <td>Pilot</td>
+                                        <td>1d ago</td>
+                                        <td><span class="badge badge-pending">IDLE</span></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ==================== LOGS ==================== -->
+                <div class="page" id="page-logs">
+                    <div class="page-header">
+                        <h1 class="page-title">SYSTEM <span>LOGS</span></h1>
+                        <div class="page-actions">
+                            <button class="btn-secondary btn">EXPORT</button>
+                            <button class="btn">CLEAR LOGS</button>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-header-title"><span>▶</span> RECENT LOGS</div>
+                        </div>
+                        <div class="card-body">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Timestamp</th>
+                                        <th>Level</th>
+                                        <th>Source</th>
+                                        <th>Message</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td style="font-family:'Share Tech Mono',monospace;font-size:0.8rem">2025-01-22 14:32:15</td>
+                                        <td><span class="badge badge-active">INFO</span></td>
+                                        <td>AUTH</td>
+                                        <td>User PilotMax logged in successfully</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="font-family:'Share Tech Mono',monospace;font-size:0.8rem">2025-01-22 14:30:42</td>
+                                        <td><span class="badge badge-pending">WARN</span></td>
+                                        <td>MISSION</td>
+                                        <td>Mission #M-004 deadline approaching</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="font-family:'Share Tech Mono',monospace;font-size:0.8rem">2025-01-22 14:28:01</td>
+                                        <td><span class="badge badge-danger">ERROR</span></td>
+                                        <td>API</td>
+                                        <td>Rate limit exceeded for IP 192.168.1.45</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="font-family:'Share Tech Mono',monospace;font-size:0.8rem">2025-01-22 14:25:33</td>
+                                        <td><span class="badge badge-active">INFO</span></td>
+                                        <td>MARKET</td>
+                                        <td>Fuel prices updated successfully</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ==================== SETTINGS ==================== -->
+                <div class="page" id="page-settings">
+                    <div class="page-header">
+                        <h1 class="page-title">SYSTEM <span>CONFIG</span></h1>
+                    </div>
+                    <div class="grid-2">
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-header-title"><span>▶</span> GENERAL SETTINGS</div>
+                            </div>
+                            <div class="card-body padded">
+                                <div class="form-group">
+                                    <label class="form-label">Server Name</label>
+                                    <input type="text" class="form-input" value="MFS Carrier+ Production">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">API Base URL</label>
+                                    <input type="text" class="form-input" value="http://localhost:8080/api">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Max Players</label>
+                                    <input type="number" class="form-input" value="5000">
+                                </div>
+                                <button class="btn">SAVE CHANGES</button>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-header-title"><span>▶</span> ECONOMY SETTINGS</div>
+                            </div>
+                            <div class="card-body padded">
+                                <div class="form-group">
+                                    <label class="form-label">Starting Balance</label>
+                                    <input type="number" class="form-input" value="50000">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Mission Multiplier</label>
+                                    <input type="number" class="form-input" value="1.0" step="0.1">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Tax Rate (%)</label>
+                                    <input type="number" class="form-input" value="5">
+                                </div>
+                                <button class="btn">SAVE CHANGES</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
     </div>
 
-    <div class="row" style="margin-top:8px;">
-      <input id="q" placeholder="Recherche ICAO/IATA/IDENT (ex: LFRK, CDG)" />
-      <select id="type">
-        <option value="">Tous types</option>
-        <option value="large_airport">large_airport</option>
-        <option value="medium_airport">medium_airport</option>
-        <option value="small_airport">small_airport</option>
-        <option value="heliport">heliport</option>
-        <option value="seaplane_base">seaplane_base</option>
-        <option value="balloonport">balloonport</option>
-        <option value="closed">closed</option>
-      </select>
-    </div>
-
-    <div class="row">
-      <select id="country">
-        <option value="">Tous pays</option>
-      </select>
-      <input id="countryFallback" style="display:none;" placeholder="Pays ISO (ex: FR, US)" />
-    </div>
-
-    <div class="checks">
-      <label title="Masquer les aéroports fermés">
-        <input id="hideClosed" type="checkbox" checked />
-        Hide closed
-      </label>
-      <label title="Affiche uniquement les aéroports qui ont un code IATA">
-        <input id="onlyIata" type="checkbox" />
-        IATA only
-      </label>
-      <label title="Affiche uniquement les aéroports qui ont un code ICAO">
-        <input id="onlyIcao" type="checkbox" />
-        ICAO only
-      </label>
-    </div>
-
-    <div class="line"></div>
-
-    <div class="legend">
-      <span class="chip"><span class="dot">✈</span> large/medium</span>
-      <span class="chip"><span class="dot">•</span> small</span>
-      <span class="chip"><span class="dot">H</span> heliport</span>
-      <span class="chip"><span class="dot"></span> seaplane</span>
-      <span class="chip"><span class="dot">×</span> closed</span>
-    </div>
-
-    <div class="small" id="status">—</div>
-    <div class="small muted" id="hint"></div>
-  </div>
-
-  <!-- Overlay + Side Panel -->
-  <div id="overlay" class="overlay"></div>
-
-  <aside id="panel" class="panel" aria-hidden="true">
-    <div class="panel-header">
-      <div>
-        <div class="panel-title" id="panelTitle">—</div>
-        <div class="panel-sub" id="panelSub">—</div>
-      </div>
-      <button class="panel-close" id="panelClose" aria-label="Fermer">✕</button>
-    </div>
-
-    <div class="panel-body" id="panelBody">
-      <!-- injected -->
-    </div>
-
-    <div class="panel-actions">
-      <button class="btn primary" data-action="plan">Plan de vol</button>
-      <button class="btn" data-action="factories">Usines</button>
-      <button class="btn" data-action="set-home">Définir hub</button>
-    </div>
-  </aside>
-
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
-
-  <script>
-    // =========================
-    // CONFIG
-    // =========================
-    const DIRECTUS_BASE = "http://192.168.1.15:8080"; // sans slash final
-    const COLLECTION = "airports";
-
-    const LIMIT = 2000;
-    const MIN_ZOOM = 5;
-    const DEBOUNCE_MS = 250;
-
-    // "Enter" search jump: centre sans changer le zoom
-    const SEARCH_JUMP_MIN_LEN = 2;
-    const SEARCH_LIMIT = 1;
-
-    // =========================
-    // UI
-    // =========================
-    const statusEl = document.getElementById("status");
-    const hintEl = document.getElementById("hint");
-    const zoomInfoEl = document.getElementById("zoomInfo");
-
-    const qEl = document.getElementById("q");
-    const typeEl = document.getElementById("type");
-    const countryEl = document.getElementById("country");
-    const countryFallbackEl = document.getElementById("countryFallback");
-    const hideClosedEl = document.getElementById("hideClosed");
-    const onlyIataEl = document.getElementById("onlyIata");
-    const onlyIcaoEl = document.getElementById("onlyIcao");
-
-    const overlayEl = document.getElementById("overlay");
-    const panelEl = document.getElementById("panel");
-    const panelCloseEl = document.getElementById("panelClose");
-    const panelTitleEl = document.getElementById("panelTitle");
-    const panelSubEl = document.getElementById("panelSub");
-    const panelBodyEl = document.getElementById("panelBody");
-
-    function setStatus(msg) { statusEl.textContent = msg; }
-    function setHint(msg) { hintEl.textContent = msg || ""; }
-    function zoomInfo() { zoomInfoEl.textContent = `zoom ${map.getZoom()}`; }
-
-    // =========================
-    // MAP
-    // =========================
-    const map = L.map("map", { preferCanvas: true }).setView([49.18, -0.36], 8);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 18,
-      attribution: "© OpenStreetMap"
-    }).addTo(map);
-
-    const layer = L.markerClusterGroup({
-      chunkedLoading: true,
-      chunkInterval: 50,
-      chunkDelay: 10,
-      maxClusterRadius: 60,
-      spiderfyOnMaxZoom: true,
-      showCoverageOnHover: false,
-      removeOutsideVisibleBounds: true
-    });
-    map.addLayer(layer);
-
-    // Search highlight overlay marker
-    let highlightMarker = null;
-    function showHighlight(lat, lon) {
-      if (highlightMarker) {
-        map.removeLayer(highlightMarker);
-        highlightMarker = null;
-      }
-      highlightMarker = L.marker([lat, lon], {
-        icon: L.divIcon({
-          className: "",
-          html: `<div class="pulse"></div>`,
-          iconSize: [22, 22],
-          iconAnchor: [11, 11]
-        }),
-        interactive: false
-      }).addTo(map);
-
-      setTimeout(() => {
-        if (highlightMarker) {
-          map.removeLayer(highlightMarker);
-          highlightMarker = null;
-        }
-      }, 4200);
-    }
-
-    // =========================
-    // Side Panel helpers
-    // =========================
-    let selectedAirport = null;
-
-    function openPanel() {
-      panelEl.classList.add("open");
-      overlayEl.classList.add("open");
-      panelEl.setAttribute("aria-hidden", "false");
-    }
-    function closePanel() {
-      panelEl.classList.remove("open");
-      overlayEl.classList.remove("open");
-      panelEl.setAttribute("aria-hidden", "true");
-    }
-
-    overlayEl.addEventListener("click", closePanel);
-    panelCloseEl.addEventListener("click", closePanel);
-
-    // close on ESC (desktop)
-    window.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") closePanel();
-    });
-
-    function esc(s) {
-      return String(s ?? "").replace(/[&<>"']/g, m => ({
-        "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
-      }[m]));
-    }
-
-    function renderPanel(a) {
-      selectedAirport = a;
-
-      const ident = a.icao_code || a.ident || "—";
-      const iata = a.iata_code ? ` (${a.iata_code})` : "";
-      const name = a.name || "—";
-      const type = a.type || "—";
-      const country = a.iso_country || "—";
-      const city = a.municipality || "—";
-
-      panelTitleEl.textContent = `${ident}${iata} — ${name}`;
-      panelSubEl.textContent = `${type} · ${country} · ${city}`;
-
-      const lat = (typeof a.latitude_deg === "number") ? a.latitude_deg.toFixed(4) : "—";
-      const lon = (typeof a.longitude_deg === "number") ? a.longitude_deg.toFixed(4) : "—";
-
-      panelBodyEl.innerHTML = `
-        <div class="kv">
-          <div class="k">ICAO/IDENT</div><div class="v">${esc(ident)}</div>
-          <div class="k">IATA</div><div class="v">${esc(a.iata_code || "—")}</div>
-          <div class="k">Type</div><div class="v">${esc(type)}</div>
-          <div class="k">Pays</div><div class="v">${esc(country)}</div>
-          <div class="k">Ville</div><div class="v">${esc(city)}</div>
-          <div class="k">Latitude</div><div class="v">${esc(lat)}</div>
-          <div class="k">Longitude</div><div class="v">${esc(lon)}</div>
+    <!-- MODAL: New Mission -->
+    <div class="modal-overlay" id="mission-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 class="modal-title">CREATE NEW MISSION</h2>
+                <button class="modal-close" onclick="closeModal('mission-modal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Mission Type</label>
+                    <select class="form-input form-select">
+                        <option>CARGO</option>
+                        <option>PASSENGERS</option>
+                        <option>VIP CHARTER</option>
+                        <option>SPECIAL</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Departure (ICAO)</label>
+                    <input type="text" class="form-input" placeholder="LFPG">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Arrival (ICAO)</label>
+                    <input type="text" class="form-input" placeholder="KJFK">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Cargo Weight (kg)</label>
+                    <input type="number" class="form-input" placeholder="12500">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Reward ($)</label>
+                    <input type="number" class="form-input" placeholder="45000">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary btn" onclick="closeModal('mission-modal')">CANCEL</button>
+                <button class="btn" onclick="closeModal('mission-modal')">CREATE MISSION</button>
+            </div>
         </div>
+    </div>
 
-        <div style="margin-top:12px; color: rgba(255,255,255,.75); font-size: 12px;">
-          Les boutons ci-dessous seront branchés plus tard sur les modules (usines, plan de vol, etc.).
-        </div>
-      `;
+    <!-- TOAST CONTAINER -->
+    <div class="toast-container" id="toast-container"></div>
 
-      openPanel();
-    }
+    <script>
+        // Navigation
+        document.querySelectorAll('.nav-item[data-page]').forEach(item => {
+            item.addEventListener('click', () => {
+                const page = item.dataset.page;
+                
+                // Update nav
+                document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+                item.classList.add('active');
+                
+                // Update breadcrumb
+                document.getElementById('current-page').textContent = page.toUpperCase();
+                
+                // Show page
+                document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+                document.getElementById('page-' + page).classList.add('active');
+            });
+        });
 
-    // Panel actions (placeholder hooks)
-    panelEl.addEventListener("click", (ev) => {
-      const btn = ev.target.closest("button[data-action]");
-      if (!btn) return;
-
-      const action = btn.dataset.action;
-      const a = selectedAirport;
-      if (!a) return;
-
-      const ident = a.icao_code || a.ident || a.iata_code || "—";
-      const id = a.id;
-
-      // TODO: brancher sur tes futures features
-      if (action === "plan") alert(`Plan de vol: ${ident} (id=${id})`);
-      if (action === "factories") alert(`Usines: ${ident} (id=${id})`);
-      if (action === "set-home") alert(`Hub défini: ${ident} (id=${id})`);
-    });
-
-    // =========================
-    // ICONS
-    // =========================
-    function iconForType(t) {
-      let size = 10, label = "•";
-      if (t === "large_airport") { size = 14; label = "✈"; }
-      else if (t === "medium_airport") { size = 12; label = "✈"; }
-      else if (t === "small_airport") { size = 10; label = "•"; }
-      else if (t === "heliport") { size = 12; label = "H"; }
-      else if (t === "seaplane_base") { size = 12; label = ""; }
-      else if (t === "closed") { size = 10; label = "×"; }
-
-      return L.divIcon({
-        className: "",
-        html: `<div style="
-          width:${size}px;height:${size}px;
-          border-radius:999px;
-          background:rgba(255,255,255,.86);
-          border:1px solid rgba(0,0,0,.35);
-          display:flex;align-items:center;justify-content:center;
-          font-size:${Math.max(10, size-2)}px; line-height:1;
-          box-shadow: 0 2px 8px rgba(0,0,0,.15);
-        ">${label}</div>`,
-        iconSize: [size, size],
-        iconAnchor: [size/2, size/2]
-      });
-    }
-
-    // =========================
-    // DIRECTUS URL BUILDING (bbox)
-    // =========================
-    function buildParamsForBBox(bounds, lonBetweenStr) {
-      const sw = bounds.getSouthWest();
-      const ne = bounds.getNorthEast();
-
-      const fields = [
-        "id","ident","name","type","icao_code","iata_code",
-        "latitude_deg","longitude_deg","iso_country","municipality"
-      ].join(",");
-
-      const params = new URLSearchParams();
-      params.set("fields", fields);
-      params.set("limit", String(LIMIT));
-
-      // bbox filters
-      params.set("filter[latitude_deg][_between]", `${sw.lat},${ne.lat}`);
-      params.set("filter[longitude_deg][_between]", lonBetweenStr);
-
-      // optional filters
-      const t = typeEl.value.trim();
-      if (t) params.set("filter[type][_eq]", t);
-
-      if (hideClosedEl.checked) params.set("filter[type][_neq]", "closed");
-
-      const selectedCountry = countryEl.value.trim();
-      const fallbackCountry = countryFallbackEl.value.trim().toUpperCase();
-      const countryCode = selectedCountry || fallbackCountry;
-      if (countryCode) params.set("filter[iso_country][_eq]", countryCode);
-
-      if (onlyIataEl.checked && !onlyIcaoEl.checked) {
-        params.set("filter[iata_code][_nnull]", "true");
-      } else if (onlyIcaoEl.checked && !onlyIataEl.checked) {
-        params.set("filter[icao_code][_nnull]", "true");
-      } else if (onlyIataEl.checked && onlyIcaoEl.checked) {
-        params.set("filter[iata_code][_nnull]", "true");
-        params.set("filter[icao_code][_nnull]", "true");
-      }
-
-      // If user typed a code, keep bbox results focused (exact match)
-      const q = qEl.value.trim().toUpperCase();
-      if (q.length >= 2) {
-        params.set("filter[_or][0][icao_code][_eq]", q);
-        params.set("filter[_or][1][iata_code][_eq]", q);
-        params.set("filter[_or][2][ident][_eq]", q);
-      }
-
-      return params;
-    }
-
-    // Antimeridian-safe: returns 1 or 2 URLs depending on bbox
-    function buildUrlsBBox(bounds) {
-      const sw = bounds.getSouthWest();
-      const ne = bounds.getNorthEast();
-
-      if (sw.lng <= ne.lng) {
-        const params = buildParamsForBBox(bounds, `${sw.lng},${ne.lng}`);
-        return [`${DIRECTUS_BASE}/items/${COLLECTION}?${params.toString()}`];
-      }
-
-      // Crosses antimeridian: split into two longitude ranges
-      const paramsA = buildParamsForBBox(bounds, `${sw.lng},180`);
-      const paramsB = buildParamsForBBox(bounds, `-180,${ne.lng}`);
-      return [
-        `${DIRECTUS_BASE}/items/${COLLECTION}?${paramsA.toString()}`,
-        `${DIRECTUS_BASE}/items/${COLLECTION}?${paramsB.toString()}`
-      ];
-    }
-
-    // =========================
-    // DIRECTUS SEARCH (jump)
-    // =========================
-    function buildUrlSearchExact(code) {
-      const fields = [
-        "id","ident","name","type","icao_code","iata_code",
-        "latitude_deg","longitude_deg","iso_country","municipality"
-      ].join(",");
-
-      const params = new URLSearchParams();
-      params.set("fields", fields);
-      params.set("limit", String(SEARCH_LIMIT));
-
-      if (hideClosedEl.checked) params.set("filter[type][_neq]", "closed");
-
-      params.set("filter[_or][0][icao_code][_eq]", code);
-      params.set("filter[_or][1][iata_code][_eq]", code);
-      params.set("filter[_or][2][ident][_eq]", code);
-
-      return `${DIRECTUS_BASE}/items/${COLLECTION}?${params.toString()}`;
-    }
-
-    async function searchAndCenter(openDetails = true) {
-      const code = qEl.value.trim().toUpperCase();
-      if (code.length < SEARCH_JUMP_MIN_LEN) return;
-
-      setHint("");
-      setStatus(`Recherche ${code}…`);
-
-      try {
-        const url = buildUrlSearchExact(code);
-        const json = await fetchJson(url);
-        const row = (json?.data && json.data[0]) ? json.data[0] : null;
-
-        if (!row || typeof row.latitude_deg !== "number" || typeof row.longitude_deg !== "number") {
-          setStatus(`Aucun résultat exact pour ${code}.`);
-          return;
+        // Modal functions
+        function openModal(id) {
+            document.getElementById(id).classList.add('active');
         }
 
-        map.panTo([row.latitude_deg, row.longitude_deg], { animate: true, duration: 0.6 });
-        showHighlight(row.latitude_deg, row.longitude_deg);
-
-        setStatus(`Centré sur ${row.ident || row.icao_code || row.iata_code || code} — ${row.name || ""}`);
-
-        // recharge bbox autour du centre
-        scheduleLoad();
-
-        // ouvre le panneau (optionnel)
-        if (openDetails) renderPanel(row);
-
-      } catch (err) {
-        console.error(err);
-        setStatus("Erreur recherche (Directus/CORS/permissions).");
-        setHint(String(err && err.message ? err.message : err));
-      }
-    }
-
-    // =========================
-    // FETCH + RENDER
-    // =========================
-    async function fetchJson(url) {
-      const res = await fetch(url);
-      if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        throw new Error(`HTTP ${res.status}: ${txt.slice(0, 200)}`);
-      }
-      return res.json();
-    }
-
-    async function loadAirports() {
-      zoomInfo();
-
-      if (map.getZoom() < MIN_ZOOM) {
-        layer.clearLayers();
-        setStatus(`Zoom trop faible (>= ${MIN_ZOOM}) pour charger des points.`);
-        setHint("Astuce: zoome puis déplace la map. Entrée dans la recherche recentre et peut ouvrir le panneau.");
-        return;
-      }
-
-      const urls = buildUrlsBBox(map.getBounds());
-      setStatus("Chargement…");
-      setHint(urls.length === 2 ? "BBox traverse l’antéméridien: requête splittée." : "");
-
-      const t0 = performance.now();
-
-      try {
-        const results = await Promise.all(urls.map(u => fetchJson(u)));
-        const rows = results.flatMap(r => r?.data ?? []);
-
-        // de-dup by id (utile quand split antimeridian)
-        const byId = new Map();
-        for (const a of rows) if (a && a.id != null) byId.set(a.id, a);
-        const uniq = Array.from(byId.values());
-
-        layer.clearLayers();
-
-        for (const a of uniq) {
-          const lat = a.latitude_deg, lon = a.longitude_deg;
-          if (typeof lat !== "number" || typeof lon !== "number") continue;
-
-          // marker
-          const m = L.marker([lat, lon], { icon: iconForType(a.type) });
-
-          // click => open side panel
-          m.on("click", () => renderPanel(a));
-
-          m.addTo(layer);
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
         }
 
-        const ms = Math.round(performance.now() - t0);
-        setStatus(`${uniq.length} points (limit ${LIMIT}) · ${ms} ms · zoom ${map.getZoom()}`);
+        // Close modal on overlay click
+        document.querySelectorAll('.modal-overlay').forEach(overlay => {
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) {
+                    overlay.classList.remove('active');
+                }
+            });
+        });
 
-      } catch (err) {
-        console.error(err);
-        layer.clearLayers();
-        setStatus("Erreur de chargement (permissions/CORS/Directus).");
-        setHint(String(err && err.message ? err.message : err));
-      }
-    }
+        // Toast notification
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast ' + type;
+            toast.innerHTML = `<span>${type === 'success' ? '✓' : type === 'error' ? '✕' : '⚠'}</span> ${message}`;
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
+        }
 
-    // =========================
-    // COUNTRIES (optional)
-    // =========================
-    async function loadCountries() {
-      const params = new URLSearchParams();
-      params.set("fields", "iso_country");
-      params.set("groupBy[]", "iso_country");
-      params.set("sort", "iso_country");
-      params.set("limit", "-1");
-
-      const url = `${DIRECTUS_BASE}/items/${COLLECTION}?${params.toString()}`;
-
-      try {
-        const json = await fetchJson(url);
-        const rows = json?.data ?? [];
-        const codes = rows
-          .map(r => (r?.iso_country || "").trim().toUpperCase())
-          .filter(Boolean);
-
-        if (codes.length < 20) throw new Error("groupBy iso_country returned too few rows");
-
-        countryEl.innerHTML = `<option value="">Tous pays</option>` +
-          codes.map(c => `<option value="${c}">${c}</option>`).join("");
-
-        countryEl.style.display = "";
-        countryFallbackEl.style.display = "none";
-      } catch (e) {
-        console.warn("Countries load failed, using fallback input:", e);
-        countryEl.style.display = "none";
-        countryFallbackEl.style.display = "";
-      }
-    }
-
-    // =========================
-    // EVENTS (debounce)
-    // =========================
-    let timer = null;
-    function scheduleLoad() {
-      clearTimeout(timer);
-      timer = setTimeout(loadAirports, DEBOUNCE_MS);
-    }
-
-    map.on("moveend", scheduleLoad);
-    map.on("zoomend", scheduleLoad);
-
-    qEl.addEventListener("input", scheduleLoad);
-    typeEl.addEventListener("change", scheduleLoad);
-    countryEl.addEventListener("change", scheduleLoad);
-    countryFallbackEl.addEventListener("input", scheduleLoad);
-    hideClosedEl.addEventListener("change", scheduleLoad);
-    onlyIataEl.addEventListener("change", scheduleLoad);
-    onlyIcaoEl.addEventListener("change", scheduleLoad);
-
-    // ENTER => search jump + open panel
-    qEl.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        searchAndCenter(true);
-      }
-    });
-
-    // Optional: click on map background closes panel (nice on tablet)
-    map.on("click", () => closePanel());
-
-    // =========================
-    // INIT
-    // =========================
-    zoomInfo();
-    loadCountries();
-    loadAirports();
-  </script>
+        // Example: Show welcome toast
+        setTimeout(() => {
+            showToast('Welcome to MFS Carrier+ Admin Panel', 'success');
+        }, 1000);
+    </script>
 </body>
 </html>

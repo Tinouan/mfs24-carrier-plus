@@ -2,11 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.deps import get_db
 from app.models.user import User
-from app.schemas.auth import RegisterIn, LoginIn, TokenOut
+from app.schemas.auth import RegisterIn, LoginIn, TokenOut, UserInfo
 from app.schemas.user import UserOut
 from app.core.security import hash_password, verify_password, create_access_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
 
 @router.post("/register", response_model=UserOut)
 def register(payload: RegisterIn, db: Session = Depends(get_db)):
@@ -31,6 +32,7 @@ def register(payload: RegisterIn, db: Session = Depends(get_db)):
     db.refresh(user)
     return UserOut(id=user.id, email=user.email, username=user.username, is_admin=user.is_admin)
 
+
 @router.post("/login", response_model=TokenOut)
 def login(payload: LoginIn, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == payload.email.lower()).first()
@@ -38,4 +40,12 @@ def login(payload: LoginIn, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     token = create_access_token(str(user.id))
-    return TokenOut(access_token=token)
+    return TokenOut(
+        access_token=token,
+        user=UserInfo(
+            id=user.id,
+            email=user.email,
+            username=user.username,
+            is_admin=user.is_admin,
+        )
+    )

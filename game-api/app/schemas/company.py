@@ -23,15 +23,15 @@ class CompanyOut(BaseModel):
 # ========= Members =========
 
 class MemberAddIn(BaseModel):
-    user_id: UUID
+    email: str  # Find user by email
     role: str = Field(pattern="^(owner|admin|member)$")
 
 
 class MemberOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: UUID
     user_id: UUID
     company_id: UUID
     role: str
-    created_at: datetime
+    username: str
+    email: str

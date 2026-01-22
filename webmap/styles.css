@@ -1,0 +1,2513 @@
+/* ========================================
+   MFS CARRIER+ - Global Styles
+   ======================================== */
+
+:root {
+    --bg-dark: #1a1a1a;
+    --bg-darker: #0d0d0d;
+    --bg-card: #141414;
+    --accent: #ff6600;
+    --accent-light: #ff8533;
+    --accent-dark: #cc5200;
+    --text: #e5e5e5;
+    --text-dim: #888;
+    --text-dark: #666;
+    --success: #00ff00;
+    --warning: #ffc800;
+    --danger: #ff4444;
+    --info: #00aaff;
+    --border: #333;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: 'Barlow', sans-serif;
+    background: var(--bg-dark);
+    color: var(--text);
+    min-height: 100vh;
+    overflow: hidden;
+}
+
+/* Scanline effect */
+body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.1) 2px,
+        rgba(0,0,0,0.1) 4px
+    );
+    pointer-events: none;
+    opacity: 0.3;
+    z-index: 10000;
+}
+
+/* ========== TYPOGRAPHY ========== */
+.font-display { font-family: 'Bebas Neue', sans-serif; }
+.font-mono { font-family: 'Share Tech Mono', monospace; }
+
+/* ========== LAYOUT ========== */
+.app {
+    display: flex;
+    height: 100vh;
+    position: relative;
+    z-index: 1;
+}
+
+/* ========== SIDEBAR ========== */
+.sidebar {
+    width: 280px;
+    background: var(--bg-darker);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    z-index: 1000;
+    transition: transform 0.3s ease;
+}
+
+.sidebar.collapsed {
+    transform: translateX(-280px);
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    border-bottom: 3px solid var(--accent);
+}
+
+.logo-icon {
+    width: 44px; height: 44px;
+    background: var(--accent);
+    clip-path: polygon(10% 0%, 100% 0%, 90% 100%, 0% 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.3rem;
+    color: #000;
+}
+
+.logo-text {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.4rem;
+    letter-spacing: 2px;
+}
+.logo-text span { color: var(--accent); }
+
+/* ========== NAVIGATION ========== */
+.nav { flex: 1; padding: 1rem 0; overflow-y: auto; }
+
+.nav-section { margin-bottom: 0.5rem; }
+
+.nav-title {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--text-dark);
+    padding: 0.75rem 1.25rem 0.5rem;
+    text-transform: uppercase;
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1.25rem;
+    color: var(--text-dim);
+    border-left: 3px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-weight: 500;
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    letter-spacing: 1px;
+}
+
+.nav-item:hover {
+    background: rgba(255, 102, 0, 0.1);
+    color: var(--accent);
+    border-left-color: var(--accent);
+}
+
+.nav-item.active {
+    background: rgba(255, 102, 0, 0.15);
+    color: var(--accent);
+    border-left-color: var(--accent);
+}
+
+.nav-item .badge {
+    margin-left: auto;
+    background: var(--accent);
+    color: #000;
+    font-size: 0.65rem;
+    padding: 0.15rem 0.4rem;
+    font-weight: 700;
+}
+
+.nav-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 0.5rem 1.25rem;
+}
+
+/* ========== SIDEBAR SECTIONS (Filters & Info) ========== */
+.sidebar-section {
+    border-top: 1px solid var(--border);
+    background: rgba(0, 0, 0, 0.3);
+}
+
+.sidebar-section-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    color: var(--info);
+    text-transform: uppercase;
+    background: rgba(0, 170, 255, 0.1);
+    border-bottom: 1px solid rgba(0, 170, 255, 0.2);
+}
+
+.sidebar-section-header .sidebar-close-btn {
+    margin-left: auto;
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    transition: all 0.15s;
+}
+
+.sidebar-section-header .sidebar-close-btn:hover {
+    background: rgba(255, 68, 68, 0.2);
+    color: var(--danger);
+}
+
+.sidebar-section-body {
+    padding: 0.75rem 1rem;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.sidebar-filter-group {
+    margin-bottom: 0.75rem;
+}
+
+.sidebar-filter-group:last-child {
+    margin-bottom: 0;
+}
+
+.sidebar-filter-label {
+    display: block;
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: var(--text-dim);
+    margin-bottom: 0.4rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.sidebar-filter-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.sidebar-filter-chips .filter-chip {
+    padding: 0.3rem 0.5rem;
+    font-size: 0.7rem;
+}
+
+.sidebar-select {
+    width: 100%;
+    padding: 0.4rem 0.6rem;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 0.75rem;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.sidebar-select:focus {
+    outline: none;
+    border-color: var(--info);
+}
+
+.sidebar-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-size: 0.75rem;
+    color: var(--text-dim);
+}
+
+.sidebar-checkbox input {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--info);
+}
+
+.sidebar-checkbox:hover {
+    color: var(--text);
+}
+
+/* Sidebar Info Panel (Airport Details) */
+#sidebar-info .sidebar-section-header {
+    background: rgba(255, 102, 0, 0.1);
+    border-color: rgba(255, 102, 0, 0.2);
+    color: var(--accent);
+}
+
+.sidebar-info-content {
+    font-size: 0.8rem;
+}
+
+.sidebar-info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.sidebar-info-row:last-child {
+    border-bottom: none;
+}
+
+.sidebar-info-label {
+    color: var(--text-dim);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+}
+
+.sidebar-info-value {
+    color: var(--accent);
+    font-weight: 600;
+    font-family: 'Share Tech Mono', monospace;
+}
+
+.sidebar-info-title {
+    font-size: 0.85rem;
+    font-weight: bold;
+    color: var(--text);
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.sidebar-info-factories {
+    margin-top: 0.75rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border);
+}
+
+.sidebar-info-factories-title {
+    font-size: 0.7rem;
+    color: var(--success);
+    font-weight: 600;
+    margin-bottom: 0.4rem;
+}
+
+.sidebar-factory-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 0;
+    font-size: 0.75rem;
+    color: var(--text-dim);
+}
+
+.sidebar-factory-item span:first-child {
+    font-size: 1rem;
+}
+
+/* ========== MAIN CONTENT ========== */
+.main {
+    flex: 1;
+    margin-left: 280px;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    transition: margin-left 0.3s ease;
+}
+
+.main.expanded {
+    margin-left: 0;
+}
+
+/* ========== HEADER ========== */
+.header {
+    background: var(--bg-darker);
+    border-bottom: 1px solid var(--border);
+    padding: 0.75rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 100;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.toggle-sidebar {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    width: 36px;
+    height: 36px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    transition: all 0.2s;
+}
+
+.toggle-sidebar:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.breadcrumb {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+}
+.breadcrumb span { color: var(--accent); }
+
+.status-bar {
+    display: flex;
+    gap: 1.5rem;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--text-dim);
+}
+
+.status-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.status-light {
+    width: 8px; height: 8px;
+    background: var(--success);
+    clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+    animation: pulse 2s infinite;
+}
+.status-light.warning { background: var(--warning); }
+.status-light.danger { background: var(--danger); }
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+/* ========== USER INFO ========== */
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.4rem 0.75rem;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.user-info:hover {
+    border-color: var(--accent);
+}
+
+.user-avatar {
+    width: 32px; height: 32px;
+    background: var(--accent);
+    clip-path: polygon(15% 0%, 100% 0%, 85% 100%, 0% 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Bebas Neue', sans-serif;
+    color: #000;
+}
+
+.user-name {
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+/* ========== MAP CONTAINER ========== */
+.map-container {
+    flex: 1;
+    position: relative;
+}
+
+#map {
+    width: 100%;
+    height: 100%;
+    background: var(--bg-darker);
+}
+
+/* ========== MAP CONTROLS ========== */
+.map-controls {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    z-index: 500;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.map-control-btn {
+    width: 40px;
+    height: 40px;
+    background: var(--bg-darker);
+    border: 1px solid var(--border);
+    color: var(--text);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    transition: all 0.2s;
+}
+
+.map-control-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.map-control-btn.active {
+    background: var(--accent);
+    color: #000;
+    border-color: var(--accent);
+}
+
+/* ========== FILTERS PANEL ========== */
+.filters-panel {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    z-index: 500;
+    background: var(--bg-darker);
+    border: 1px solid var(--border);
+    width: 240px;
+}
+
+.filters-header {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    font-family: 'Bebas Neue', sans-serif;
+    letter-spacing: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.filters-header span { color: var(--accent); }
+
+.filters-body {
+    padding: 1rem;
+}
+
+.filter-group {
+    margin-bottom: 1rem;
+}
+
+.filter-group:last-child {
+    margin-bottom: 0;
+}
+
+.filter-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    margin-bottom: 0.5rem;
+    display: block;
+}
+
+.filter-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.filter-chip {
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    padding: 0.3rem 0.6rem;
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+}
+
+.filter-chip:hover {
+    border-color: var(--accent);
+}
+
+.filter-chip.active {
+    background: var(--accent);
+    color: #000;
+    border-color: var(--accent);
+}
+
+/* ========== INFO PANEL ========== */
+.info-panel {
+    position: absolute;
+    bottom: 1rem;
+    left: 1rem;
+    z-index: 500;
+    background: var(--bg-darker);
+    border: 1px solid var(--border);
+    width: 320px;
+    max-height: 300px;
+    overflow: hidden;
+    display: none;
+}
+
+.info-panel.visible {
+    display: block;
+}
+
+.info-header {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient(90deg, rgba(255,102,0,0.1) 0%, transparent 50%);
+}
+
+.info-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.1rem;
+    letter-spacing: 2px;
+}
+
+.info-close {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 1.2rem;
+    transition: color 0.2s;
+}
+
+.info-close:hover {
+    color: var(--danger);
+}
+
+.info-body {
+    padding: 1rem;
+    overflow-y: auto;
+    max-height: 220px;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid #222;
+}
+
+.info-row:last-child {
+    border-bottom: none;
+}
+
+.info-label {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+}
+
+.info-value {
+    font-family: 'Share Tech Mono', monospace;
+    color: var(--accent);
+}
+
+/* ========== STATS BAR ========== */
+.stats-bar {
+    position: absolute;
+    bottom: 1rem;
+    right: 1rem;
+    z-index: 500;
+    display: flex;
+    gap: 0.5rem;
+}
+
+.stat-chip {
+    background: var(--bg-darker);
+    border: 1px solid var(--border);
+    padding: 0.5rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.stat-chip-icon {
+    font-size: 1rem;
+}
+
+.stat-chip-value {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1rem;
+    color: var(--accent);
+}
+
+.stat-chip-label {
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+}
+
+/* ========== BUTTONS ========== */
+.btn {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    padding: 0.7rem 1.25rem;
+    font-family: 'Barlow', sans-serif;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.btn:hover {
+    background: var(--accent-light);
+    transform: translateY(-2px);
+}
+
+.btn-secondary {
+    background: var(--bg-darker);
+    color: var(--text);
+    border: 1px solid var(--border);
+    clip-path: none;
+}
+
+.btn-secondary:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--bg-darker);
+    transform: none;
+}
+
+.btn-sm {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.7rem;
+}
+
+/* ========== BADGES ========== */
+.badge {
+    display: inline-block;
+    padding: 0.25rem 0.6rem;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.badge-t0 {
+    background: rgba(0, 170, 255, 0.2);
+    color: var(--info);
+    border: 1px solid rgba(0, 170, 255, 0.3);
+}
+
+.badge-t1 {
+    background: rgba(0, 255, 0, 0.2);
+    color: var(--success);
+    border: 1px solid rgba(0, 255, 0, 0.3);
+}
+
+.badge-active {
+    background: rgba(0, 255, 0, 0.2);
+    color: var(--success);
+    border: 1px solid rgba(0, 255, 0, 0.3);
+}
+
+.badge-producing {
+    background: rgba(255, 102, 0, 0.2);
+    color: var(--accent);
+    border: 1px solid rgba(255, 102, 0, 0.3);
+}
+
+/* ========== FORMS ========== */
+.form-group {
+    margin-bottom: 1rem;
+}
+
+.form-label {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    margin-bottom: 0.4rem;
+}
+
+.form-input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.9rem;
+    transition: border-color 0.2s;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.form-input::placeholder {
+    color: var(--text-dark);
+}
+
+/* ========== MODAL ========== */
+.modal-overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 10001;
+}
+
+.modal-overlay.active {
+    display: flex;
+}
+
+.modal {
+    background: var(--bg-darker);
+    border: 1px solid var(--border);
+    width: 90%;
+    max-width: 420px;
+    position: relative;
+}
+
+.modal::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 3px;
+    background: var(--accent);
+}
+
+.modal-header {
+    padding: 1.25rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.3rem;
+    letter-spacing: 2px;
+}
+
+.modal-close {
+    width: 32px; height: 32px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    transition: all 0.2s;
+}
+
+.modal-close:hover {
+    border-color: var(--danger);
+    color: var(--danger);
+}
+
+.modal-body {
+    padding: 1.25rem;
+}
+
+.modal-footer {
+    padding: 1rem 1.25rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+}
+
+/* ========== LOGIN PAGE ========== */
+.login-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--bg-darker) 0%, var(--bg-dark) 100%);
+}
+
+.login-container {
+    width: 100%;
+    max-width: 400px;
+    padding: 2rem;
+}
+
+.login-logo {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.login-logo-icon {
+    width: 80px; height: 80px;
+    background: var(--accent);
+    clip-path: polygon(10% 0%, 100% 0%, 90% 100%, 0% 100%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2.5rem;
+    color: #000;
+    margin-bottom: 1rem;
+}
+
+.login-logo-text {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2rem;
+    letter-spacing: 4px;
+}
+
+.login-logo-text span {
+    color: var(--accent);
+}
+
+.login-card {
+    background: var(--bg-darker);
+    border: 1px solid var(--border);
+    position: relative;
+}
+
+.login-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 3px;
+    background: var(--accent);
+}
+
+.login-header {
+    padding: 1.25rem;
+    border-bottom: 1px solid var(--border);
+    text-align: center;
+}
+
+.login-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.3rem;
+    letter-spacing: 2px;
+}
+
+.login-body {
+    padding: 1.5rem;
+}
+
+.login-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border);
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+}
+
+.login-footer a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.login-footer a:hover {
+    text-decoration: underline;
+}
+
+.login-error {
+    background: rgba(255, 68, 68, 0.1);
+    border: 1px solid rgba(255, 68, 68, 0.3);
+    color: var(--danger);
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.85rem;
+    display: none;
+}
+
+.login-error.visible {
+    display: block;
+}
+
+/* ========== TABS ========== */
+.tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+}
+
+.tab {
+    flex: 1;
+    padding: 0.75rem;
+    text-align: center;
+    cursor: pointer;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+}
+
+.tab:hover {
+    color: var(--text);
+}
+
+.tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* ========== TOAST ========== */
+.toast-container {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    z-index: 10002;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.toast {
+    background: var(--bg-darker);
+    border: 1px solid var(--border);
+    padding: 1rem 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    animation: slideIn 0.3s ease;
+    position: relative;
+}
+
+.toast::before {
+    content: '';
+    width: 4px;
+    height: 100%;
+    position: absolute;
+    left: 0;
+    top: 0;
+}
+
+.toast.success::before { background: var(--success); }
+.toast.error::before { background: var(--danger); }
+.toast.warning::before { background: var(--warning); }
+
+@keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+/* ========== LEAFLET OVERRIDES ========== */
+.leaflet-container {
+    background: var(--bg-darker);
+    font-family: 'Barlow', sans-serif;
+}
+
+.leaflet-popup-content-wrapper {
+    background: var(--bg-darker);
+    border: 1px solid var(--border);
+    border-radius: 0;
+    color: var(--text);
+}
+
+.leaflet-popup-tip {
+    background: var(--bg-darker);
+    border: 1px solid var(--border);
+}
+
+.leaflet-popup-content {
+    margin: 0;
+    min-width: 200px;
+}
+
+.popup-header {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(90deg, rgba(255,102,0,0.1) 0%, transparent 50%);
+}
+
+.popup-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1rem;
+    letter-spacing: 1px;
+}
+
+.popup-body {
+    padding: 0.75rem 1rem;
+}
+
+.popup-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.3rem 0;
+    font-size: 0.8rem;
+}
+
+.popup-label {
+    color: var(--text-dim);
+}
+
+.popup-value {
+    font-family: 'Share Tech Mono', monospace;
+    color: var(--accent);
+}
+
+.leaflet-control-zoom {
+    border: 1px solid var(--border) !important;
+    border-radius: 0 !important;
+}
+
+.leaflet-control-zoom a {
+    background: var(--bg-darker) !important;
+    color: var(--text) !important;
+    border-bottom: 1px solid var(--border) !important;
+    width: 36px !important;
+    height: 36px !important;
+    line-height: 36px !important;
+}
+
+.leaflet-control-zoom a:hover {
+    background: var(--bg-dark) !important;
+    color: var(--accent) !important;
+}
+
+/* ========== CUSTOM MARKERS ========== */
+.factory-marker {
+    background: var(--bg-darker);
+    border: 2px solid var(--accent);
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+}
+
+.factory-marker.t0 {
+    border-color: var(--info);
+}
+
+.factory-marker.t1 {
+    border-color: var(--success);
+}
+
+/* ========== LOADING ========== */
+.loading {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: var(--bg-darker);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 20000;
+}
+
+.loading-spinner {
+    width: 60px;
+    height: 60px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ========== RESPONSIVE ========== */
+@media (max-width: 768px) {
+    .sidebar {
+        transform: translateX(-280px);
+    }
+
+    .sidebar.open {
+        transform: translateX(0);
+    }
+
+    .main {
+        margin-left: 0;
+    }
+
+    .filters-panel {
+        width: calc(100% - 2rem);
+    }
+
+    .stats-bar {
+        flex-direction: column;
+    }
+
+    /* Company responsive */
+    .company-tabs {
+        flex-wrap: wrap;
+    }
+
+    .company-tab {
+        flex: 1;
+        justify-content: center;
+        padding: 0.5rem;
+        font-size: 0.75rem;
+    }
+
+    .company-tab span:first-child {
+        display: none;
+    }
+
+    .company-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .company-header-card {
+        flex-direction: column;
+        gap: 1rem;
+        text-align: center;
+    }
+
+    .company-balance {
+        text-align: center;
+    }
+}
+
+/* ========== AIRPORT CLUSTERS ========== */
+.custom-cluster {
+    background: transparent !important;
+}
+
+/* Invisible clusters - just for grouping behavior */
+.invisible-cluster {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+/* ============================================================================
+   CLUSTER STYLES BY AIRPORT TYPE
+   - Large airports: Orange (visible first)
+   - Medium airports: Yellow (visible second)
+   - Small airports: Gray (visible last)
+   ============================================================================ */
+
+/* Large airports cluster - Orange, prominent */
+.cluster-large-airports {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-family: 'Share Tech Mono', monospace;
+    font-weight: bold;
+    color: #fff;
+    width: 44px;
+    height: 44px;
+    font-size: 14px;
+    background: linear-gradient(135deg, #ff6b00 0%, #cc5500 100%);
+    border: 3px solid #fff;
+    box-shadow: 0 0 20px rgba(255, 107, 0, 0.6);
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+}
+
+/* Medium airports cluster - Yellow */
+.cluster-medium-airports {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-family: 'Share Tech Mono', monospace;
+    font-weight: bold;
+    color: #000;
+    width: 38px;
+    height: 38px;
+    font-size: 12px;
+    background: linear-gradient(135deg, #ffcc00 0%, #cc9900 100%);
+    border: 2px solid #fff;
+    box-shadow: 0 0 15px rgba(255, 204, 0, 0.5);
+    opacity: 0.85;
+}
+
+/* Small airports cluster - Gray, subtle */
+.cluster-small-airports {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-family: 'Share Tech Mono', monospace;
+    font-weight: bold;
+    color: #fff;
+    width: 32px;
+    height: 32px;
+    font-size: 11px;
+    background: linear-gradient(135deg, #555 0%, #333 100%);
+    border: 2px solid #888;
+    box-shadow: 0 0 10px rgba(100, 100, 100, 0.4);
+    opacity: 0.6;
+}
+
+/* Legacy cluster styles (keep for compatibility) */
+.airport-cluster {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-family: 'Share Tech Mono', monospace;
+    font-weight: bold;
+    color: #fff;
+    text-shadow: 0 0 5px rgba(0,0,0,0.8);
+    box-shadow: 0 0 15px rgba(255, 102, 0, 0.5), inset 0 0 10px rgba(0,0,0,0.3);
+    opacity: 0.5;
+}
+
+.airport-cluster-small {
+    background: linear-gradient(135deg, #444 0%, #222 100%);
+    border: 2px solid #ff6600;
+    width: 30px;
+    height: 30px;
+    font-size: 11px;
+}
+
+.airport-cluster-medium {
+    background: linear-gradient(135deg, #555 0%, #333 100%);
+    border: 3px solid #ff6600;
+    width: 40px;
+    height: 40px;
+    font-size: 13px;
+}
+
+.airport-cluster-large {
+    background: linear-gradient(135deg, #666 0%, #444 100%);
+    border: 3px solid #ff6600;
+    width: 50px;
+    height: 50px;
+    font-size: 15px;
+}
+
+
+.airport-marker {
+    transition: transform 0.2s ease;
+}
+
+.airport-marker:hover {
+    transform: scale(1.2);
+    z-index: 1000 !important;
+}
+
+/* Override default leaflet cluster styles */
+.marker-cluster-small,
+.marker-cluster-medium,
+.marker-cluster-large {
+    background: transparent !important;
+}
+
+.marker-cluster-small div,
+.marker-cluster-medium div,
+.marker-cluster-large div {
+    background: transparent !important;
+}
+
+/* ========== FACTORY MARKERS ========== */
+.factory-marker {
+    transition: transform 0.2s ease;
+    z-index: 600 !important;
+}
+
+.factory-marker:hover {
+    transform: scale(1.3);
+    z-index: 1000 !important;
+}
+
+.factory-marker > div {
+    animation: factoryPulse 2s ease-in-out infinite;
+}
+
+@keyframes factoryPulse {
+    0%, 100% { box-shadow: 0 0 10px currentColor, 0 2px 6px rgba(0,0,0,0.8); }
+    50% { box-shadow: 0 0 20px currentColor, 0 2px 8px rgba(0,0,0,0.8); }
+}
+
+/* Factory airport glow animation - uses transform only, box-shadow set inline */
+@keyframes factoryGlow {
+    0%, 100% {
+        transform: scale(1);
+        filter: brightness(1);
+    }
+    50% {
+        transform: scale(1.08);
+        filter: brightness(1.2);
+    }
+}
+
+/* Factory airport markers stand out */
+.factory-airport {
+    z-index: 700 !important;
+}
+
+.factory-airport:hover {
+    transform: scale(1.3) !important;
+    z-index: 1001 !important;
+}
+
+/* ============================================================================
+   FACTORY NODE SYSTEM - Factories attached to airports
+   ============================================================================ */
+
+.factory-node {
+    /* Leaflet marker container */
+}
+
+.factory-node-marker {
+    --factory-color: #ff6600;
+    width: 28px;
+    height: 28px;
+    background: linear-gradient(135deg, #555, #333);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--factory-color);
+    box-shadow:
+        0 0 8px var(--factory-color),
+        0 2px 6px rgba(0, 0, 0, 0.5);
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    font-size: 14px;
+}
+
+.factory-node-marker:hover {
+    transform: scale(1.3);
+    box-shadow:
+        0 0 15px var(--factory-color),
+        0 4px 10px rgba(0, 0, 0, 0.6);
+    z-index: 1000 !important;
+}
+
+.factory-node-marker span {
+    line-height: 1;
+}
+
+/* Empty factory slot marker */
+.factory-slot-empty {
+    /* Leaflet marker container */
+}
+
+.factory-slot-marker {
+    width: 26px;
+    height: 26px;
+    background: rgba(0, 170, 255, 0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px dashed #00aaff;
+    cursor: pointer;
+    transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+    font-size: 18px;
+    font-weight: bold;
+    color: #00aaff;
+    box-shadow: 0 0 8px rgba(0, 170, 255, 0.5);
+}
+
+.factory-slot-marker:hover {
+    transform: scale(1.3);
+    border-color: #22cc22;
+    color: #22cc22;
+    background: rgba(34, 204, 34, 0.25);
+    box-shadow: 0 0 15px rgba(34, 204, 34, 0.6);
+}
+
+.factory-slot-marker span {
+    line-height: 1;
+}
+
+/* Factory popup styles */
+.popup-factory {
+    min-width: 180px;
+}
+
+.popup-factory .popup-header {
+    font-weight: bold;
+    font-size: 14px;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #444;
+}
+
+.popup-factory .popup-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    padding: 3px 0;
+}
+
+.popup-factory .popup-value {
+    color: #ff6600;
+    font-weight: 500;
+}
+
+/* Empty slot popup - special design */
+.popup-slot-empty {
+    min-width: 200px;
+    text-align: center;
+    padding: 4px 0;
+}
+
+.popup-slot-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.popup-slot-icon {
+    font-size: 20px;
+}
+
+.popup-slot-title {
+    font-weight: bold;
+    font-size: 14px;
+    color: #22cc22;
+}
+
+.popup-slot-info {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #888;
+    margin-bottom: 12px;
+}
+
+.popup-slot-separator {
+    color: #555;
+}
+
+.popup-slot-btn {
+    width: 100%;
+    padding: 10px 16px;
+    background: linear-gradient(135deg, #00aaff 0%, #0088cc 100%);
+    border: none;
+    border-radius: 6px;
+    color: #fff;
+    font-weight: bold;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.popup-slot-btn:hover {
+    background: linear-gradient(135deg, #22bbff 0%, #00aaff 100%);
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(0, 170, 255, 0.4);
+}
+
+/* ============================================================================
+   FACTORY CREATION MODAL
+   ============================================================================ */
+
+.modal-error {
+    background: rgba(255, 68, 68, 0.1);
+    border: 1px solid rgba(255, 68, 68, 0.3);
+    color: var(--danger);
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.85rem;
+    display: none;
+}
+
+.modal-error.visible {
+    display: block;
+}
+
+.modal-info-box {
+    background: rgba(0, 170, 255, 0.1);
+    border: 1px solid rgba(0, 170, 255, 0.3);
+    padding: 0.75rem 1rem;
+    margin-bottom: 1.25rem;
+}
+
+.modal-info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.3rem 0;
+}
+
+.modal-info-row:first-child {
+    padding-top: 0;
+}
+
+.modal-info-row:last-child {
+    padding-bottom: 0;
+}
+
+.modal-info-label {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.modal-info-value {
+    font-family: 'Share Tech Mono', monospace;
+    color: var(--info);
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.form-select {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Barlow', sans-serif;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.form-select:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.form-select option {
+    background: var(--bg-darker);
+    color: var(--text);
+    padding: 0.5rem;
+}
+
+.form-hint {
+    font-size: 0.7rem;
+    color: var(--text-dark);
+    margin-top: 0.4rem;
+    font-style: italic;
+}
+
+.modal-recipe-details {
+    background: rgba(255, 102, 0, 0.1);
+    border: 1px solid rgba(255, 102, 0, 0.3);
+    padding: 0.75rem 1rem;
+    margin-top: 1rem;
+}
+
+.recipe-detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 0.5rem;
+    margin-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(255, 102, 0, 0.2);
+    font-weight: 600;
+    color: var(--accent);
+}
+
+.recipe-tier-badge {
+    background: var(--accent);
+    color: #000;
+    padding: 0.2rem 0.5rem;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+.recipe-detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.3rem 0;
+    font-size: 0.8rem;
+}
+
+.recipe-detail-row span:first-child {
+    color: var(--text-dim);
+}
+
+.recipe-detail-row span:last-child {
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+}
+
+/* Loading state for button */
+.btn.loading {
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+.btn.loading::after {
+    content: '';
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid transparent;
+    border-top-color: currentColor;
+    border-radius: 50%;
+    margin-left: 8px;
+    animation: spin 0.8s linear infinite;
+}
+
+/* ============================================================================
+   COMPANY VIEW
+   ============================================================================ */
+
+.view-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem;
+    background: var(--bg-dark);
+}
+
+.view-content {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    background: var(--bg-darker);
+    border: 1px solid var(--border);
+}
+
+.empty-state-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+}
+
+.empty-state h2 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.8rem;
+    letter-spacing: 2px;
+    margin-bottom: 0.5rem;
+}
+
+.empty-state p {
+    color: var(--text-dim);
+    margin-bottom: 1.5rem;
+    max-width: 400px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Form Card */
+.form-card {
+    background: var(--bg-darker);
+    border: 1px solid var(--border);
+    max-width: 450px;
+    margin: 0 auto;
+}
+
+.form-card::before {
+    content: '';
+    display: block;
+    height: 3px;
+    background: var(--accent);
+}
+
+.form-card-header {
+    padding: 1.25rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.form-card-header h2 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.3rem;
+    letter-spacing: 2px;
+    margin: 0;
+}
+
+.form-card-body {
+    padding: 1.25rem;
+}
+
+.form-card-footer {
+    padding: 1rem 1.25rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+}
+
+.form-error {
+    background: rgba(255, 68, 68, 0.1);
+    border: 1px solid rgba(255, 68, 68, 0.3);
+    color: var(--danger);
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.85rem;
+    display: none;
+}
+
+.form-error.visible {
+    display: block;
+}
+
+/* Company Dashboard */
+.company-header-card {
+    background: var(--bg-darker);
+    border: 1px solid var(--border);
+    padding: 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    position: relative;
+}
+
+.company-header-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--accent);
+}
+
+.company-header-info h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.8rem;
+    letter-spacing: 2px;
+    margin: 0 0 0.5rem 0;
+}
+
+.company-meta {
+    display: flex;
+    gap: 1.5rem;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+}
+
+.company-meta span {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.company-balance {
+    text-align: right;
+}
+
+.balance-label {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 0.25rem;
+}
+
+.balance-value {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1.5rem;
+    color: var(--success);
+}
+
+/* Company Stats Grid */
+.company-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+}
+
+.company-stat-card {
+    background: var(--bg-darker);
+    border: 1px solid var(--border);
+    padding: 1.25rem;
+    text-align: center;
+}
+
+.company-stat-card .stat-icon {
+    font-size: 1.5rem;
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.company-stat-card .stat-value {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1.8rem;
+    color: var(--accent);
+    display: block;
+}
+
+.company-stat-card .stat-label {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Company Tabs */
+.company-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 1.5rem;
+    border-bottom: 2px solid var(--border);
+}
+
+.company-tab {
+    padding: 0.75rem 1.25rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s;
+    color: var(--text-dim);
+}
+
+.company-tab:hover {
+    color: var(--text);
+    background: rgba(255, 107, 0, 0.05);
+}
+
+.company-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+
+.company-tab span:first-child {
+    font-size: 1rem;
+}
+
+.tab-badge {
+    background: var(--bg-darker);
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-family: 'Share Tech Mono', monospace;
+}
+
+.company-tab.active .tab-badge {
+    background: var(--accent);
+    color: var(--bg-dark);
+}
+
+/* Company Tab Content */
+.company-tab-content {
+    display: none;
+}
+
+.company-tab-content.active {
+    display: block;
+}
+
+/* Tab Header with title and action button */
+.tab-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.tab-header h3 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.2rem;
+    letter-spacing: 1px;
+    margin: 0;
+}
+
+.btn-small {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.75rem;
+}
+
+/* Empty State Small */
+.empty-state-small {
+    text-align: center;
+    padding: 2rem;
+    background: var(--bg-darker);
+    border: 1px dashed var(--border);
+}
+
+.empty-state-small span {
+    font-size: 2rem;
+    display: block;
+    margin-bottom: 0.5rem;
+    opacity: 0.5;
+}
+
+.empty-state-small p {
+    color: var(--text-dim);
+    margin: 0;
+    font-size: 0.85rem;
+}
+
+/* Factories List */
+.factories-list,
+.fleet-list,
+.employees-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+/* Factory Card */
+.factory-card,
+.fleet-card,
+.employee-card {
+    background: var(--bg-darker);
+    border: 1px solid var(--border);
+    padding: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    transition: border-color 0.2s;
+}
+
+.factory-card:hover,
+.fleet-card:hover,
+.employee-card:hover {
+    border-color: var(--accent);
+}
+
+.factory-card-icon,
+.fleet-card-icon,
+.employee-card-icon {
+    font-size: 1.5rem;
+    width: 40px;
+    text-align: center;
+}
+
+.factory-card-info,
+.fleet-card-info,
+.employee-card-info {
+    flex: 1;
+}
+
+.factory-card-name,
+.fleet-card-name,
+.employee-card-name {
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+.factory-card-meta,
+.fleet-card-meta,
+.employee-card-meta {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    display: flex;
+    gap: 1rem;
+}
+
+.factory-card-status,
+.fleet-card-status {
+    padding: 0.2rem 0.5rem;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-radius: 3px;
+}
+
+.factory-card-status.producing,
+.fleet-card-status.active {
+    background: rgba(0, 200, 0, 0.2);
+    color: var(--success);
+}
+
+.factory-card-status.idle,
+.fleet-card-status.grounded {
+    background: rgba(150, 150, 150, 0.2);
+    color: var(--text-dim);
+}
+
+/* Employee Role Badge */
+.employee-role {
+    padding: 0.2rem 0.5rem;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-radius: 3px;
+}
+
+.employee-role.owner {
+    background: rgba(255, 107, 0, 0.2);
+    color: var(--accent);
+}
+
+.employee-role.admin {
+    background: rgba(0, 150, 255, 0.2);
+    color: #00aaff;
+}
+
+.employee-role.member {
+    background: rgba(150, 150, 150, 0.2);
+    color: var(--text-dim);
+}
+
+/* 4-column stats grid */
+.company-stats-grid {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+/* ========== PROFILE VIEW ========== */
+
+/* Profile Header */
+.profile-header-card {
+    background: var(--bg-darker);
+    border: 1px solid var(--border);
+    padding: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+    position: relative;
+}
+
+.profile-header-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--accent), #00aaff);
+}
+
+.profile-avatar {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, var(--accent), #ff8c42);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    font-family: 'Bebas Neue', sans-serif;
+    color: var(--bg-dark);
+    flex-shrink: 0;
+}
+
+.profile-header-info {
+    flex: 1;
+}
+
+.profile-header-info h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.8rem;
+    letter-spacing: 2px;
+    margin: 0 0 0.5rem 0;
+}
+
+.profile-meta {
+    display: flex;
+    gap: 1.5rem;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+}
+
+.profile-meta span {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+/* XP Box */
+.profile-xp-box {
+    text-align: center;
+    padding: 0.75rem 1.5rem;
+    background: rgba(255, 107, 0, 0.1);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+}
+
+.xp-label {
+    font-size: 0.6rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 0.25rem;
+}
+
+.xp-level {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2rem;
+    color: var(--accent);
+    line-height: 1;
+}
+
+.xp-bar {
+    width: 120px;
+    height: 6px;
+    background: var(--bg-dark);
+    border-radius: 3px;
+    margin: 0.5rem auto;
+    overflow: hidden;
+}
+
+.xp-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), #ff8c42);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+.xp-text {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    font-family: 'Share Tech Mono', monospace;
+}
+
+/* Profile Tabs */
+.profile-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 1.5rem;
+    border-bottom: 2px solid var(--border);
+}
+
+.profile-tab {
+    padding: 0.75rem 1.25rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s;
+    color: var(--text-dim);
+}
+
+.profile-tab:hover {
+    color: var(--text);
+    background: rgba(0, 170, 255, 0.05);
+}
+
+.profile-tab.active {
+    color: #00aaff;
+    border-bottom-color: #00aaff;
+}
+
+.profile-tab span:first-child {
+    font-size: 1rem;
+}
+
+.profile-tab .tab-badge {
+    background: var(--bg-darker);
+}
+
+.profile-tab.active .tab-badge {
+    background: #00aaff;
+    color: var(--bg-dark);
+}
+
+/* Profile Tab Content */
+.profile-tab-content {
+    display: none;
+}
+
+.profile-tab-content.active {
+    display: block;
+}
+
+/* Profile Stats Grid */
+.profile-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.profile-stat-card {
+    background: var(--bg-darker);
+    border: 1px solid var(--border);
+    padding: 1.25rem;
+    text-align: center;
+}
+
+.profile-stat-card .stat-icon {
+    font-size: 1.5rem;
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.profile-stat-card .stat-value {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1.5rem;
+    color: #00aaff;
+    display: block;
+}
+
+.profile-stat-card .stat-label {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Profile Section */
+.profile-section {
+    background: var(--bg-darker);
+    border: 1px solid var(--border);
+    padding: 1rem;
+}
+
+.profile-section h3 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1rem;
+    letter-spacing: 1px;
+    margin: 0 0 1rem 0;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.profile-info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+
+.profile-info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.profile-info-item .info-label {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.profile-info-item .info-value {
+    font-size: 0.9rem;
+}
+
+/* Licenses Grid */
+.licenses-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+
+.license-card {
+    background: var(--bg-darker);
+    border: 1px solid var(--border);
+    padding: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    transition: all 0.2s;
+}
+
+.license-card:hover {
+    border-color: #00aaff;
+}
+
+.license-card.locked {
+    opacity: 0.5;
+}
+
+.license-card.locked:hover {
+    border-color: var(--border);
+}
+
+.license-icon {
+    font-size: 1.5rem;
+    width: 40px;
+    text-align: center;
+}
+
+.license-info {
+    flex: 1;
+}
+
+.license-name {
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+.license-desc {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+}
+
+.license-status {
+    font-size: 1.2rem;
+}
+
+.license-status.unlocked {
+    color: var(--success);
+}
+
+.license-status.locked {
+    color: var(--text-dim);
+}
+
+/* Mailbox */
+.mailbox-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.mail-item {
+    background: var(--bg-darker);
+    border: 1px solid var(--border);
+    padding: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.mail-item:hover {
+    border-color: #00aaff;
+}
+
+.mail-item.unread {
+    border-left: 3px solid #00aaff;
+}
+
+.mail-icon {
+    font-size: 1.2rem;
+}
+
+.mail-info {
+    flex: 1;
+}
+
+.mail-subject {
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+.mail-preview {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mail-date {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+}
+
+/* Transactions */
+.transactions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.transaction-item {
+    background: var(--bg-darker);
+    border: 1px solid var(--border);
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.transaction-icon {
+    font-size: 1.2rem;
+    width: 30px;
+    text-align: center;
+}
+
+.transaction-info {
+    flex: 1;
+}
+
+.transaction-desc {
+    font-size: 0.85rem;
+    margin-bottom: 0.15rem;
+}
+
+.transaction-date {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+}
+
+.transaction-amount {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1rem;
+}
+
+.transaction-amount.positive {
+    color: var(--success);
+}
+
+.transaction-amount.negative {
+    color: #ff4444;
+}

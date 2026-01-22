@@ -54,7 +54,7 @@ services:
       - "8080:80"
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - /volume1/docker/msfs-directus/webmap:/var/www/map:ro
+      - ./webmap:/var/www/map:ro
     restart: unless-stopped
 
 volumes:

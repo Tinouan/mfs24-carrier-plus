@@ -10,7 +10,8 @@ from sqlalchemy import func
 from app.deps import get_db
 from app.models.item import Item
 from app.models.recipe import Recipe, RecipeIngredient
-# from app.models.factory import Factory  # Commented - table doesn't exist yet
+from app.models.airport import Airport
+from app.models.factory import Factory
 from app.schemas.factories import (
     ItemOut,
     ItemListOut,
@@ -18,6 +19,7 @@ from app.schemas.factories import (
     RecipeListOut,
     RecipeIngredientOut,
     AirportSlotOut,
+    AirportOut,
 )
 
 router = APIRouter(prefix="/world", tags=["world"])
@@ -208,6 +210,50 @@ def search_recipes_by_name(
 # AIRPORTS / SLOTS
 # =====================================================
 
+@router.get("/airports", response_model=list[AirportOut])
+def list_airports(
+    country: str | None = Query(None, description="Filter by ISO country code (FR, DE, US, etc.)"),
+    type: str | None = Query(None, description="Filter by airport type (large_airport, medium_airport, small_airport, heliport, seaplane_base)"),
+    min_lat: float | None = Query(None, description="Minimum latitude (bounding box)"),
+    max_lat: float | None = Query(None, description="Maximum latitude (bounding box)"),
+    min_lon: float | None = Query(None, description="Minimum longitude (bounding box)"),
+    max_lon: float | None = Query(None, description="Maximum longitude (bounding box)"),
+    limit: int = Query(2000, ge=1, le=10000, description="Max results"),
+    db: Session = Depends(get_db),
+):
+    """
+    List airports from database.
+    Returns airports with their coordinates for map display.
+    Use bounding box params (min_lat, max_lat, min_lon, max_lon) for viewport filtering.
+    """
+    query = db.query(Airport)
+
+    # Filter by bounding box (viewport)
+    if min_lat is not None and max_lat is not None and min_lon is not None and max_lon is not None:
+        query = query.filter(
+            Airport.latitude_deg >= min_lat,
+            Airport.latitude_deg <= max_lat,
+            Airport.longitude_deg >= min_lon,
+            Airport.longitude_deg <= max_lon
+        )
+
+    # Filter by country
+    if country:
+        query = query.filter(Airport.iso_country == country)
+
+    # Filter by type
+    if type:
+        query = query.filter(Airport.type == type)
+
+    # Exclude closed airports
+    query = query.filter(Airport.type != 'closed')
+
+    # Order by type (large first) then name
+    airports = query.order_by(Airport.type, Airport.name).limit(limit).all()
+
+    return airports
+
+
 @router.get("/airports/slots", response_model=list[AirportSlotOut])
 def list_airport_slots(
     airport_ident: str | None = Query(None, description="Filter by airport ICAO code"),
@@ -277,6 +323,167 @@ def get_airport_available_slots(
         "available_slots": len(available_indices),
         "available_slot_indices": available_indices,
     }
+
+
+# =====================================================
+# FACTORIES (Public map view)
+# =====================================================
+
+# T0 factory name to product/type mapping for map icons
+T0_FACTORY_PRODUCTS = {
+    # Food - Cereals
+    "Exploitation Céréalière Beauce": ("wheat", "food", "Blé"),
+    "Coopérative Agricole Île-de-France": ("wheat", "food", "Blé"),
+    "Ferme Céréalière du Nord": ("wheat", "food", "Blé"),
+    # Food - Meat
+    "Élevage Breton": ("meat", "food", "Viande"),
+    "Boucherie Lyonnaise": ("meat", "food", "Viande"),
+    "Ferme Normande": ("meat", "food", "Viande"),
+    # Food - Dairy
+    "Laiterie Normande": ("milk", "food", "Lait"),
+    "Fromagerie Alpine": ("milk", "food", "Lait"),
+    # Food - Fruits/Vegetables
+    "Vergers de Provence": ("fruits", "food", "Fruits"),
+    "Fruits du Sud-Ouest": ("fruits", "food", "Fruits"),
+    "Potager de Provence": ("vegetables", "food", "Légumes"),
+    "Maraîchage Loire": ("vegetables", "food", "Légumes"),
+    # Food - Fish
+    "Criée de Bretagne": ("fish", "food", "Poisson"),
+    "Pêcherie Méditerranée": ("fish", "food", "Poisson"),
+    # Food - Water
+    "Source Volvic": ("water", "food", "Eau"),
+    "Eaux des Alpes": ("water", "food", "Eau"),
+    # Food - Salt
+    "Salines de Guérande": ("salt", "food", "Sel"),
+    "Salines de Camargue": ("salt", "food", "Sel"),
+    # Fuel
+    "Raffinerie de Fos": ("crude_oil", "fuel", "Pétrole Brut"),
+    "Raffinerie de Donges": ("crude_oil", "fuel", "Pétrole Brut"),
+    "Gisement de Lacq": ("natural_gas", "fuel", "Gaz Naturel"),
+    "Biocarburants Occitanie": ("crude_oil", "fuel", "Biocarburant"),
+    # Minerals
+    "Mine de Lorraine": ("iron_ore", "mineral", "Minerai de Fer"),
+    "Bassin Minier du Nord": ("coal", "mineral", "Charbon"),
+    "Carrières d'Alsace": ("iron_ore", "mineral", "Minerai"),
+    "Carrières du Rhône": ("iron_ore", "mineral", "Minerai"),
+    # Construction
+    "Forêt des Landes": ("wood", "construction", "Bois"),
+    "Bois du Massif Central": ("wood", "construction", "Bois"),
+    "Scierie des Vosges": ("wood", "construction", "Bois"),
+}
+
+
+def _get_t0_product_info(factory_name: str) -> tuple[str, str, str]:
+    """Get product info for T0 factory based on name."""
+    if factory_name in T0_FACTORY_PRODUCTS:
+        return T0_FACTORY_PRODUCTS[factory_name]
+    # Fallback based on keywords in name
+    name_lower = factory_name.lower()
+    if any(w in name_lower for w in ["céréal", "blé", "ferme", "agricole", "coopérative"]):
+        return ("wheat", "food", "Blé")
+    if any(w in name_lower for w in ["élevage", "boucherie", "viande"]):
+        return ("meat", "food", "Viande")
+    if any(w in name_lower for w in ["lait", "fromage"]):
+        return ("milk", "food", "Lait")
+    if any(w in name_lower for w in ["verger", "fruit"]):
+        return ("fruits", "food", "Fruits")
+    if any(w in name_lower for w in ["potager", "maraîch", "légume"]):
+        return ("vegetables", "food", "Légumes")
+    if any(w in name_lower for w in ["criée", "pêche", "poisson"]):
+        return ("fish", "food", "Poisson")
+    if any(w in name_lower for w in ["source", "eau"]):
+        return ("water", "food", "Eau")
+    if any(w in name_lower for w in ["saline", "sel"]):
+        return ("salt", "food", "Sel")
+    if any(w in name_lower for w in ["raffinerie", "pétrole", "biocarburant"]):
+        return ("crude_oil", "fuel", "Pétrole")
+    if any(w in name_lower for w in ["gisement", "gaz"]):
+        return ("natural_gas", "fuel", "Gaz")
+    if any(w in name_lower for w in ["mine", "minier", "charbon"]):
+        return ("coal", "mineral", "Charbon")
+    if any(w in name_lower for w in ["carrière", "minerai"]):
+        return ("iron_ore", "mineral", "Minerai")
+    if any(w in name_lower for w in ["forêt", "bois", "scierie"]):
+        return ("wood", "construction", "Bois")
+    # Default
+    return ("wheat", "food", "Ressource")
+
+
+@router.get("/factories")
+def list_factories_for_map(
+    country: str | None = Query(None, description="Filter by country (uses airport's iso_country)"),
+    tier: int | None = Query(None, ge=0, le=5, description="Filter by tier (0=NPC, 1-5=player)"),
+    min_lat: float | None = Query(None, description="Minimum latitude (bounding box)"),
+    max_lat: float | None = Query(None, description="Maximum latitude (bounding box)"),
+    min_lon: float | None = Query(None, description="Minimum longitude (bounding box)"),
+    max_lon: float | None = Query(None, description="Maximum longitude (bounding box)"),
+    limit: int = Query(500, ge=1, le=2000, description="Max results"),
+    db: Session = Depends(get_db),
+):
+    """
+    List all factories for map display.
+    Returns factories with airport coordinates for map markers.
+    Includes both T0 (NPC) and player-owned factories.
+    """
+    from app.models.company import Company
+
+    # Join factories with airports to get coordinates
+    query = db.query(Factory, Airport).join(
+        Airport, Factory.airport_ident == Airport.ident
+    ).filter(Factory.is_active == True)
+
+    # Filter by tier
+    if tier is not None:
+        query = query.filter(Factory.tier == tier)
+
+    # Filter by country (via airport)
+    if country:
+        query = query.filter(Airport.iso_country == country)
+
+    # Filter by bounding box
+    if min_lat is not None and max_lat is not None and min_lon is not None and max_lon is not None:
+        query = query.filter(
+            Airport.latitude_deg >= min_lat,
+            Airport.latitude_deg <= max_lat,
+            Airport.longitude_deg >= min_lon,
+            Airport.longitude_deg <= max_lon
+        )
+
+    results = query.limit(limit).all()
+
+    factories_out = []
+    for factory, airport in results:
+        # Get company name
+        company = db.query(Company).filter(Company.id == factory.company_id).first()
+        company_name = company.name if company else "Unknown"
+
+        # Get product info for T0 factories
+        if factory.tier == 0:
+            product, prod_type, product_name = _get_t0_product_info(factory.name)
+        else:
+            # For player factories, use factory_type or default
+            product = None
+            prod_type = factory.factory_type or "production"
+            product_name = None
+
+        factories_out.append({
+            "id": str(factory.id),
+            "name": factory.name,
+            "airport_ident": factory.airport_ident,
+            "airport_name": airport.name,
+            "tier": factory.tier,
+            "type": prod_type,  # For frontend compatibility
+            "product": product,
+            "product_name": product_name,
+            "factory_type": factory.factory_type,
+            "status": factory.status,
+            "company_id": str(factory.company_id),
+            "company_name": company_name,
+            "latitude": airport.latitude_deg,
+            "longitude": airport.longitude_deg,
+        })
+
+    return factories_out
 
 
 # =====================================================

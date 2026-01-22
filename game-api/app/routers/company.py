@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from app.deps import get_db, get_current_user
-from app.models.company import Company
+from app.models.company import Company, slugify
 from app.models.company_member import CompanyMember
 from app.models.user import User
 from app.schemas.company import CompanyCreateIn, CompanyOut, MemberAddIn, MemberOut
@@ -43,17 +43,19 @@ def create_company(
     if not airport_exists:
         raise HTTPException(status_code=400, detail="Invalid home_airport_ident")
 
-    slug = payload.slug.lower().strip()
-    exists_slug = db.query(Company).filter(Company.world_id == 1, Company.slug == slug).first()
-    if exists_slug:
-        raise HTTPException(status_code=400, detail="Slug already used")
+    # Generate unique slug
+    base_slug = slugify(payload.name)
+    slug = base_slug
+    counter = 1
+    while db.query(Company).filter(Company.slug == slug).first():
+        slug = f"{base_slug[:45]}-{counter}"
+        counter += 1
 
     c = Company(
-        world_id=1,
         name=payload.name,
         slug=slug,
-        owner_user_id=user.id,
         home_airport_ident=home_ident,
+        owner_user_id=user.id,
     )
     db.add(c)
     db.flush()  # get c.id
@@ -72,11 +74,9 @@ def create_company(
 
     return CompanyOut(
         id=c.id,
-        world_id=c.world_id,
         name=c.name,
-        slug=c.slug,
-        owner_user_id=c.owner_user_id,
         home_airport_ident=c.home_airport_ident,
+        created_at=c.created_at,
     )
 
 @router.get("/me", response_model=CompanyOut)
@@ -90,11 +90,9 @@ def company_me(
 
     return CompanyOut(
         id=c.id,
-        world_id=c.world_id,
         name=c.name,
-        slug=c.slug,
-        owner_user_id=c.owner_user_id,
         home_airport_ident=c.home_airport_ident,
+        created_at=c.created_at,
     )
 
 @router.get("/members", response_model=list[MemberOut])
@@ -106,8 +104,20 @@ def list_members(
     if not c:
         raise HTTPException(status_code=404, detail="No company")
 
-    rows = db.query(CompanyMember).filter(CompanyMember.company_id == c.id).all()
-    return [MemberOut(company_id=r.company_id, user_id=r.user_id, role=r.role) for r in rows]
+    rows = db.query(CompanyMember, User).join(
+        User, CompanyMember.user_id == User.id
+    ).filter(CompanyMember.company_id == c.id).all()
+
+    return [
+        MemberOut(
+            company_id=member.company_id,
+            user_id=member.user_id,
+            role=member.role,
+            username=u.username,
+            email=u.email
+        )
+        for member, u in rows
+    ]
 
 @router.post("/members/add", response_model=MemberOut)
 def add_member(
@@ -146,4 +156,10 @@ def add_member(
     db.add(cm)
     db.commit()
 
-    return MemberOut(company_id=cm.company_id, user_id=cm.user_id, role=cm.role)
+    return MemberOut(
+        company_id=cm.company_id,
+        user_id=cm.user_id,
+        role=cm.role,
+        username=target.username,
+        email=target.email
+    )

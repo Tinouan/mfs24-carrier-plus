@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MFS Carrier+ - World Map</title>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- LOADING SCREEN -->
+    <div class="loading" id="loading">
+        <div class="loading-spinner"></div>
+    </div>
+
+    <!-- LOGIN PAGE -->
+    <div class="login-page" id="login-page">
+        <div class="login-container">
+            <div class="login-logo">
+                <div class="login-logo-icon">C+</div>
+                <div class="login-logo-text">MFS <span>CARRIER+</span></div>
+            </div>
+
+            <div class="login-card">
+                <div class="tabs">
+                    <div class="tab active" data-tab="login">CONNEXION</div>
+                    <div class="tab" data-tab="register">INSCRIPTION</div>
+                </div>
+
+                <!-- LOGIN FORM -->
+                <div class="tab-content active" id="tab-login">
+                    <div class="login-body">
+                        <div class="login-error" id="login-error"></div>
+                        <div class="form-group">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-input" id="login-email" placeholder="pilot@example.com">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Mot de passe</label>
+                            <input type="password" class="form-input" id="login-password" placeholder="••••••••">
+                        </div>
+                        <button class="btn" style="width:100%" onclick="handleLogin()">
+                            SE CONNECTER
+                        </button>
+                    </div>
+                    <div class="login-footer">
+                        Mot de passe oublié? <a href="#">Réinitialiser</a>
+                    </div>
+                </div>
+
+                <!-- REGISTER FORM -->
+                <div class="tab-content" id="tab-register">
+                    <div class="login-body">
+                        <div class="login-error" id="register-error"></div>
+                        <div class="form-group">
+                            <label class="form-label">Pseudo</label>
+                            <input type="text" class="form-input" id="register-username" placeholder="PilotMax">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-input" id="register-email" placeholder="pilot@example.com">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Mot de passe</label>
+                            <input type="password" class="form-input" id="register-password" placeholder="••••••••">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Confirmer mot de passe</label>
+                            <input type="password" class="form-input" id="register-confirm" placeholder="••••••••">
+                        </div>
+                        <button class="btn" style="width:100%" onclick="handleRegister()">
+                            CRÉER UN COMPTE
+                        </button>
+                    </div>
+                    <div class="login-footer">
+                        Déjà un compte? <a href="#" onclick="switchTab('login')">Se connecter</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN APPLICATION -->
+    <div class="app" id="app" style="display:none">
+        <!-- SIDEBAR -->
+        <aside class="sidebar" id="sidebar">
+            <div class="logo">
+                <div class="logo-icon">C+</div>
+                <div class="logo-text">MFS <span>CARRIER+</span></div>
+            </div>
+            <nav class="nav">
+                <div class="nav-section">
+                    <div class="nav-title">Navigation</div>
+                    <div class="nav-item active" data-view="map">
+                        <span>🗺️</span> World Map
+                    </div>
+                    <div class="nav-item" data-view="inventory">
+                        <span>📦</span> Inventaire
+                    </div>
+                </div>
+                <div class="nav-divider"></div>
+                <div class="nav-section">
+                    <div class="nav-title">Économie</div>
+                    <div class="nav-item" data-view="market">
+                        <span>💰</span> Marché
+                    </div>
+                    <div class="nav-item" data-view="missions">
+                        <span>🎯</span> Missions
+                    </div>
+                </div>
+                <div class="nav-divider"></div>
+                <div class="nav-section">
+                    <div class="nav-title">Pilote</div>
+                    <div class="nav-item" data-view="profile">
+                        <span>👤</span> Mon Profil
+                    </div>
+                </div>
+                <div class="nav-divider"></div>
+                <div class="nav-section">
+                    <div class="nav-title">Company</div>
+                    <div class="nav-item" data-view="company">
+                        <span>🏢</span> Ma Company
+                    </div>
+                </div>
+                <div class="nav-divider"></div>
+                <div class="nav-section">
+                    <div class="nav-item" onclick="handleLogout()">
+                        <span>🚪</span> Déconnexion
+                    </div>
+                </div>
+            </nav>
+
+            <!-- SIDEBAR FILTERS -->
+            <div class="sidebar-section" id="sidebar-filters">
+                <div class="sidebar-section-header">
+                    <span>🔍</span> FILTRES
+                </div>
+                <div class="sidebar-section-body">
+                    <div class="sidebar-filter-group">
+                        <label class="sidebar-filter-label">Type d'usine</label>
+                        <div class="sidebar-filter-chips">
+                            <div class="filter-chip active" data-filter="tier" data-value="all">Toutes</div>
+                            <div class="filter-chip" data-filter="tier" data-value="0">T0</div>
+                            <div class="filter-chip" data-filter="tier" data-value="1">T1+</div>
+                        </div>
+                    </div>
+                    <div class="sidebar-filter-group">
+                        <label class="sidebar-filter-label">Ressource</label>
+                        <div class="sidebar-filter-chips">
+                            <div class="filter-chip active" data-filter="resource" data-value="all">Toutes</div>
+                            <div class="filter-chip" data-filter="resource" data-value="food">🌾</div>
+                            <div class="filter-chip" data-filter="resource" data-value="fuel">⛽</div>
+                            <div class="filter-chip" data-filter="resource" data-value="mineral">⛏️</div>
+                        </div>
+                    </div>
+                    <div class="sidebar-filter-group">
+                        <label class="sidebar-filter-label">Pays</label>
+                        <select class="sidebar-select" id="country-filter">
+                            <option value="all" selected>Tous</option>
+                            <option value="FR">France</option>
+                            <option value="DE">Allemagne</option>
+                            <option value="GB">UK</option>
+                            <option value="US">USA</option>
+                        </select>
+                    </div>
+                    <div class="sidebar-filter-group">
+                        <label class="sidebar-checkbox">
+                            <input type="checkbox" id="factories-only-filter">
+                            <span>🏭 Usines uniquement</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SIDEBAR INFO PANEL (Airport details) -->
+            <div class="sidebar-section" id="sidebar-info" style="display:none;">
+                <div class="sidebar-section-header">
+                    <span>✈️</span> <span id="sidebar-info-title">DÉTAILS</span>
+                    <button class="sidebar-close-btn" onclick="closeSidebarInfo()">✕</button>
+                </div>
+                <div class="sidebar-section-body" id="sidebar-info-body">
+                    <!-- Dynamic content -->
+                </div>
+            </div>
+        </aside>
+
+        <!-- MAIN CONTENT -->
+        <main class="main" id="main">
+            <!-- HEADER -->
+            <header class="header">
+                <div class="header-left">
+                    <button class="toggle-sidebar" onclick="toggleSidebar()">☰</button>
+                    <div class="breadcrumb">
+                        MFS CARRIER+ <span>▸</span> <span id="current-view">WORLD MAP</span>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <div class="status-bar">
+                        <div class="status-item">
+                            <span class="status-light" id="api-status"></span>
+                            <span id="api-status-text">API:...</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-light"></span>
+                            <span id="factories-online">0 FACTORIES</span>
+                        </div>
+                    </div>
+                    <div class="user-info" onclick="toggleUserMenu()">
+                        <div class="user-avatar" id="user-avatar">?</div>
+                        <span class="user-name" id="user-name">Loading...</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- MAP VIEW -->
+            <div class="map-container" id="view-map">
+                <div id="map"></div>
+
+                <!-- MAP CONTROLS -->
+                <div class="map-controls">
+                    <button class="map-control-btn" onclick="centerOnFrance()" title="Centrer sur la France">🇫🇷</button>
+                    <button class="map-control-btn" onclick="toggleLabels()" title="Basculer Satellite/Dark">🗺️</button>
+                    <button class="map-control-btn" onclick="toggleAirports()" title="Afficher/Masquer Aéroports">✈️</button>
+                    <button class="map-control-btn" onclick="refreshFactories()" title="Rafraîchir">🔄</button>
+                </div>
+
+                <!-- STATS BAR -->
+                <div class="stats-bar">
+                    <div class="stat-chip">
+                        <span class="stat-chip-icon">🏭</span>
+                        <span class="stat-chip-value" id="stat-factories">0</span>
+                        <span class="stat-chip-label">Usines</span>
+                    </div>
+                    <div class="stat-chip">
+                        <span class="stat-chip-icon">🌍</span>
+                        <span class="stat-chip-value" id="stat-airports">0</span>
+                        <span class="stat-chip-label">Aéroports</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- COMPANY VIEW -->
+            <div class="view-container" id="view-company" style="display:none;">
+                <div class="view-content">
+                    <!-- No Company State -->
+                    <div class="company-no-company" id="company-no-company">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">🏢</div>
+                            <h2>Pas de Company</h2>
+                            <p>Créez votre company pour commencer à construire des usines et produire des ressources.</p>
+                            <button class="btn" onclick="showCreateCompanyForm()">
+                                CRÉER MA COMPANY
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Create Company Form -->
+                    <div class="company-create-form" id="company-create-form" style="display:none;">
+                        <div class="form-card">
+                            <div class="form-card-header">
+                                <h2>Nouvelle Company</h2>
+                            </div>
+                            <div class="form-card-body">
+                                <div class="form-error" id="company-create-error"></div>
+                                <div class="form-group">
+                                    <label class="form-label">Nom de la company</label>
+                                    <input type="text" class="form-input" id="company-name" placeholder="Ma Super Company">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Aéroport d'attache (ICAO)</label>
+                                    <input type="text" class="form-input" id="company-home-airport" placeholder="LFPG" maxlength="4" style="text-transform: uppercase;">
+                                    <div class="form-hint">Code ICAO de votre aéroport principal (ex: LFPG, EGLL, KJFK)</div>
+                                </div>
+                            </div>
+                            <div class="form-card-footer">
+                                <button class="btn btn-secondary" onclick="hideCreateCompanyForm()">ANNULER</button>
+                                <button class="btn" id="btn-create-company" onclick="submitCreateCompany()">CRÉER</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Company Dashboard (with tabs) -->
+                    <div class="company-dashboard" id="company-dashboard" style="display:none;">
+                        <!-- Company Header -->
+                        <div class="company-header-card">
+                            <div class="company-header-info">
+                                <h1 id="company-display-name">Ma Company</h1>
+                                <div class="company-meta">
+                                    <span>🏠 <span id="company-home-ident">LFPG</span></span>
+                                    <span>📅 Créée le <span id="company-created-date">-</span></span>
+                                </div>
+                            </div>
+                            <div class="company-balance">
+                                <span class="balance-label">Solde</span>
+                                <span class="balance-value" id="company-balance">0 $</span>
+                            </div>
+                        </div>
+
+                        <!-- Company Tabs -->
+                        <div class="company-tabs">
+                            <div class="company-tab active" data-tab="overview" onclick="switchCompanyTab('overview')">
+                                <span>📊</span> Aperçu
+                            </div>
+                            <div class="company-tab" data-tab="factories" onclick="switchCompanyTab('factories')">
+                                <span>🏭</span> Usines
+                                <span class="tab-badge" id="tab-factories-count">0</span>
+                            </div>
+                            <div class="company-tab" data-tab="fleet" onclick="switchCompanyTab('fleet')">
+                                <span>✈️</span> Flotte
+                                <span class="tab-badge" id="tab-fleet-count">0</span>
+                            </div>
+                            <div class="company-tab" data-tab="employees" onclick="switchCompanyTab('employees')">
+                                <span>👥</span> Employés
+                                <span class="tab-badge" id="tab-employees-count">0</span>
+                            </div>
+                        </div>
+
+                        <!-- Tab Content: Overview -->
+                        <div class="company-tab-content active" id="company-tab-overview">
+                            <div class="company-stats-grid">
+                                <div class="company-stat-card">
+                                    <span class="stat-icon">🏭</span>
+                                    <span class="stat-value" id="company-factory-count">0</span>
+                                    <span class="stat-label">Usines</span>
+                                </div>
+                                <div class="company-stat-card">
+                                    <span class="stat-icon">✈️</span>
+                                    <span class="stat-value" id="company-aircraft-count">0</span>
+                                    <span class="stat-label">Avions</span>
+                                </div>
+                                <div class="company-stat-card">
+                                    <span class="stat-icon">👥</span>
+                                    <span class="stat-value" id="company-member-count">0</span>
+                                    <span class="stat-label">Membres</span>
+                                </div>
+                                <div class="company-stat-card">
+                                    <span class="stat-icon">👷</span>
+                                    <span class="stat-value" id="company-worker-count">0</span>
+                                    <span class="stat-label">Ouvriers</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tab Content: Factories -->
+                        <div class="company-tab-content" id="company-tab-factories">
+                            <div class="tab-header">
+                                <h3>Usines de la Company</h3>
+                                <button class="btn btn-small" onclick="goToMapForFactory()">
+                                    + Nouvelle Usine
+                                </button>
+                            </div>
+                            <div class="factories-list" id="company-factories-list">
+                                <div class="empty-state-small">
+                                    <span>🏭</span>
+                                    <p>Aucune usine. Allez sur la carte pour en créer une.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tab Content: Fleet -->
+                        <div class="company-tab-content" id="company-tab-fleet">
+                            <div class="tab-header">
+                                <h3>Flotte Aérienne</h3>
+                                <button class="btn btn-small" onclick="openAddAircraftModal()">
+                                    + Ajouter Avion
+                                </button>
+                            </div>
+                            <div class="fleet-list" id="company-fleet-list">
+                                <div class="empty-state-small">
+                                    <span>✈️</span>
+                                    <p>Aucun avion dans la flotte.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tab Content: Employees -->
+                        <div class="company-tab-content" id="company-tab-employees">
+                            <div class="tab-header">
+                                <h3>Membres de la Company</h3>
+                                <button class="btn btn-small" onclick="openInviteMemberModal()">
+                                    + Inviter Membre
+                                </button>
+                            </div>
+                            <div class="employees-list" id="company-employees-list">
+                                <div class="empty-state-small">
+                                    <span>👥</span>
+                                    <p>Chargement des membres...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PROFILE VIEW -->
+            <div class="view-container" id="view-profile" style="display:none;">
+                <div class="view-content">
+                    <!-- Profile Header -->
+                    <div class="profile-header-card">
+                        <div class="profile-avatar">
+                            <span id="profile-avatar-letter">?</span>
+                        </div>
+                        <div class="profile-header-info">
+                            <h1 id="profile-username">Pilote</h1>
+                            <div class="profile-meta">
+                                <span>📧 <span id="profile-email">-</span></span>
+                                <span>📅 Membre depuis <span id="profile-joined-date">-</span></span>
+                            </div>
+                        </div>
+                        <div class="profile-xp-box">
+                            <div class="xp-label">NIVEAU PILOTE</div>
+                            <div class="xp-level" id="profile-pilot-level">1</div>
+                            <div class="xp-bar">
+                                <div class="xp-bar-fill" id="profile-xp-fill" style="width: 0%"></div>
+                            </div>
+                            <div class="xp-text"><span id="profile-xp">0</span> / <span id="profile-xp-next">1000</span> XP</div>
+                        </div>
+                    </div>
+
+                    <!-- Profile Tabs -->
+                    <div class="profile-tabs">
+                        <div class="profile-tab active" data-tab="overview" onclick="switchProfileTab('overview')">
+                            <span>📊</span> Aperçu
+                        </div>
+                        <div class="profile-tab" data-tab="licenses" onclick="switchProfileTab('licenses')">
+                            <span>🪪</span> Licences
+                        </div>
+                        <div class="profile-tab" data-tab="mailbox" onclick="switchProfileTab('mailbox')">
+                            <span>📬</span> Messagerie
+                            <span class="tab-badge" id="tab-mail-count">0</span>
+                        </div>
+                        <div class="profile-tab" data-tab="transactions" onclick="switchProfileTab('transactions')">
+                            <span>💳</span> Transactions
+                        </div>
+                    </div>
+
+                    <!-- Tab Content: Overview -->
+                    <div class="profile-tab-content active" id="profile-tab-overview">
+                        <div class="profile-stats-grid">
+                            <div class="profile-stat-card">
+                                <span class="stat-icon">✈️</span>
+                                <span class="stat-value" id="profile-flights-count">0</span>
+                                <span class="stat-label">Vols effectués</span>
+                            </div>
+                            <div class="profile-stat-card">
+                                <span class="stat-icon">🕐</span>
+                                <span class="stat-value" id="profile-flight-hours">0h</span>
+                                <span class="stat-label">Heures de vol</span>
+                            </div>
+                            <div class="profile-stat-card">
+                                <span class="stat-icon">📦</span>
+                                <span class="stat-value" id="profile-cargo-delivered">0t</span>
+                                <span class="stat-label">Cargo livré</span>
+                            </div>
+                            <div class="profile-stat-card">
+                                <span class="stat-icon">💰</span>
+                                <span class="stat-value" id="profile-earnings">0$</span>
+                                <span class="stat-label">Gains totaux</span>
+                            </div>
+                        </div>
+
+                        <div class="profile-section">
+                            <h3>Informations</h3>
+                            <div class="profile-info-grid">
+                                <div class="profile-info-item">
+                                    <span class="info-label">Company</span>
+                                    <span class="info-value" id="profile-company-name">-</span>
+                                </div>
+                                <div class="profile-info-item">
+                                    <span class="info-label">Rôle</span>
+                                    <span class="info-value" id="profile-company-role">-</span>
+                                </div>
+                                <div class="profile-info-item">
+                                    <span class="info-label">Base</span>
+                                    <span class="info-value" id="profile-home-base">-</span>
+                                </div>
+                                <div class="profile-info-item">
+                                    <span class="info-label">Position actuelle</span>
+                                    <span class="info-value" id="profile-current-location">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tab Content: Licenses -->
+                    <div class="profile-tab-content" id="profile-tab-licenses">
+                        <div class="tab-header">
+                            <h3>Licences Avion</h3>
+                        </div>
+                        <div class="licenses-grid" id="profile-licenses-list">
+                            <div class="license-card locked">
+                                <div class="license-icon">🛩️</div>
+                                <div class="license-info">
+                                    <div class="license-name">PPL - Monomoteur</div>
+                                    <div class="license-desc">Cessna 172, PA-28</div>
+                                </div>
+                                <div class="license-status unlocked">✓</div>
+                            </div>
+                            <div class="license-card">
+                                <div class="license-icon">✈️</div>
+                                <div class="license-info">
+                                    <div class="license-name">CPL - Bimoteur</div>
+                                    <div class="license-desc">King Air, Baron</div>
+                                </div>
+                                <div class="license-status locked">🔒</div>
+                            </div>
+                            <div class="license-card">
+                                <div class="license-icon">🛫</div>
+                                <div class="license-info">
+                                    <div class="license-name">ATPL - Jet Régional</div>
+                                    <div class="license-desc">CRJ, ERJ, ATR</div>
+                                </div>
+                                <div class="license-status locked">🔒</div>
+                            </div>
+                            <div class="license-card">
+                                <div class="license-icon">🛬</div>
+                                <div class="license-info">
+                                    <div class="license-name">ATPL - Narrowbody</div>
+                                    <div class="license-desc">A320, B737</div>
+                                </div>
+                                <div class="license-status locked">🔒</div>
+                            </div>
+                            <div class="license-card">
+                                <div class="license-icon">🌍</div>
+                                <div class="license-info">
+                                    <div class="license-name">ATPL - Widebody</div>
+                                    <div class="license-desc">A350, B777, B787</div>
+                                </div>
+                                <div class="license-status locked">🔒</div>
+                            </div>
+                            <div class="license-card">
+                                <div class="license-icon">📦</div>
+                                <div class="license-info">
+                                    <div class="license-name">Cargo - Freighter</div>
+                                    <div class="license-desc">B747F, A330F</div>
+                                </div>
+                                <div class="license-status locked">🔒</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tab Content: Mailbox -->
+                    <div class="profile-tab-content" id="profile-tab-mailbox">
+                        <div class="tab-header">
+                            <h3>Messagerie</h3>
+                        </div>
+                        <div class="mailbox-list" id="profile-mailbox-list">
+                            <div class="empty-state-small">
+                                <span>📬</span>
+                                <p>Aucun message.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tab Content: Transactions -->
+                    <div class="profile-tab-content" id="profile-tab-transactions">
+                        <div class="tab-header">
+                            <h3>Historique des Transactions</h3>
+                        </div>
+                        <div class="transactions-list" id="profile-transactions-list">
+                            <div class="empty-state-small">
+                                <span>💳</span>
+                                <p>Aucune transaction.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- TOAST CONTAINER -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- FACTORY CREATION MODAL -->
+    <div class="modal-overlay" id="modal-create-factory">
+        <div class="modal" style="max-width: 480px;">
+            <div class="modal-header">
+                <div class="modal-title">NOUVELLE USINE</div>
+                <button class="modal-close" onclick="closeCreateFactoryModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-error" id="factory-create-error"></div>
+
+                <!-- Location Info -->
+                <div class="modal-info-box">
+                    <div class="modal-info-row">
+                        <span class="modal-info-label">Aéroport</span>
+                        <span class="modal-info-value" id="factory-airport-ident">LFPG</span>
+                    </div>
+                    <div class="modal-info-row">
+                        <span class="modal-info-label">Emplacement</span>
+                        <span class="modal-info-value">Slot #<span id="factory-slot-index">1</span></span>
+                    </div>
+                </div>
+
+                <!-- Factory Name -->
+                <div class="form-group">
+                    <label class="form-label">Nom de l'usine</label>
+                    <input type="text" class="form-input" id="factory-name" placeholder="Ma première usine">
+                </div>
+
+                <!-- Recipe Selection -->
+                <div class="form-group">
+                    <label class="form-label">Recette (optionnel)</label>
+                    <select class="form-select" id="factory-recipe">
+                        <option value="">-- Sélectionner une recette --</option>
+                    </select>
+                    <div class="form-hint">Vous pouvez configurer la recette plus tard</div>
+                </div>
+
+                <!-- Recipe Details (shown when recipe selected) -->
+                <div class="modal-recipe-details" id="recipe-details" style="display: none;">
+                    <div class="recipe-detail-header">
+                        <span id="recipe-detail-name">Nom recette</span>
+                        <span class="recipe-tier-badge" id="recipe-detail-tier">T1</span>
+                    </div>
+                    <div class="recipe-detail-row">
+                        <span>Durée de production</span>
+                        <span id="recipe-detail-time">2h</span>
+                    </div>
+                    <div class="recipe-detail-row">
+                        <span>Quantité produite</span>
+                        <span id="recipe-detail-qty">10</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeCreateFactoryModal()">ANNULER</button>
+                <button class="btn" id="btn-create-factory" onclick="submitCreateFactory()">
+                    CRÉER L'USINE
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPTS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
