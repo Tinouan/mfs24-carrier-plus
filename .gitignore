@@ -1,6 +1,9 @@
 # secrets
 .env
 
+# docker (contains local paths/secrets)
+docker-compose.yml
+
 # python
 __pycache__/
 *.pyc
