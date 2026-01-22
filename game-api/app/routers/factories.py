@@ -16,7 +16,6 @@ from app.models.factory import Factory
 from app.models.item import Item
 from app.models.recipe import Recipe, RecipeIngredient
 from app.models.worker import Worker
-from app.models.engineer import Engineer
 from app.models.factory_storage import FactoryStorage
 from app.models.production_batch import ProductionBatch
 from app.models.factory_transaction import FactoryTransaction
@@ -28,11 +27,6 @@ from app.schemas.factories import (
     FactoryListOut,
     FactoryCreateIn,
     FactoryUpdateIn,
-    WorkerOut,
-    WorkerCreateIn,
-    WorkerUpdateIn,
-    EngineerOut,
-    EngineerCreateIn,
     FactoryStorageOut,
     FactoryStorageLineOut,
     StorageDepositIn,
@@ -41,6 +35,13 @@ from app.schemas.factories import (
     StartProductionIn,
     FactoryTransactionOut,
     FactoryStatsOut,
+    FoodDepositIn,
+    FoodStatusOut,
+)
+from app.schemas.workers import (
+    WorkerOut,
+    WorkerListOut,
+    FactoryWorkersOut,
 )
 
 router = APIRouter(prefix="/factories", tags=["factories"])
@@ -371,8 +372,8 @@ def start_production(
 
     # Calculate estimated completion
     production_time = float(recipe.production_time_hours)
-    # In a real implementation, this would be: now + production_time hours
-    estimated_completion = datetime.utcnow()  # Placeholder
+    from datetime import timedelta
+    estimated_completion = datetime.utcnow() + timedelta(hours=production_time)
 
     # Consume ingredients from storage
     for ingredient in recipe_ingredients:
@@ -497,255 +498,47 @@ def stop_production(
 
 
 # =====================================================
-# WORKERS
+# WORKERS (V0.6 - Use /workers endpoints for full management)
 # =====================================================
 
-@router.post("/{factory_id}/workers", response_model=WorkerOut, status_code=201)
-def hire_worker(
+@router.get("/{factory_id}/workers", response_model=FactoryWorkersOut)
+def list_factory_workers(
     factory_id: uuid.UUID,
-    data: WorkerCreateIn,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Hire a worker for this factory."""
+    """List all workers assigned to this factory (V0.6).
+
+    For full worker management (hire, assign, fire), use /workers endpoints.
+    """
     c, _cm = _get_my_company(db, user.id)
     if not c:
         raise HTTPException(status_code=404, detail="No company")
 
     factory = _get_factory_or_404(db, c.id, factory_id)
 
-    # Limit max workers per factory (reasonable limit)
-    # TODO: Define this in config or based on factory tier
-    MAX_WORKERS_PER_FACTORY = 10
-
-    current_workers = db.query(func.count(Worker.id)).filter(
-        Worker.factory_id == factory.id,
-        Worker.is_active == True
-    ).scalar()
-
-    if current_workers >= MAX_WORKERS_PER_FACTORY:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Factory has reached maximum worker capacity ({MAX_WORKERS_PER_FACTORY})"
-        )
-
-    # Check company balance for hiring cost
-    # TODO: Define worker hiring cost system (may vary by tier, location, etc.)
-    # For now, workers are free to hire
-    # When implemented:
-    # HIRING_COST = 1000  # Example base cost
-    # if c.balance < HIRING_COST:
-    #     raise HTTPException(status_code=400, detail="Insufficient funds to hire worker")
-    # c.balance -= HIRING_COST
-
-    # Create worker with T0 defaults
-    worker = Worker(
-        factory_id=factory.id,
-        first_name=data.first_name,
-        last_name=data.last_name,
-        tier=0,  # Starts at T0
-        health=100,
-        happiness=80,
-        xp=0,
-        is_active=True,
-    )
-    db.add(worker)
-    db.commit()
-    db.refresh(worker)
-
-    return WorkerOut(
-        id=worker.id,
-        factory_id=worker.factory_id,
-        first_name=worker.first_name,
-        last_name=worker.last_name,
-        tier=worker.tier,
-        health=worker.health,
-        happiness=worker.happiness,
-        xp=worker.xp,
-        is_active=worker.is_active,
-        created_at=worker.created_at,
-    )
-
-
-@router.get("/{factory_id}/workers", response_model=list[WorkerOut])
-def list_workers(
-    factory_id: uuid.UUID,
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    """List all workers in this factory."""
-    c, _cm = _get_my_company(db, user.id)
-    if not c:
-        raise HTTPException(status_code=404, detail="No company")
-
-    factory = _get_factory_or_404(db, c.id, factory_id)
-
+    # Get workers (worker_type='worker')
     workers = db.query(Worker).filter(
         Worker.factory_id == factory.id,
-        Worker.is_active == True
+        Worker.worker_type == "worker"
     ).all()
 
-    return [
-        WorkerOut(
-            id=w.id,
-            factory_id=w.factory_id,
-            first_name=w.first_name,
-            last_name=w.last_name,
-            tier=w.tier,
-            health=w.health,
-            happiness=w.happiness,
-            xp=w.xp,
-            is_active=w.is_active,
-            created_at=w.created_at,
-        )
-        for w in workers
-    ]
+    # Get engineers (worker_type='engineer')
+    engineers = db.query(Worker).filter(
+        Worker.factory_id == factory.id,
+        Worker.worker_type == "engineer"
+    ).all()
 
-
-@router.delete("/{factory_id}/workers/{worker_id}", status_code=204)
-def fire_worker(
-    factory_id: uuid.UUID,
-    worker_id: uuid.UUID,
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    """Fire a worker (soft delete)."""
-    c, _cm = _get_my_company(db, user.id)
-    if not c:
-        raise HTTPException(status_code=404, detail="No company")
-
-    factory = _get_factory_or_404(db, c.id, factory_id)
-
-    worker = db.query(Worker).filter(
-        Worker.id == worker_id,
-        Worker.factory_id == factory.id
-    ).first()
-    if not worker:
-        raise HTTPException(status_code=404, detail="Worker not found")
-
-    # Soft delete
-    worker.is_active = False
-    db.commit()
-
-
-# =====================================================
-# ENGINEERS
-# =====================================================
-
-@router.post("/engineers", response_model=EngineerOut, status_code=201)
-def hire_engineer(
-    data: EngineerCreateIn,
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    """Hire an engineer for a specific factory (1 engineer per factory max)."""
-    c, _cm = _get_my_company(db, user.id)
-    if not c:
-        raise HTTPException(status_code=404, detail="No company")
-
-    # Validate factory exists and belongs to company
-    factory = _get_factory_or_404(db, c.id, data.factory_id)
-
-    # Check if factory already has an engineer (1 per factory max)
-    existing_engineer = db.query(Engineer).filter(
-        Engineer.factory_id == factory.id,
-        Engineer.is_active == True
-    ).first()
-
-    if existing_engineer:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Factory already has an engineer: {existing_engineer.name}"
-        )
-
-    # Check company balance for hiring cost
-    # TODO: Define engineer hiring cost system (likely higher than workers)
-    # For now, engineers are free to hire
-    # When implemented:
-    # HIRING_COST = 5000  # Example base cost
-    # if c.balance < HIRING_COST:
-    #     raise HTTPException(status_code=400, detail="Insufficient funds to hire engineer")
-    # c.balance -= HIRING_COST
-
-    # Create engineer
-    engineer = Engineer(
-        company_id=c.id,
+    return FactoryWorkersOut(
         factory_id=factory.id,
-        name=data.name,
-        specialization=data.specialization,
-        bonus_percentage=10,  # Default 10%
-        experience=0,
-        is_active=True,
+        factory_name=factory.name,
+        max_workers=factory.max_workers,
+        max_engineers=factory.max_engineers,
+        current_workers=len(workers),
+        current_engineers=len(engineers),
+        workers=[WorkerListOut.model_validate(w) for w in workers],
+        engineers=[WorkerListOut.model_validate(e) for e in engineers]
     )
-    db.add(engineer)
-    db.commit()
-    db.refresh(engineer)
-
-    return EngineerOut(
-        id=engineer.id,
-        company_id=engineer.company_id,
-        factory_id=engineer.factory_id,
-        name=engineer.name,
-        specialization=engineer.specialization,
-        bonus_percentage=engineer.bonus_percentage,
-        experience=engineer.experience,
-        is_active=engineer.is_active,
-        created_at=engineer.created_at,
-    )
-
-
-@router.get("/engineers", response_model=list[EngineerOut])
-def list_my_engineers(
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    """List all engineers for current company."""
-    c, _cm = _get_my_company(db, user.id)
-    if not c:
-        raise HTTPException(status_code=404, detail="No company")
-
-    engineers = db.query(Engineer).filter(
-        Engineer.company_id == c.id,
-        Engineer.is_active == True
-    ).all()
-
-    return [
-        EngineerOut(
-            id=e.id,
-            company_id=e.company_id,
-            factory_id=e.factory_id,
-            name=e.name,
-            specialization=e.specialization,
-            bonus_percentage=e.bonus_percentage,
-            experience=e.experience,
-            is_active=e.is_active,
-            created_at=e.created_at,
-        )
-        for e in engineers
-    ]
-
-
-@router.delete("/engineers/{engineer_id}", status_code=204)
-def fire_engineer(
-    engineer_id: uuid.UUID,
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    """Fire an engineer (soft delete)."""
-    c, _cm = _get_my_company(db, user.id)
-    if not c:
-        raise HTTPException(status_code=404, detail="No company")
-
-    engineer = db.query(Engineer).filter(
-        Engineer.id == engineer_id,
-        Engineer.company_id == c.id
-    ).first()
-    if not engineer:
-        raise HTTPException(status_code=404, detail="Engineer not found")
-
-    # Soft delete
-    engineer.is_active = False
-    db.commit()
 
 
 # =====================================================

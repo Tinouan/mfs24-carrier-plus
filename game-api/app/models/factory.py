@@ -5,7 +5,9 @@ Company-owned production facilities with auto-detected type
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, String, Integer, ForeignKey, func
+from decimal import Decimal
+
+from sqlalchemy import Boolean, DateTime, String, Integer, ForeignKey, Numeric, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -75,6 +77,46 @@ class Factory(Base):
         Boolean,
         server_default="true",
         nullable=False
+    )
+
+    # V0.6 Worker Capacity
+    max_workers: Mapped[int] = mapped_column(
+        Integer,
+        server_default="10",
+        nullable=False,
+        comment="Max workers based on tier (T1=10, T5=50)"
+    )
+    max_engineers: Mapped[int] = mapped_column(
+        Integer,
+        server_default="2",
+        nullable=False,
+        comment="Max engineers based on tier (T1=2, T5=10)"
+    )
+
+    # V0.6 Food System
+    food_item_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("game.items.id"),
+        nullable=True,
+        comment="Item used as food (default: Rations)"
+    )
+    food_stock: Mapped[int] = mapped_column(
+        Integer,
+        server_default="0",
+        nullable=False,
+        comment="Current food units in storage"
+    )
+    food_capacity: Mapped[int] = mapped_column(
+        Integer,
+        server_default="100",
+        nullable=False,
+        comment="Max food storage capacity"
+    )
+    food_consumption_per_hour: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2),
+        server_default="0",
+        nullable=False,
+        comment="Food consumed per hour (based on workers)"
     )
 
     # Timestamps

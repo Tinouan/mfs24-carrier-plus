@@ -66,63 +66,125 @@ class RecipeListOut(BaseModel):
 
 
 # =====================================================
-# WORKERS
+# WORKERS (V0.6 Unified System)
 # =====================================================
 
 class WorkerOut(BaseModel):
-    """Worker output."""
+    """Worker/Engineer output (unified model)."""
     id: uuid.UUID
-    factory_id: uuid.UUID | None = None
     first_name: str
     last_name: str
+    country_code: str
+    worker_type: str  # 'worker' or 'engineer'
+    speed: int
+    resistance: int
     tier: int
-    health: int
-    happiness: int
     xp: int
-    is_active: bool
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class WorkerCreateIn(BaseModel):
-    """Create worker input."""
-    first_name: str = Field(..., min_length=1, max_length=50)
-    last_name: str = Field(..., min_length=1, max_length=50)
-
-
-class WorkerUpdateIn(BaseModel):
-    """Update worker input."""
-    is_active: bool | None = None
+    hourly_salary: float
+    status: str  # 'available', 'working', 'injured', 'dead'
+    injured_at: datetime | None = None
+    location_type: str  # 'airport' or 'factory'
+    airport_ident: str | None = None
     factory_id: uuid.UUID | None = None
-
-
-# =====================================================
-# ENGINEERS
-# =====================================================
-
-class EngineerOut(BaseModel):
-    """Engineer output."""
-    id: uuid.UUID
-    company_id: uuid.UUID
-    factory_id: uuid.UUID | None
-    name: str
-    specialization: str
-    bonus_percentage: int
-    experience: int
-    is_active: bool
+    company_id: uuid.UUID | None = None
     created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True
 
 
-class EngineerCreateIn(BaseModel):
-    """Create engineer input (hired for a specific factory)."""
+class WorkerListOut(BaseModel):
+    """Simplified worker for lists."""
+    id: uuid.UUID
+    first_name: str
+    last_name: str
+    country_code: str
+    worker_type: str
+    tier: int
+    speed: int
+    status: str
+    hourly_salary: float
+
+    class Config:
+        from_attributes = True
+
+
+class WorkerHireIn(BaseModel):
+    """Hire worker from airport pool."""
+    worker_id: uuid.UUID
+
+
+class WorkerHireBulkIn(BaseModel):
+    """Hire multiple workers from airport pool."""
+    worker_ids: list[uuid.UUID] = Field(..., min_length=1, max_length=10)
+
+
+class WorkerAssignIn(BaseModel):
+    """Assign worker to factory."""
     factory_id: uuid.UUID
-    name: str = Field(..., min_length=1, max_length=100)
-    specialization: str = Field(..., pattern="^(food_processing|metal_smelting|chemical_refining|construction|electronics|medical|fuel_production|general)$")
+
+
+class WorkerFireIn(BaseModel):
+    """Fire worker (returns to airport pool or removes if injured/dead)."""
+    worker_id: uuid.UUID
+
+
+# =====================================================
+# AIRPORT WORKER POOLS
+# =====================================================
+
+class AirportWorkerPoolOut(BaseModel):
+    """Airport worker pool info."""
+    airport_ident: str
+    max_workers: int
+    max_engineers: int
+    current_workers: int
+    current_engineers: int
+    last_refresh: datetime | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class PoolWorkerOut(BaseModel):
+    """Worker available in airport pool (for hiring)."""
+    id: uuid.UUID
+    first_name: str
+    last_name: str
+    country_code: str
+    worker_type: str
+    tier: int
+    speed: int
+    resistance: int
+    hourly_salary: float
+
+    class Config:
+        from_attributes = True
+
+
+# =====================================================
+# COUNTRY WORKER STATS
+# =====================================================
+
+class CountryWorkerStatsOut(BaseModel):
+    """Country worker statistics."""
+    country_code: str
+    country_name: str
+    base_speed: int
+    base_resistance: int
+    base_hourly_salary: float
+
+    class Config:
+        from_attributes = True
+
+
+# =====================================================
+# ENGINEERS (Deprecated - use WorkerOut with worker_type='engineer')
+# =====================================================
+
+# EngineerOut is now just an alias for WorkerOut
+EngineerOut = WorkerOut
 
 
 # =====================================================
@@ -165,10 +227,18 @@ class FactoryOut(BaseModel):
     company_id: uuid.UUID
     airport_ident: str
     name: str
+    tier: int = 0
     factory_type: str | None = None
     status: str
     current_recipe_id: uuid.UUID | None = None
     is_active: bool
+    # V0.6 Workers capacity
+    max_workers: int = 10
+    max_engineers: int = 2
+    # V0.6 Food system
+    food_stock: int = 0
+    food_capacity: int = 100
+    food_consumption_per_hour: float = 0.0
     created_at: datetime
     updated_at: datetime
 
@@ -181,9 +251,13 @@ class FactoryListOut(BaseModel):
     id: uuid.UUID
     name: str
     airport_ident: str
+    tier: int = 0
     factory_type: str | None = None
     status: str
     is_active: bool
+    # Worker counts
+    worker_count: int = 0
+    engineer_count: int = 0
 
     class Config:
         from_attributes = True
@@ -200,6 +274,40 @@ class FactoryUpdateIn(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=100)
     current_recipe_id: uuid.UUID | None = None
     status: str | None = Field(None, pattern="^(idle|producing|maintenance|offline)$")
+
+
+# =====================================================
+# FACTORY FOOD SYSTEM
+# =====================================================
+
+class FoodDepositIn(BaseModel):
+    """Deposit food into factory."""
+    quantity: int = Field(..., ge=1, description="Amount of food to deposit")
+
+
+class FoodStatusOut(BaseModel):
+    """Factory food status."""
+    factory_id: uuid.UUID
+    food_stock: int
+    food_capacity: int
+    food_consumption_per_hour: float
+    hours_until_empty: float | None = None
+    workers_fed: int
+    workers_hungry: int
+
+
+# =====================================================
+# FACTORY WORKERS MANAGEMENT
+# =====================================================
+
+class FactoryWorkersOut(BaseModel):
+    """Workers assigned to a factory."""
+    factory_id: uuid.UUID
+    factory_name: str
+    max_workers: int
+    max_engineers: int
+    workers: list["WorkerListOut"]
+    engineers: list["WorkerListOut"]
 
 
 # =====================================================

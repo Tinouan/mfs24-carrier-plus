@@ -11,3 +11,6 @@ argon2-cffi==23.1.0
 pydantic==2.8.2
 pydantic-settings==2.4.0
 email-validator==2.2.0
+
+# Scheduler for background jobs
+apscheduler==3.10.4

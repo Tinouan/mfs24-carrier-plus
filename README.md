@@ -9,10 +9,82 @@ Jeu de gestion de compagnie aérienne cargo pour Microsoft Flight Simulator 2024
 - [x] Docker stack : Postgres + Directus + Nginx + FastAPI
 - [x] Auth JWT (`/api/auth/*`, `/api/me`)
 - [x] Company + members
-- [x] Inventory (vault + warehouses)
+- [x] Inventory (vault + warehouses + marché)
 - [x] Fleet (company_aircraft)
 - [x] API docs via `/api/docs`
 - [x] **84 000+ airports** importés avec système de slots
+
+---
+
+## Inventory System (DONE)
+
+### Vue d'ensemble
+Système d'inventaire localisé par aéroport avec mise en vente sur place.
+
+### Tables
+
+| Table | Description |
+|-------|-------------|
+| `game.inventory_locations` | Locations (vault, warehouse, aircraft, in_transit) |
+| `game.inventory_items` | Items par location avec système de vente |
+| `game.inventory_audits` | Historique des mouvements |
+
+### Structure `inventory_items`
+```sql
+id UUID PRIMARY KEY
+location_id UUID REFERENCES inventory_locations(id)
+item_id UUID REFERENCES items(id)
+qty INT                    -- Quantité en stock
+for_sale BOOLEAN           -- En vente ?
+sale_price NUMERIC(12,2)   -- Prix unitaire
+sale_qty BIGINT            -- Quantité à vendre
+```
+
+### API Endpoints
+
+| Méthode | Endpoint | Auth | Description |
+|---------|----------|------|-------------|
+| GET | `/api/inventory/locations` | Oui | Liste des locations (vault + warehouses) |
+| POST | `/api/inventory/locations/warehouse` | Oui | Créer un warehouse à un aéroport |
+| GET | `/api/inventory/location/{id}` | Oui | Contenu d'une location |
+| POST | `/api/inventory/deposit` | Oui | Ajouter du stock |
+| POST | `/api/inventory/withdraw` | Oui | Retirer du stock |
+| POST | `/api/inventory/move` | Oui | Déplacer entre locations |
+| POST | `/api/inventory/set-for-sale` | Oui | Mettre en vente / retirer |
+| GET | `/api/inventory/market/{icao}` | Non | Items en vente à un aéroport (public) |
+| POST | `/api/inventory/market/buy` | Oui | Acheter sur le marché |
+
+### Fonctionnalités vente
+
+- **Vente partielle** : Choisir la quantité à vendre (sale_qty ≤ qty)
+- **Restriction** : Vente uniquement depuis les warehouses
+- **Transaction complète** : Débit acheteur + crédit vendeur
+- **Création auto** : Warehouse acheteur créé automatiquement
+- **Protection** : Impossible d'acheter à soi-même
+- **Audit trail** : Toutes les actions tracées (market_buy, market_sell, etc.)
+
+### Exemple de flux
+
+```bash
+# 1. Créer un warehouse
+POST /api/inventory/locations/warehouse
+{"airport_ident": "LFPG"}
+
+# 2. Déposer des items
+POST /api/inventory/deposit
+{"location_id": "...", "item_code": "Raw Fish", "qty": 100}
+
+# 3. Mettre en vente
+POST /api/inventory/set-for-sale
+{"location_id": "...", "item_code": "Raw Fish", "for_sale": true, "sale_price": 15.50, "sale_qty": 50}
+
+# 4. Voir le marché (endpoint public)
+GET /api/inventory/market/LFPG
+
+# 5. Acheter (autre company)
+POST /api/inventory/market/buy
+{"seller_location_id": "...", "item_code": "Raw Fish", "qty": 10}
+```
 
 ---
 
@@ -247,9 +319,30 @@ CREATE TABLE game.factory_transactions (
 
 ---
 
-### 🏭 PHASE 3: Production Logic (À VENIR)
+### 🏭 PHASE 3: Production Logic (EN COURS)
 
-**Statut**: 🔴 Non démarré
+**Statut**: 🟡 Partiellement implémenté
+
+#### ✅ Background Jobs (APScheduler)
+
+**Fichiers créés:**
+- [scheduler.py](game-api/app/core/scheduler.py) - Configuration APScheduler
+- [production_service.py](game-api/app/services/production_service.py) - Logique de production
+
+**Jobs planifiés:**
+| Job | Intervalle | Description |
+|-----|------------|-------------|
+| `batch_completion` | 1 min | Complète les batches T1+ dont `estimated_completion` est passé |
+| `t0_auto_production` | 5 min | Produit automatiquement les items des usines T0 (NPC) |
+
+**Fonctionnalités implémentées:**
+- ✅ Auto-complétion des batches T1+ (status → completed)
+- ✅ Ajout items produits au `factory_storage`
+- ✅ Gain XP workers (tier * 10 XP par batch)
+- ✅ Auto-promotion tier workers basée sur XP
+- ✅ Bonus engineer (+20% si applicable)
+- ✅ Logging complet des opérations
+- ✅ Production T0 → warehouse NPC → marché (for_sale=true)
 
 #### Mécanique de production
 
@@ -311,20 +404,27 @@ POST /api/factories/{factory_id}/batches
 - [ ] `POST /api/workers/{id}/rest` - Mettre au repos
 
 #### Background Tasks
-- [ ] Cron toutes les 5 min: check batches en cours
+- [x] APScheduler intégré (BackgroundScheduler)
+- [x] Cron toutes les 1 min: check batches en cours
+- [x] Cron toutes les 5 min: production T0 automatique
+- [x] Auto-completion batches T1+
 - [ ] Health degradation workers
-- [ ] Auto-completion batches
 - [ ] Notifications (batch terminé, worker critique, etc.)
 
 ---
 
-### 🤖 PHASE 4: NPC Factories + Market (À VENIR)
+### 🤖 PHASE 4: NPC Factories + Market (EN COURS)
 
-**Statut**: 🔴 Non démarré
+**Statut**: 🟡 Partiellement implémenté
 
-#### Concept
-- Factories gérées par système (non-joueur)
-- Production automatique items pour marché mondial
+#### ✅ Implémenté
+- ✅ 31 usines T0 (NPC) en France avec mapping produits
+- ✅ Production automatique toutes les 5 min (50 items/cycle)
+- ✅ Items stockés dans warehouse NPC @ aéroport
+- ✅ Items mis en vente automatiquement (`for_sale=true`)
+- ✅ Stock limit T0: 1000 items max par produit
+
+#### Concept (restant)
 - Prix dynamiques basés offre/demande
 - Intégration avec `game.market_wallet` existante
 
@@ -610,16 +710,27 @@ $$ LANGUAGE plpgsql;
 ### 🎯 État Actuel Projet
 
 **✅ Fonctionnel (2026-01-22)**
-- PostgreSQL avec **17 tables game** (Phase 1 + Phase 2)
+- PostgreSQL avec **21 tables game** (V0.5 Factories + V0.6 Workers)
 - **84 000+ airports** importés avec système de slots
 - **31 usines T0** (NPC) en France avec mapping produits
-- 93 items (T0: 33, T1: 30, T2: 30) insérés
+- **34 items T0** (raw materials) - incluant Raw Water ajouté
+- 93 items total (T0: 34, T1: 30, T2: 30)
 - 60 recettes (T1: 30, T2: 30) insérées
 - API FastAPI démarrée (Docker local)
 - Auth JWT fonctionnelle
 - Docker containers stables
+- **APScheduler** avec 7 jobs automatiques
 
-**✅ Frontend Webmap (2026-01-22)**
+**✅ V0.6 Workers System (2026-01-22)**
+- Table `workers` unifiée (workers + engineers)
+- **42 pays** avec stats de base configurés
+- **5201 pools** de recrutement aux aéroports
+- Système de blessures et mort (>10 jours)
+- Consommation food (1/worker/heure)
+- Paiement salaires horaires
+- Génération workers par nationalité
+
+**✅ Frontend Webmap**
 - Carte Leaflet avec clustering aéroports/usines
 - Icônes de production pour usines T0 (food, fuel, mineral, etc.)
 - Dashboard Company avec onglets (Aperçu, Usines, Flotte, Employés)
@@ -628,24 +739,93 @@ $$ LANGUAGE plpgsql;
 - Affichage membres company avec username/email
 
 **✅ API Endpoints Complets**
-- `/api/world/factories` - Liste factories pour carte
-- `/api/world/airports/{ident}/slots` - Slots disponibles
-- `/api/company/members` - Membres avec infos utilisateur
-- `/api/factories/*` - CRUD complet factories
-- `/api/factories/{id}/workers` - Gestion workers
+- `/api/world/*` - Items, recettes, factories carte
+- `/api/factories/*` - CRUD factories + storage + production
+- `/api/workers/*` - 15+ endpoints gestion workers
+- `/api/company/*` - Membres, profil company
+- `/api/inventory/*` - Inventaire + marché
 
 **⏳ À venir**
-- Implémentation système production complet (Phase 3)
-- NPC factories + marché dynamique (Phase 4)
+- Prix dynamiques marché (Phase 4)
 - Items T3-T5 (~300 items total)
+- Missions / Logistics (V0.7)
 - Intégration MSFS 2024
 
 ---
 
-## V0.6 — Missions / Logistics
+## V0.6 — Workers System (DONE) 👷
+
+### Vue d'ensemble
+Système unifié workers/engineers avec nationalité, stats, pool de recrutement et système de blessures.
+
+**Documentation complète:** [docs/workers.md](docs/workers.md) | [docs/factories.md](docs/factories.md)
+
+### Fonctionnalités implémentées
+
+#### Tables SQL
+- ✅ `game.workers` - Table unifiée (workers + engineers)
+- ✅ `game.country_worker_stats` - 42 pays avec stats de base
+- ✅ `game.worker_xp_thresholds` - 5 tiers (Novice → Maître)
+- ✅ `game.airport_worker_pools` - 5201 pools de recrutement
+- ✅ Colonnes food ajoutées à `factories`
+
+#### Modèles SQLAlchemy
+- ✅ [Worker](game-api/app/models/worker.py) - Modèle unifié avec 18 colonnes
+- ✅ [CountryWorkerStats](game-api/app/models/worker.py) - Stats par nationalité
+- ✅ [AirportWorkerPool](game-api/app/models/worker.py) - Pools recrutement
+- ✅ [Factory](game-api/app/models/factory.py) - Ajout max_workers, food_*
+
+#### API Endpoints
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| GET | `/workers/pools` | Liste pools recrutement |
+| GET | `/workers/pool/{airport}` | Workers disponibles |
+| POST | `/workers/hire/{company_id}` | Embaucher un worker |
+| POST | `/workers/hire-bulk/{company_id}` | Embaucher plusieurs |
+| POST | `/workers/{id}/assign` | Assigner à factory |
+| POST | `/workers/{id}/unassign` | Retirer de factory |
+| DELETE | `/workers/{id}` | Licencier |
+| GET | `/workers/company/{id}` | Workers d'une company |
+| GET | `/workers/factory/{id}` | Workers d'une factory |
+| GET | `/workers/countries` | Stats par pays |
+
+#### Système de Production
+- ✅ Temps = `base_time * (200 / sum(speed))`
+- ✅ Food: 1 unit/worker/heure
+- ✅ Sans food: -50% vitesse, x2 risque blessure
+- ✅ Bonus engineer: +10% output par engineer (max 50%)
+- ✅ XP: `recipe.tier * 10` par batch
+
+#### Système de Blessures
+- ✅ Risque base: 0.5%/heure (x2 sans food)
+- ✅ Resistance réduit le risque
+- ✅ Blessure >10 jours → mort
+- ✅ Pénalité mort: -10,000 crédits
+
+#### Scheduler Jobs (7 jobs)
+| Job | Intervalle | Description |
+|-----|------------|-------------|
+| `batch_completion` | 1 min | Complète batches terminés |
+| `t0_auto_production` | 5 min | Production NPC T0 |
+| `food_and_injuries` | 1h | Consommation food + blessures |
+| `salary_payments` | 1h | Paiement salaires |
+| `injury_processing` | 1h | Traitement blessures/morts |
+| `pool_reset` | 6h | Régénération pools aéroports |
+| `dead_workers_cleanup` | 24h | Nettoyage workers morts |
+
+#### Génération Workers par Nationalité
+- ✅ Stats basées sur `iso_country` de l'aéroport
+- ✅ Variation ±20% (speed, resistance)
+- ✅ Variation ±10% (salaire)
+- ✅ 200 workers / 20 engineers par large_airport
+- ✅ 100 workers / 10 engineers par medium_airport
+
+---
+
+## V0.7 — Missions / Logistics
 
 ### Objectif
-Créer un gameplay “transport / supply chain”.
+Créer un gameplay "transport / supply chain".
 
 - [ ] Mission generator
 - [ ] Claim/validation vol (takeoff+landing)
@@ -654,7 +834,7 @@ Créer un gameplay “transport / supply chain”.
 
 ---
 
-## V0.7 — Admin Panel MVP
+## V0.8 — Admin Panel MVP
 
 ### Objectif
 Outils de modération + monitoring.
