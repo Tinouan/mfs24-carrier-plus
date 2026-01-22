@@ -13,31 +13,31 @@ from app.core.db import Base
 
 class Airport(Base):
     """Airport from OurAirports data, managed by Directus."""
-    __tablename__ = "airports"
+    __tablename__ = "airports"  # Directus collection name (lowercase)
     __table_args__ = {"schema": "public"}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    ident: Mapped[str] = mapped_column(String(10), unique=True, nullable=False)
-    type: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    name: Mapped[str | None] = mapped_column(nullable=True)
-    latitude_deg: Mapped[float | None] = mapped_column(Numeric(10, 8), nullable=True)
-    longitude_deg: Mapped[float | None] = mapped_column(Numeric(11, 8), nullable=True)
+    ident: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    type: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    latitude_deg: Mapped[float | None] = mapped_column(Numeric(10, 5), nullable=True)
+    longitude_deg: Mapped[float | None] = mapped_column(Numeric(10, 5), nullable=True)
     elevation_ft: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    continent: Mapped[str | None] = mapped_column(String(2), nullable=True)
-    iso_country: Mapped[str | None] = mapped_column(String(2), nullable=True)
-    iso_region: Mapped[str | None] = mapped_column(String(10), nullable=True)
-    municipality: Mapped[str | None] = mapped_column(nullable=True)
-    scheduled_service: Mapped[str | None] = mapped_column(String(3), nullable=True)
-    gps_code: Mapped[str | None] = mapped_column(String(10), nullable=True)
-    iata_code: Mapped[str | None] = mapped_column(String(3), nullable=True)
-    local_code: Mapped[str | None] = mapped_column(String(10), nullable=True)
-    home_link: Mapped[str | None] = mapped_column(nullable=True)
-    wikipedia_link: Mapped[str | None] = mapped_column(nullable=True)
-    keywords: Mapped[str | None] = mapped_column(nullable=True)
+    continent: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    iso_country: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    iso_region: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    municipality: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    schedule_service: Mapped[str | None] = mapped_column(String(255), nullable=True)  # Directus typo
+    gps_code: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    iata_code: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    local_code: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    home_link: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    wikipedia_link: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    keywords: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
-    # Factory system columns
-    max_factory_slots: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
-    occupied_slots: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    # Factory system columns (Directus typo: max_factories_slots)
+    max_factories_slots: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    occupied_slots: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Directus management columns
     date_created: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=True)

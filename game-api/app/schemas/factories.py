@@ -256,7 +256,7 @@ class AirportSlotOut(BaseModel):
     airport_ident: str
     airport_name: str
     airport_type: str
-    max_factory_slots: int
+    max_factories_slots: int
     occupied_slots: int
     available_slots: int
 

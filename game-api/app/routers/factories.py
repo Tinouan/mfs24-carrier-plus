@@ -119,7 +119,7 @@ def create_factory(
         raise HTTPException(status_code=404, detail=f"Airport {data.airport_ident} not found")
 
     # Check if airport has factory slots available
-    if airport.max_factory_slots == 0:
+    if airport.max_factories_slots == 0:
         raise HTTPException(status_code=400, detail=f"Airport {data.airport_ident} does not support factories")
 
     # Count existing T1+ factories at this airport (T0 NPC factories don't count)
@@ -129,10 +129,10 @@ def create_factory(
         Factory.is_active == True
     ).scalar()
 
-    if occupied_count >= airport.max_factory_slots:
+    if occupied_count >= airport.max_factories_slots:
         raise HTTPException(
             status_code=400,
-            detail=f"Airport {data.airport_ident} has no available factory slots ({occupied_count}/{airport.max_factory_slots})"
+            detail=f"Airport {data.airport_ident} has no available factory slots ({occupied_count}/{airport.max_factories_slots})"
         )
 
     # Construction cost - TODO: Define factory construction cost system

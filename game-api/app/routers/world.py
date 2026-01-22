@@ -225,7 +225,7 @@ def list_airport_slots(
     # - ident (ICAO code)
     # - name
     # - type (large_airport, medium_airport, small_airport)
-    # - max_factory_slots (calculated by trigger)
+    # - max_factories_slots (calculated by trigger)
     # - occupied_slots (updated when factories created/destroyed)
 
     # Mock response for now
@@ -240,7 +240,7 @@ def list_airport_slots(
                 airport_ident=airport_ident,
                 airport_name="Airport Name (TODO)",
                 airport_type="large_airport",
-                max_factory_slots=12,
+                max_factories_slots=12,
                 occupied_slots=occupied,
                 available_slots=12 - occupied,
             )
