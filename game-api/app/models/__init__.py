@@ -16,3 +16,7 @@ from .engineer import Engineer
 from .factory_storage import FactoryStorage
 from .production_batch import ProductionBatch
 from .factory_transaction import FactoryTransaction
+
+# V0.7 Unified Inventory System
+from .company_permission import CompanyPermission
+from .company_aircraft import CompanyAircraft

@@ -1,15 +1,19 @@
 import uuid
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from app.deps import get_db, get_current_user
 from app.models.company_member import CompanyMember
 from app.models.company import Company
+from app.models.company_permission import CompanyPermission
 from app.models.item import Item
 from app.models.inventory_location import InventoryLocation
 from app.models.inventory_item import InventoryItem
 from app.models.inventory_audit import InventoryAudit
+from app.models.user import User
 from app.schemas.inventory import (
     LocationOut,
     WarehouseCreateIn,
@@ -20,6 +24,15 @@ from app.schemas.inventory import (
     SetForSaleIn,
     MarketListingOut,
     BuyFromMarketIn,
+    # V0.7
+    InventoryOverviewOut,
+    AirportInventoryOut,
+    ContainerOut,
+    InventoryItemOut,
+    TransferIn,
+    TransferOut,
+    PlayerWarehouseCreateIn,
+    LocationOutV2,
 )
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
@@ -597,3 +610,501 @@ def buy_from_market(
         raise
 
     return get_inventory(buyer_loc.id, db, user)
+
+
+# ═══════════════════════════════════════════════════════════
+# V0.7 UNIFIED INVENTORY SYSTEM
+# ═══════════════════════════════════════════════════════════
+
+def _get_user_permissions(db: Session, user_id: uuid.UUID, company_id: uuid.UUID) -> CompanyPermission | None:
+    """Get user's permissions for a company"""
+    return db.query(CompanyPermission).filter(
+        CompanyPermission.user_id == user_id,
+        CompanyPermission.company_id == company_id,
+    ).first()
+
+
+def _can_access_location(db: Session, user_id: uuid.UUID, location: InventoryLocation) -> tuple[bool, CompanyPermission | None]:
+    """Check if user can access a location"""
+    if location.owner_type == "player":
+        return location.owner_id == user_id, None
+
+    if location.owner_type == "company":
+        # Check membership
+        membership = db.query(CompanyMember).filter(
+            CompanyMember.user_id == user_id,
+            CompanyMember.company_id == location.owner_id,
+        ).first()
+        if not membership:
+            return False, None
+
+        perms = _get_user_permissions(db, user_id, location.owner_id)
+        return True, perms
+
+    return False, None
+
+
+def _can_withdraw_from_location(db: Session, user_id: uuid.UUID, location: InventoryLocation) -> bool:
+    """Check if user can withdraw from a location"""
+    has_access, perms = _can_access_location(db, user_id, location)
+    if not has_access:
+        return False
+
+    if location.owner_type == "player":
+        return True
+
+    # Company location - check permissions
+    if not perms:
+        return False
+
+    if perms.is_founder:
+        return True
+
+    if location.kind in ("company_warehouse", "warehouse"):
+        return perms.can_withdraw_warehouse
+    if location.kind == "factory_storage":
+        return perms.can_withdraw_factory
+    if location.kind == "aircraft":
+        return perms.can_use_aircraft
+
+    return False
+
+
+def _can_deposit_to_location(db: Session, user_id: uuid.UUID, location: InventoryLocation) -> bool:
+    """Check if user can deposit to a location"""
+    has_access, perms = _can_access_location(db, user_id, location)
+    if not has_access:
+        return False
+
+    if location.owner_type == "player":
+        return True
+
+    # Company location - check permissions
+    if not perms:
+        return False
+
+    if perms.is_founder:
+        return True
+
+    if location.kind in ("company_warehouse", "warehouse"):
+        return perms.can_deposit_warehouse
+    if location.kind == "factory_storage":
+        return perms.can_deposit_factory
+    if location.kind == "aircraft":
+        return perms.can_use_aircraft
+
+    return False
+
+
+@router.get("/overview", response_model=InventoryOverviewOut)
+def get_inventory_overview(
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """V0.7 - Get complete inventory overview for current user (personal + company)"""
+
+    # Get all locations user has access to
+    # 1. Player's own locations
+    player_locations = db.query(InventoryLocation).filter(
+        InventoryLocation.owner_type == "player",
+        InventoryLocation.owner_id == user.id,
+    ).all()
+
+    # 2. Company locations (for companies user is member of)
+    company_ids = db.query(CompanyMember.company_id).filter(
+        CompanyMember.user_id == user.id
+    ).subquery()
+
+    company_locations = db.query(InventoryLocation).filter(
+        InventoryLocation.owner_type == "company",
+        InventoryLocation.owner_id.in_(company_ids),
+    ).all()
+
+    all_locations = player_locations + company_locations
+
+    # Group by airport
+    airports_data: dict[str, list[InventoryLocation]] = {}
+    for loc in all_locations:
+        airport = loc.airport_ident or "GLOBAL"
+        if airport not in airports_data:
+            airports_data[airport] = []
+        airports_data[airport].append(loc)
+
+    # Build response
+    total_items = 0
+    total_value = Decimal("0")
+    locations_out = []
+
+    for airport_ident, locs in airports_data.items():
+        containers = []
+
+        for loc in locs:
+            # Get items in this location
+            items_query = (
+                db.query(InventoryItem, Item)
+                .join(Item, Item.id == InventoryItem.item_id)
+                .filter(InventoryItem.location_id == loc.id, InventoryItem.qty > 0)
+                .all()
+            )
+
+            items_out = []
+            container_total = Decimal("0")
+            container_items = 0
+
+            for inv_item, item in items_query:
+                item_total_value = item.base_value * inv_item.qty
+                item_total_weight = item.weight_kg * inv_item.qty
+                container_total += item_total_value
+                container_items += inv_item.qty
+
+                items_out.append(InventoryItemOut(
+                    item_id=item.id,
+                    item_name=item.name,
+                    tier=item.tier,
+                    qty=inv_item.qty,
+                    weight_kg=item.weight_kg,
+                    total_weight_kg=item_total_weight,
+                    base_value=item.base_value,
+                    total_value=item_total_value,
+                ))
+
+            total_items += container_items
+            total_value += container_total
+
+            # Get owner name
+            owner_name = None
+            if loc.owner_type == "company":
+                company = db.query(Company).filter(Company.id == loc.owner_id).first()
+                owner_name = company.name if company else None
+            else:
+                owner_name = "Personal"
+
+            containers.append(ContainerOut(
+                id=loc.id,
+                type=loc.kind,
+                name=loc.name,
+                owner_name=owner_name,
+                items=items_out,
+                total_items=container_items,
+                total_value=container_total,
+            ))
+
+        # Get airport name (simple lookup)
+        airport_name = airport_ident if airport_ident != "GLOBAL" else "Global Storage"
+
+        locations_out.append(AirportInventoryOut(
+            airport_ident=airport_ident,
+            airport_name=airport_name,
+            containers=containers,
+        ))
+
+    return InventoryOverviewOut(
+        total_items=total_items,
+        total_value=total_value,
+        locations=locations_out,
+    )
+
+
+@router.post("/transfer", response_model=TransferOut)
+def transfer_items(
+    payload: TransferIn,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """V0.7 - Transfer items between locations (same airport only)"""
+
+    # Get locations
+    from_loc = db.query(InventoryLocation).filter(
+        InventoryLocation.id == payload.from_location_id
+    ).first()
+    if not from_loc:
+        raise HTTPException(status_code=404, detail="Source location not found")
+
+    to_loc = db.query(InventoryLocation).filter(
+        InventoryLocation.id == payload.to_location_id
+    ).first()
+    if not to_loc:
+        raise HTTPException(status_code=404, detail="Destination location not found")
+
+    # Check same airport
+    if from_loc.airport_ident != to_loc.airport_ident:
+        raise HTTPException(
+            status_code=400,
+            detail="Transfer between airports not allowed. Use aircraft for transport."
+        )
+
+    # Check permissions
+    if not _can_withdraw_from_location(db, user.id, from_loc):
+        raise HTTPException(status_code=403, detail="No permission to withdraw from source location")
+
+    if not _can_deposit_to_location(db, user.id, to_loc):
+        raise HTTPException(status_code=403, detail="No permission to deposit to destination location")
+
+    # Get item
+    item = db.query(Item).filter(Item.id == payload.item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    # Check stock
+    src_inv = db.query(InventoryItem).filter(
+        InventoryItem.location_id == from_loc.id,
+        InventoryItem.item_id == payload.item_id,
+    ).first()
+
+    if not src_inv or src_inv.qty < payload.qty:
+        available = src_inv.qty if src_inv else 0
+        raise HTTPException(
+            status_code=400,
+            detail=f"Insufficient stock ({available} available, {payload.qty} requested)"
+        )
+
+    # If destination is aircraft, check cargo capacity
+    if to_loc.kind == "aircraft" and to_loc.aircraft_id:
+        from app.models.company_aircraft import CompanyAircraft
+
+        aircraft = db.query(CompanyAircraft).filter(
+            CompanyAircraft.id == to_loc.aircraft_id
+        ).first()
+
+        if aircraft:
+            # Calculate current cargo weight
+            current_weight_result = db.execute(text("""
+                SELECT COALESCE(SUM(ii.qty * i.weight_kg), 0) as total_weight
+                FROM game.inventory_items ii
+                JOIN game.items i ON i.id = ii.item_id
+                WHERE ii.location_id = :loc_id
+            """), {"loc_id": str(to_loc.id)}).fetchone()
+
+            current_weight = Decimal(str(current_weight_result[0])) if current_weight_result else Decimal("0")
+            added_weight = item.weight_kg * payload.qty
+
+            if current_weight + added_weight > aircraft.cargo_capacity_kg:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Cargo capacity exceeded ({aircraft.cargo_capacity_kg}kg max, {current_weight}kg current, {added_weight}kg to add)"
+                )
+
+    try:
+        # Decrease from source
+        src_inv.qty -= payload.qty
+
+        # Increase at destination
+        dst_inv = db.query(InventoryItem).filter(
+            InventoryItem.location_id == to_loc.id,
+            InventoryItem.item_id == payload.item_id,
+        ).first()
+
+        if not dst_inv:
+            dst_inv = InventoryItem(
+                location_id=to_loc.id,
+                item_id=payload.item_id,
+                qty=0,
+            )
+            db.add(dst_inv)
+            db.flush()
+
+        dst_inv.qty += payload.qty
+
+        # Audit logs
+        db.add(InventoryAudit(
+            location_id=from_loc.id,
+            item_id=payload.item_id,
+            quantity_delta=-payload.qty,
+            action="transfer_out",
+            user_id=user.id,
+            notes=f"Transfer to {to_loc.name}",
+        ))
+
+        db.add(InventoryAudit(
+            location_id=to_loc.id,
+            item_id=payload.item_id,
+            quantity_delta=payload.qty,
+            action="transfer_in",
+            user_id=user.id,
+            notes=f"Transfer from {from_loc.name}",
+        ))
+
+        # Clean up zero quantity rows
+        if src_inv.qty == 0:
+            db.delete(src_inv)
+
+        db.commit()
+
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return TransferOut(
+        success=True,
+        message=f"Transferred {payload.qty} {item.name} successfully",
+        from_location_id=from_loc.id,
+        to_location_id=to_loc.id,
+        item_id=payload.item_id,
+        qty=payload.qty,
+    )
+
+
+@router.get("/my-locations", response_model=list[LocationOutV2])
+def get_my_locations(
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """V0.7 - Get all locations owned by current player"""
+    locs = db.query(InventoryLocation).filter(
+        InventoryLocation.owner_type == "player",
+        InventoryLocation.owner_id == user.id,
+    ).all()
+
+    return [
+        LocationOutV2(
+            id=loc.id,
+            kind=loc.kind,
+            airport_ident=loc.airport_ident,
+            name=loc.name,
+            owner_type=loc.owner_type,
+            owner_id=loc.owner_id,
+            company_id=loc.company_id,
+            aircraft_id=loc.aircraft_id,
+        )
+        for loc in locs
+    ]
+
+
+@router.post("/warehouse/player", response_model=LocationOutV2)
+def create_player_warehouse(
+    payload: PlayerWarehouseCreateIn,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """V0.7 - Create a player-owned warehouse at an airport"""
+    ident = payload.airport_ident.strip().upper()
+
+    # Check if already exists
+    existing = db.query(InventoryLocation).filter(
+        InventoryLocation.owner_type == "player",
+        InventoryLocation.owner_id == user.id,
+        InventoryLocation.kind == "player_warehouse",
+        InventoryLocation.airport_ident == ident,
+    ).first()
+
+    if existing:
+        return LocationOutV2(
+            id=existing.id,
+            kind=existing.kind,
+            airport_ident=existing.airport_ident,
+            name=existing.name,
+            owner_type=existing.owner_type,
+            owner_id=existing.owner_id,
+            company_id=existing.company_id,
+            aircraft_id=existing.aircraft_id,
+        )
+
+    # Create new warehouse
+    name = payload.name or f"My Warehouse {ident}"
+    loc = InventoryLocation(
+        kind="player_warehouse",
+        airport_ident=ident,
+        name=name,
+        owner_type="player",
+        owner_id=user.id,
+        company_id=None,
+    )
+    db.add(loc)
+    db.commit()
+    db.refresh(loc)
+
+    return LocationOutV2(
+        id=loc.id,
+        kind=loc.kind,
+        airport_ident=loc.airport_ident,
+        name=loc.name,
+        owner_type=loc.owner_type,
+        owner_id=loc.owner_id,
+        company_id=loc.company_id,
+        aircraft_id=loc.aircraft_id,
+    )
+
+
+@router.get("/airport/{icao}", response_model=AirportInventoryOut)
+def get_inventory_at_airport(
+    icao: str,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """V0.7 - Get all user's inventory at a specific airport"""
+    ident = icao.strip().upper()
+
+    # Get company IDs user is member of
+    company_ids = [
+        cm.company_id for cm in
+        db.query(CompanyMember).filter(CompanyMember.user_id == user.id).all()
+    ]
+
+    # Get all locations at this airport user can access
+    locations = db.query(InventoryLocation).filter(
+        InventoryLocation.airport_ident == ident,
+    ).filter(
+        (
+            (InventoryLocation.owner_type == "player") &
+            (InventoryLocation.owner_id == user.id)
+        ) | (
+            (InventoryLocation.owner_type == "company") &
+            (InventoryLocation.owner_id.in_(company_ids))
+        )
+    ).all()
+
+    containers = []
+    for loc in locations:
+        items_query = (
+            db.query(InventoryItem, Item)
+            .join(Item, Item.id == InventoryItem.item_id)
+            .filter(InventoryItem.location_id == loc.id, InventoryItem.qty > 0)
+            .all()
+        )
+
+        items_out = []
+        container_total = Decimal("0")
+        container_items = 0
+
+        for inv_item, item in items_query:
+            item_total_value = item.base_value * inv_item.qty
+            item_total_weight = item.weight_kg * inv_item.qty
+            container_total += item_total_value
+            container_items += inv_item.qty
+
+            items_out.append(InventoryItemOut(
+                item_id=item.id,
+                item_name=item.name,
+                tier=item.tier,
+                qty=inv_item.qty,
+                weight_kg=item.weight_kg,
+                total_weight_kg=item_total_weight,
+                base_value=item.base_value,
+                total_value=item_total_value,
+            ))
+
+        owner_name = None
+        if loc.owner_type == "company":
+            company = db.query(Company).filter(Company.id == loc.owner_id).first()
+            owner_name = company.name if company else None
+        else:
+            owner_name = "Personal"
+
+        containers.append(ContainerOut(
+            id=loc.id,
+            type=loc.kind,
+            name=loc.name,
+            owner_name=owner_name,
+            items=items_out,
+            total_items=container_items,
+            total_value=container_total,
+        ))
+
+    return AirportInventoryOut(
+        airport_ident=ident,
+        airport_name=ident,
+        containers=containers,
+    )

@@ -1,12 +1,18 @@
 import uuid
 import re
 from datetime import datetime
+from typing import TYPE_CHECKING, List
 
 from sqlalchemy import String, Boolean, DateTime, Numeric, Integer, func
 from sqlalchemy.dialects.postgresql import UUID, JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
+
+if TYPE_CHECKING:
+    from .inventory_location import InventoryLocation
+    from .company_aircraft import CompanyAircraft
+    from .company_permission import CompanyPermission
 
 
 def slugify(text: str) -> str:
@@ -55,4 +61,21 @@ class Company(Base):
 
     # V0.4 Wallet
     balance: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, server_default="0")
+
+    # V0.7 Relationships
+    inventory_locations: Mapped[List["InventoryLocation"]] = relationship(
+        "InventoryLocation",
+        back_populates="company",
+        foreign_keys="InventoryLocation.company_id"
+    )
+    aircraft: Mapped[List["CompanyAircraft"]] = relationship(
+        "CompanyAircraft",
+        back_populates="company",
+        foreign_keys="CompanyAircraft.company_id"
+    )
+    permissions: Mapped[List["CompanyPermission"]] = relationship(
+        "CompanyPermission",
+        back_populates="company",
+        cascade="all, delete-orphan"
+    )
 

@@ -2,11 +2,106 @@
 
 ## Vue d'ensemble
 
-Le système d'inventaire gère le stockage et le transport des items pour les compagnies:
-- **Locations** - Emplacements de stockage (vault, warehouse, in_transit)
+Le système d'inventaire gère le stockage et le transport des items:
+- **Locations** - Emplacements de stockage (player_warehouse, company_warehouse, factory_storage, aircraft)
 - **Items** - Quantités d'items par emplacement
 - **Audit** - Historique de tous les mouvements
 - **Marché** - Système de vente entre joueurs
+- **Permissions V0.7** - Contrôle d'accès granulaire
+
+---
+
+## V0.7 - Unified Inventory System
+
+### Principes Anti-Cheat
+
+1. **Localisation physique** - Tous les items sont physiquement à un aéroport
+2. **Transferts locaux** - Mouvements uniquement au même aéroport
+3. **Transport = Vol** - Inter-aéroport nécessite un avion
+
+### Types de Containers
+
+| Type | Description | Owner |
+|------|-------------|-------|
+| `player_warehouse` | Entrepôt personnel | Player |
+| `company_warehouse` | Entrepôt company | Company |
+| `factory_storage` | Stockage usine | Company |
+| `aircraft` | Cargo avion | Company/Player |
+
+### Ownership Polymorphe
+
+```sql
+-- inventory_locations
+owner_type VARCHAR(20)  -- 'company' ou 'player'
+owner_id   UUID         -- company_id ou user_id
+```
+
+### Permissions V0.7
+
+| Permission | Description |
+|------------|-------------|
+| `can_withdraw_warehouse` | Retirer du warehouse company |
+| `can_deposit_warehouse` | Déposer au warehouse company |
+| `can_withdraw_factory` | Retirer du factory storage |
+| `can_deposit_factory` | Déposer au factory storage |
+| `can_manage_aircraft` | Gérer les avions (acheter, vendre) |
+| `can_use_aircraft` | Utiliser les avions (load/unload cargo) |
+| `can_sell_market` | Mettre en vente sur le marché |
+| `can_buy_market` | Acheter sur le marché |
+| `can_manage_workers` | Gérer les workers |
+| `can_manage_members` | Gérer les permissions membres |
+| `can_manage_factories` | Gérer les usines |
+| `is_founder` | Tous les droits (non modifiable) |
+
+### Endpoints V0.7
+
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| GET | `/inventory/overview` | Vue globale (player + company) |
+| GET | `/inventory/my-locations` | Locations du joueur |
+| GET | `/inventory/airport/{icao}` | Inventaire à un aéroport |
+| POST | `/inventory/warehouse/player` | Créer warehouse personnel |
+| POST | `/inventory/transfer` | Transfert même aéroport |
+
+### Fleet Cargo V0.7
+
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| GET | `/fleet/{id}/cargo` | Contenu cargo avion |
+| POST | `/fleet/{id}/load` | Charger (validation poids) |
+| POST | `/fleet/{id}/unload` | Décharger (même aéroport) |
+| PATCH | `/fleet/{id}/location` | Update position après vol |
+
+### Exemple: Transport LFPG → EGLL
+
+```bash
+# 1. Charger à LFPG
+POST /fleet/{aircraft_id}/load
+{"from_location_id": "warehouse-lfpg", "item_id": "uuid", "qty": 100}
+
+# 2. Vol (simulateur MSFS)
+
+# 3. Update position
+PATCH /fleet/{aircraft_id}/location
+{"airport_ident": "EGLL"}
+
+# 4. Décharger à EGLL
+POST /fleet/{aircraft_id}/unload
+{"to_location_id": "warehouse-egll", "item_id": "uuid", "qty": 100}
+```
+
+### Validation Cross-Airport
+
+```bash
+# ❌ BLOQUÉ - Transfert direct entre aéroports
+POST /inventory/transfer
+{"from_location_id": "lfpg-uuid", "to_location_id": "egll-uuid", ...}
+# → 400: "Transfer between airports not allowed. Use aircraft for transport."
+
+# ❌ BLOQUÉ - Décharger vers autre aéroport
+POST /fleet/{id}/unload (aircraft à EGLL, destination à LFPG)
+# → 400: "Destination (LFPG) must be at same airport as aircraft (EGLL)"
+```
 
 ---
 
@@ -14,24 +109,58 @@ Le système d'inventaire gère le stockage et le transport des items pour les co
 
 ### `game.inventory_locations`
 
-Emplacements de stockage d'une compagnie.
+Emplacements de stockage (ownership polymorphe V0.7).
+
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `id` | UUID | Clé primaire |
+| `company_id` | UUID | FK → companies (nullable V0.7) |
+| `owner_type` | VARCHAR(20) | **V0.7** 'company' ou 'player' |
+| `owner_id` | UUID | **V0.7** company_id ou user_id |
+| `aircraft_id` | UUID | **V0.7** FK → company_aircraft (si kind=aircraft) |
+| `kind` | VARCHAR | player_warehouse, company_warehouse, factory_storage, aircraft |
+| `airport_ident` | VARCHAR(8) | Code ICAO |
+| `name` | VARCHAR | Nom de l'emplacement |
+| `created_at` | TIMESTAMPTZ | Date de création |
+
+**Types de locations V0.7:**
+
+| Kind | Owner Type | Description |
+|------|------------|-------------|
+| `player_warehouse` | player | Entrepôt personnel |
+| `company_warehouse` | company | Entrepôt company |
+| `factory_storage` | company | Stockage usine |
+| `aircraft` | company/player | Cargo avion |
+
+### `game.company_permissions` (V0.7)
+
+Permissions granulaires par membre de company.
 
 | Colonne | Type | Description |
 |---------|------|-------------|
 | `id` | UUID | Clé primaire |
 | `company_id` | UUID | FK → companies |
-| `kind` | VARCHAR | vault, warehouse, in_transit |
-| `airport_ident` | VARCHAR(8) | Code ICAO ("" pour vault) |
-| `name` | VARCHAR | Nom de l'emplacement |
-| `created_at` | TIMESTAMPTZ | Date de création |
+| `user_id` | UUID | FK → users |
+| `can_withdraw_warehouse` | BOOLEAN | Retirer du warehouse |
+| `can_deposit_warehouse` | BOOLEAN | Déposer au warehouse |
+| `can_withdraw_factory` | BOOLEAN | Retirer de factory |
+| `can_deposit_factory` | BOOLEAN | Déposer à factory |
+| `can_manage_aircraft` | BOOLEAN | Gérer avions |
+| `can_use_aircraft` | BOOLEAN | Utiliser avions |
+| `can_sell_market` | BOOLEAN | Vendre sur marché |
+| `can_buy_market` | BOOLEAN | Acheter sur marché |
+| `can_manage_workers` | BOOLEAN | Gérer workers |
+| `can_manage_members` | BOOLEAN | Gérer permissions |
+| `can_manage_factories` | BOOLEAN | Gérer factories |
+| `is_founder` | BOOLEAN | Fondateur (tous droits) |
 
-**Types de locations:**
+**Permissions par défaut:**
 
-| Kind | Description | Création |
-|------|-------------|----------|
-| `vault` | Stockage global company | Auto (1er accès) |
-| `warehouse` | Entrepôt par aéroport | Manuel ou auto (withdraw) |
-| `in_transit` | Cargo avion | Futur (lors du chargement) |
+| Rôle | Permissions |
+|------|-------------|
+| Founder | Toutes (is_founder=true) |
+| Admin | withdraw_*, manage_aircraft, sell_market, manage_workers, manage_factories |
+| Member | deposit_*, use_aircraft, buy_market |
 
 ### `game.inventory_items`
 
@@ -352,14 +481,17 @@ POST /inventory/market/buy
 {"seller_location_id": "warehouse-uuid", "item_code": "Steel Ingot", "qty": 50}
 ```
 
-### Transport entre aéroports (futur)
+### Transport entre aéroports (V0.7 ✅)
 
 ```
 [Warehouse LFPG] ──load──→ [Aircraft Cargo] ──flight──→ [Warehouse KJFK]
-                            (in_transit)
+                            at LFPG               at KJFK
 ```
 
-**Note:** Le système `in_transit` sera implémenté avec le système de missions (V0.7).
+**Implémenté en V0.7:**
+- `POST /fleet/{id}/load` - Charge depuis warehouse (même aéroport)
+- `PATCH /fleet/{id}/location` - Update position après vol
+- `POST /fleet/{id}/unload` - Décharge vers warehouse (même aéroport)
 
 ---
 
@@ -387,10 +519,13 @@ POST /inventory/market/buy
 
 ## Évolutions futures
 
-- [ ] `in_transit` - Cargo aircraft system
+- [x] ~~`in_transit` - Cargo aircraft system~~ **V0.7 Complété**
+- [x] ~~Player warehouses~~ **V0.7 Complété**
+- [x] ~~Permissions granulaires~~ **V0.7 Complété**
+- [x] ~~Anti-cheat cross-airport~~ **V0.7 Complété**
 - [ ] Capacités de stockage par location
 - [ ] Frais de stockage (warehouse rent)
 - [ ] Historique des prix du marché
 - [ ] Ordres d'achat (buy orders)
 - [ ] Enchères / prix dynamiques
-- [ ] Export/import entre aéroports (missions)
+- [ ] Missions (transport, supply chain)

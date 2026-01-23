@@ -1,11 +1,16 @@
 import uuid
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, Numeric, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
+
+if TYPE_CHECKING:
+    from .inventory_location import InventoryLocation
+    from .item import Item
 
 
 class InventoryItem(Base):
@@ -27,3 +32,7 @@ class InventoryItem(Base):
     sale_qty: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)  # Quantité mise en vente (≤ qty)
 
     updated_at: Mapped[str] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    # V0.7 Relationships
+    location: Mapped["InventoryLocation"] = relationship("InventoryLocation", back_populates="items")
+    item: Mapped["Item"] = relationship("Item")

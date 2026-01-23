@@ -1,6 +1,6 @@
 # Mfs Carrier+ (MSFS 2024)
 
-Backend modulaire pour **Microsoft Flight Simulator 2024** : Auth, Company, Inventory, Fleet, Market, **Factory System (V0.5)**, **Workers System (V0.6)**, Missions.
+Backend modulaire pour **Microsoft Flight Simulator 2024** : Auth, Company, Inventory, Fleet, Market, **Factory System (V0.5)**, **Workers System (V0.6)**, **Unified Inventory System (V0.7)**.
 Stack Docker avec **FastAPI + PostgreSQL + Directus + Nginx + APScheduler**.
 
 > Repo : https://github.com/Tinouan/mfs24-carrier-plus
@@ -56,18 +56,19 @@ Le backend est **source de vérité** : inventaires, flotte, économie, producti
      - **Factory slots**: `max_factory_slots`, `occupied_slots`
      - Trigger PostgreSQL auto-calcule slots par type d'aéroport
 
-2. **`game`** - Données gameplay (FastAPI) — **21 tables**
+2. **`game`** - Données gameplay (FastAPI) — **22 tables**
 
-   **Core** (6 tables):
+   **Core** (7 tables):
    - `users` - Comptes joueurs
    - `companies` - Compagnies de transport
    - `company_members` - Membres d'une compagnie
-   - `inventory_locations` - Emplacements de stockage
+   - `company_permissions` - **V0.7** Permissions granulaires par membre
+   - `inventory_locations` - Emplacements de stockage (polymorphe: player/company)
    - `inventory_items` - Inventaire par emplacement
    - `inventory_audits` - Historique des mouvements
 
    **Fleet & Market** (2 tables):
-   - `company_aircraft` - Flotte aérienne
+   - `company_aircraft` - Flotte aérienne (cargo_capacity_kg, owner_type)
    - `market_orders` - Ordres d'achat/vente
 
    **World Data** (3 tables):
@@ -113,12 +114,31 @@ Le backend est **source de vérité** : inventaires, flotte, économie, producti
 
 ### Inventory (CRUD inventaire)
 - `GET /inventory` - Liste items
-- `POST /inventory/transfer` - Transférer items
+- `POST /inventory/transfer` - Transférer items (même aéroport)
+
+### Inventory V0.7 (Système unifié)
+- `GET /inventory/overview` - Vue globale inventaire (player + company)
+- `GET /inventory/my-locations` - Locations du joueur
+- `GET /inventory/airport/{icao}` - Inventaire à un aéroport
+- `POST /inventory/warehouse/player` - Créer warehouse personnel
+- `POST /inventory/transfer` - Transfert même aéroport (anti-cheat)
 
 ### Fleet (Flotte aérienne)
 - `GET /fleet` - Liste avions
+- `GET /fleet/{id}` - Détails avion
 - `POST /fleet` - Acheter avion
 - `PATCH /fleet/{id}` - Modifier avion
+
+### Fleet Cargo V0.7
+- `GET /fleet/{id}/cargo` - Contenu cargo avion
+- `POST /fleet/{id}/load` - Charger cargo (avec validation poids)
+- `POST /fleet/{id}/unload` - Décharger cargo (même aéroport)
+- `PATCH /fleet/{id}/location` - Mise à jour position après vol
+
+### Company Permissions V0.7
+- `GET /company/permissions` - Liste permissions membres
+- `GET /company/permissions/{user_id}` - Permissions d'un membre
+- `PATCH /company/permissions/{user_id}` - Modifier permissions
 
 ### Market (Marché)
 - `GET /market/orders` - Liste ordres
@@ -214,13 +234,39 @@ Le backend est **source de vérité** : inventaires, flotte, économie, producti
 - Paiement salaires horaires
 - Bonus engineer (+10% output par engineer, max 50%)
 
-**Documentation**: [workers.md](workers.md) | [factories.md](factories.md) | [items-recipes.md](items-recipes.md)
+**Documentation**: [workers.md](workers.md) | [factories.md](factories.md) | [items-recipes.md](items-recipes.md) | [inventory.md](inventory.md)
+
+### V0.7 Unified Inventory System (Complété)
+
+**Anti-cheat par localisation physique**:
+- Items physiquement localisés par aéroport
+- Transferts locaux uniquement (même aéroport)
+- Transport inter-aéroport = vol obligatoire
+
+**Tables modifiées/créées**:
+- `inventory_locations` - owner_type polymorphe (player/company)
+- `company_aircraft` - cargo_capacity_kg, owner_type flexible
+- `company_permissions` - 12 permissions granulaires
+
+**4 types de containers**:
+1. `player_warehouse` - Entrepôt personnel par aéroport
+2. `company_warehouse` - Entrepôt company par aéroport
+3. `factory_storage` - Stockage local usine
+4. `aircraft` - Cargo avion (avec limite poids)
+
+**Permissions V0.7**:
+- `can_withdraw_warehouse` / `can_deposit_warehouse`
+- `can_withdraw_factory` / `can_deposit_factory`
+- `can_manage_aircraft` / `can_use_aircraft`
+- `can_sell_market` / `can_buy_market`
+- `can_manage_workers` / `can_manage_members` / `can_manage_factories`
+- `is_founder` (tous les droits, non modifiable)
 
 ### En cours / À venir
 
-- **V0.7**: Missions / Logistics (transport, supply chain)
-- **V0.8**: Admin Panel MVP
-- **V0.9**: Intégration MSFS 2024
+- **V0.8**: Missions / Logistics (transport, supply chain)
+- **V0.9**: Admin Panel MVP
+- **V1.0**: Intégration MSFS 2024
 
 ---
 
@@ -235,23 +281,33 @@ Le joueur est propriétaire d'une compagnie de transport aérien. Le gameplay ce
 3. **Transporter ces items** en avion entre aéroports
 4. **Vendre sur le marché** pour générer des profits
 
-### Système d'inventaires
+### Système d'inventaires V0.7
 
-**3 types de stockage:**
+**4 types de containers (physiquement localisés par aéroport):**
 
-1. **Factory Storage** (stockage usine)
+1. **Player Warehouse** (entrepôt personnel)
+   - Créé par le joueur à n'importe quel aéroport
+   - Propriété exclusive du joueur
+   - Pas de restrictions de permissions
+
+2. **Company Warehouse** (entrepôt company)
+   - Un par aéroport pour chaque company
+   - Accès contrôlé par permissions
+   - Créé automatiquement au siège (home_airport)
+
+3. **Factory Storage** (stockage usine)
    - Local à chaque usine
-   - Contient les ingrédients pour production
-   - Reçoit les items produits
+   - Contient ingrédients + produits
+   - Permissions: `can_withdraw_factory` / `can_deposit_factory`
 
-2. **Company Warehouse** (entrepôt company par aéroport)
-   - Un warehouse par aéroport pour chaque company
-   - Reçoit items retirés des factories
-   - Source pour charger les avions
+4. **Aircraft Cargo** (cargo avion) ✅ **V0.7**
+   - Capacité limitée (cargo_capacity_kg)
+   - Position = airport_ident de l'avion
+   - Load/Unload au même aéroport uniquement
 
-3. **Aircraft Cargo** (cargo avion) - *À implémenter*
-   - Items chargés dans un avion
-   - Pendant le vol: statut "in_transit"
+**Anti-cheat V0.7:**
+- ❌ Transfert LFPG → EGLL bloqué
+- ✅ Transport = charger avion, voler, décharger
 
 ### Workers et Engineers (V0.6)
 
