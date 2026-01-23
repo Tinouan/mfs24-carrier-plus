@@ -395,6 +395,74 @@
                 </div>
             </div>
 
+            <!-- INVENTORY VIEW -->
+            <div class="view-container" id="view-inventory" style="display:none;">
+                <div class="view-content">
+                    <!-- Inventory Header -->
+                    <div class="inventory-header-card">
+                        <div class="inventory-header-info">
+                            <h1>📦 Inventaire</h1>
+                        </div>
+                        <div class="inventory-stats">
+                            <div class="inventory-stat">
+                                <span class="inventory-stat-value" id="inv-total-items">0</span>
+                                <span class="inventory-stat-label">Items</span>
+                            </div>
+                            <div class="inventory-stat">
+                                <span class="inventory-stat-value" id="inv-total-locations">0</span>
+                                <span class="inventory-stat-label">Locations</span>
+                            </div>
+                            <div class="inventory-stat">
+                                <span class="inventory-stat-value" id="inv-total-value">0$</span>
+                                <span class="inventory-stat-label">Valeur</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Inventory Tabs -->
+                    <div class="inventory-tabs">
+                        <div class="inventory-tab active" data-tab="all" onclick="switchInventoryTab('all')">
+                            <span>📦</span> Tout
+                        </div>
+                        <div class="inventory-tab" data-tab="personal" onclick="switchInventoryTab('personal')">
+                            <span>👤</span> Personnel
+                        </div>
+                        <div class="inventory-tab" data-tab="company" onclick="switchInventoryTab('company')">
+                            <span>🏢</span> Company
+                        </div>
+                        <div class="inventory-tab" data-tab="aircraft" onclick="switchInventoryTab('aircraft')">
+                            <span>✈️</span> Avions
+                        </div>
+                    </div>
+
+                    <!-- Airport Selector -->
+                    <div class="airport-tabs" id="inventory-airport-tabs">
+                        <!-- Dynamically populated -->
+                        <div class="airport-tab active" data-airport="all">
+                            🌍 Tous les aéroports
+                        </div>
+                    </div>
+
+                    <!-- Inventory Content -->
+                    <div class="inventory-tab-content active" id="inventory-tab-all">
+                        <!-- Empty State -->
+                        <div class="inventory-empty-state" id="inventory-empty-state" style="display:none;">
+                            <div class="empty-icon">📦</div>
+                            <h3>Aucun inventaire</h3>
+                            <p>Vous n'avez pas encore de locations d'inventaire. Créez un entrepôt personnel ou rejoignez une company.</p>
+                            <button class="btn" onclick="createPlayerWarehouse()">
+                                + Créer un entrepôt
+                            </button>
+                        </div>
+
+                        <!-- Inventory Grid -->
+                        <div class="inventory-grid" id="inventory-grid">
+                            <!-- Dynamically populated with inventory containers -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- PROFILE VIEW -->
             <div class="view-container" id="view-profile" style="display:none;">
                 <div class="view-content">
@@ -632,6 +700,81 @@
                 <button class="btn btn-secondary" onclick="closeCreateFactoryModal()">ANNULER</button>
                 <button class="btn" id="btn-create-factory" onclick="submitCreateFactory()">
                     CRÉER L'USINE
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TRANSFER MODAL -->
+    <div class="modal-overlay" id="modal-transfer">
+        <div class="modal" style="max-width: 500px;">
+            <div class="modal-header">
+                <div class="modal-title">TRANSFERT D'ITEMS</div>
+                <button class="modal-close" onclick="closeTransferModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-error" id="transfer-error"></div>
+
+                <!-- Transfer Preview -->
+                <div class="transfer-preview">
+                    <div class="transfer-from">
+                        <div class="location-name" id="transfer-from-name">Source</div>
+                        <div class="location-type" id="transfer-from-type">warehouse</div>
+                    </div>
+                    <div class="transfer-arrow">→</div>
+                    <div class="transfer-to">
+                        <div class="location-name" id="transfer-to-name">Destination</div>
+                        <div class="location-type" id="transfer-to-type">warehouse</div>
+                    </div>
+                </div>
+
+                <!-- Item Info -->
+                <div class="transfer-item-info">
+                    <div class="item-icon" id="transfer-item-icon">📦</div>
+                    <div class="item-details">
+                        <div class="item-name" id="transfer-item-name">Item</div>
+                        <div class="item-available">Disponible: <span id="transfer-item-available">0</span></div>
+                    </div>
+                </div>
+
+                <!-- Quantity Input -->
+                <div class="form-group">
+                    <label class="form-label">Quantité à transférer</label>
+                    <div class="transfer-qty-input">
+                        <input type="number" id="transfer-qty" min="1" value="1">
+                        <button class="qty-max-btn" onclick="setTransferMax()">MAX</button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeTransferModal()">ANNULER</button>
+                <button class="btn" id="btn-confirm-transfer" onclick="confirmTransfer()">
+                    TRANSFÉRER
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CREATE WAREHOUSE MODAL -->
+    <div class="modal-overlay" id="modal-create-warehouse">
+        <div class="modal" style="max-width: 420px;">
+            <div class="modal-header">
+                <div class="modal-title">NOUVEL ENTREPÔT</div>
+                <button class="modal-close" onclick="closeCreateWarehouseModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-error" id="warehouse-create-error"></div>
+
+                <div class="form-group">
+                    <label class="form-label">Aéroport (Code ICAO)</label>
+                    <input type="text" class="form-input" id="warehouse-airport" placeholder="LFPG" maxlength="4" style="text-transform: uppercase;">
+                    <div class="form-hint">Code ICAO de l'aéroport où créer votre entrepôt personnel</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeCreateWarehouseModal()">ANNULER</button>
+                <button class="btn" id="btn-create-warehouse" onclick="submitCreateWarehouse()">
+                    CRÉER L'ENTREPÔT
                 </button>
             </div>
         </div>

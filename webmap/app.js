@@ -1547,6 +1547,7 @@ function switchView(viewName) {
     document.getElementById('view-map').style.display = 'none';
     document.getElementById('view-company').style.display = 'none';
     document.getElementById('view-profile').style.display = 'none';
+    document.getElementById('view-inventory').style.display = 'none';
 
     // Show selected view
     if (viewName === 'map') {
@@ -1558,6 +1559,9 @@ function switchView(viewName) {
     } else if (viewName === 'profile') {
         document.getElementById('view-profile').style.display = 'block';
         loadProfileView();
+    } else if (viewName === 'inventory') {
+        document.getElementById('view-inventory').style.display = 'block';
+        loadInventoryView();
     } else {
         // Other views not implemented yet, show map
         document.getElementById('view-map').style.display = 'block';
@@ -2171,4 +2175,573 @@ async function loadProfileTransactions() {
             <p>Aucune transaction.</p>
         </div>
     `;
+}
+
+// ========================================
+// INVENTORY VIEW V0.7
+// ========================================
+
+let inventoryData = {
+    locations: [],
+    items: {},
+    currentAirport: 'all',
+    currentTab: 'all',
+    selectedItem: null,
+    dragSource: null
+};
+
+// Load inventory view
+async function loadInventoryView() {
+    console.log('[INVENTORY] Loading inventory view...');
+
+    // Check if logged in
+    if (!state.token || state.token === 'demo-token') {
+        showToast('Connectez-vous pour voir votre inventaire', 'warning');
+        document.getElementById('inventory-empty-state').style.display = 'block';
+        document.getElementById('inventory-grid').style.display = 'none';
+        return;
+    }
+
+    await refreshInventory();
+}
+
+// Refresh inventory data
+async function refreshInventory() {
+    try {
+        // Load inventory overview
+        const response = await fetch(`${API_BASE}/inventory/overview`, {
+            headers: { 'Authorization': `Bearer ${state.token}` }
+        });
+
+        if (!response.ok) {
+            if (response.status === 404) {
+                // No inventory yet
+                showEmptyInventoryState();
+                return;
+            }
+            throw new Error('Failed to load inventory');
+        }
+
+        const data = await response.json();
+        console.log('[INVENTORY] Loaded:', data);
+
+        inventoryData.locations = data.locations || [];
+        inventoryData.items = {};
+
+        // Build items map by location
+        if (data.items) {
+            data.items.forEach(item => {
+                const locId = item.location_id;
+                if (!inventoryData.items[locId]) {
+                    inventoryData.items[locId] = [];
+                }
+                inventoryData.items[locId].push(item);
+            });
+        }
+
+        updateInventoryStats(data);
+        updateAirportTabs();
+        renderInventoryContainers();
+
+    } catch (error) {
+        console.error('[INVENTORY] Error:', error);
+        showEmptyInventoryState();
+    }
+}
+
+// Update inventory stats
+function updateInventoryStats(data) {
+    const totalItems = data.items?.reduce((sum, item) => sum + (item.qty || 0), 0) || 0;
+    const totalLocations = inventoryData.locations.length;
+    const totalValue = data.items?.reduce((sum, item) => sum + ((item.qty || 0) * (item.base_value || 0)), 0) || 0;
+
+    document.getElementById('inv-total-items').textContent = totalItems.toLocaleString();
+    document.getElementById('inv-total-locations').textContent = totalLocations;
+    document.getElementById('inv-total-value').textContent = `${totalValue.toLocaleString()}$`;
+}
+
+// Update airport tabs
+function updateAirportTabs() {
+    const container = document.getElementById('inventory-airport-tabs');
+    const airports = new Set();
+
+    inventoryData.locations.forEach(loc => {
+        if (loc.airport_ident) {
+            airports.add(loc.airport_ident);
+        }
+    });
+
+    const airportList = Array.from(airports).sort();
+
+    let html = `
+        <div class="airport-tab ${inventoryData.currentAirport === 'all' ? 'active' : ''}"
+             data-airport="all" onclick="selectAirportTab('all')">
+            🌍 Tous
+            <span class="tab-count">${inventoryData.locations.length}</span>
+        </div>
+    `;
+
+    airportList.forEach(ident => {
+        const count = inventoryData.locations.filter(l => l.airport_ident === ident).length;
+        html += `
+            <div class="airport-tab ${inventoryData.currentAirport === ident ? 'active' : ''}"
+                 data-airport="${ident}" onclick="selectAirportTab('${ident}')">
+                ✈️ ${ident}
+                <span class="tab-count">${count}</span>
+            </div>
+        `;
+    });
+
+    container.innerHTML = html;
+}
+
+// Select airport tab
+function selectAirportTab(airport) {
+    inventoryData.currentAirport = airport;
+    updateAirportTabs();
+    renderInventoryContainers();
+}
+
+// Switch inventory tab (all, personal, company, aircraft)
+function switchInventoryTab(tabName) {
+    inventoryData.currentTab = tabName;
+
+    // Update tab buttons
+    document.querySelectorAll('.inventory-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.tab === tabName);
+    });
+
+    renderInventoryContainers();
+}
+
+// Render inventory containers
+function renderInventoryContainers() {
+    const grid = document.getElementById('inventory-grid');
+    const emptyState = document.getElementById('inventory-empty-state');
+
+    // Filter locations
+    let locations = inventoryData.locations.filter(loc => {
+        // Airport filter
+        if (inventoryData.currentAirport !== 'all' && loc.airport_ident !== inventoryData.currentAirport) {
+            return false;
+        }
+
+        // Tab filter
+        switch (inventoryData.currentTab) {
+            case 'personal':
+                return loc.owner_type === 'player';
+            case 'company':
+                return loc.owner_type === 'company' && loc.kind !== 'aircraft';
+            case 'aircraft':
+                return loc.kind === 'aircraft';
+            default:
+                return true;
+        }
+    });
+
+    if (locations.length === 0) {
+        grid.style.display = 'none';
+        emptyState.style.display = 'block';
+        return;
+    }
+
+    grid.style.display = 'grid';
+    emptyState.style.display = 'none';
+
+    grid.innerHTML = locations.map(loc => renderInventoryContainer(loc)).join('');
+
+    // Setup drag and drop
+    setupDragAndDrop();
+}
+
+// Render a single inventory container
+function renderInventoryContainer(location) {
+    const items = inventoryData.items[location.id] || [];
+    const containerClass = getContainerClass(location.kind);
+    const containerIcon = getContainerIcon(location.kind);
+
+    // For aircraft, show weight info
+    let capacityHtml = '';
+    if (location.kind === 'aircraft' && location.cargo_capacity_kg) {
+        const currentWeight = items.reduce((sum, item) => sum + (item.weight_kg || 0) * item.qty, 0);
+        const percent = (currentWeight / location.cargo_capacity_kg) * 100;
+        const isDanger = percent > 80;
+
+        capacityHtml = `
+            <div class="weight-bar-container">
+                <div class="weight-bar">
+                    <div class="weight-bar-fill ${isDanger ? 'danger' : ''}" style="width: ${Math.min(percent, 100)}%"></div>
+                </div>
+                <div class="weight-info">
+                    <span>${currentWeight.toFixed(1)} kg</span>
+                    <span>${location.cargo_capacity_kg} kg max</span>
+                </div>
+            </div>
+        `;
+    }
+
+    let itemsHtml = '';
+    if (items.length === 0) {
+        itemsHtml = `<div class="container-items empty">Vide</div>`;
+    } else {
+        itemsHtml = `
+            <div class="container-items" data-location-id="${location.id}"
+                 ondragover="handleDragOver(event)" ondrop="handleDrop(event)">
+                ${items.map(item => renderInventoryItem(item, location)).join('')}
+            </div>
+        `;
+    }
+
+    return `
+        <div class="inventory-container ${containerClass}" data-location-id="${location.id}">
+            <div class="container-header">
+                <div class="container-title">
+                    <span class="container-icon">${containerIcon}</span>
+                    <span class="container-name">${location.name || location.kind}</span>
+                    <span class="container-type">${location.airport_ident}</span>
+                </div>
+                <div class="container-capacity">${items.length} items</div>
+            </div>
+            ${itemsHtml}
+            ${capacityHtml}
+        </div>
+    `;
+}
+
+// Render a single inventory item
+function renderInventoryItem(item, location) {
+    const emoji = getProductEmoji(item.item_code, item.tag);
+    const tierLabel = item.tier !== undefined ? `T${item.tier}` : '';
+
+    return `
+        <div class="inventory-item"
+             draggable="true"
+             data-item-id="${item.item_id}"
+             data-location-id="${location.id}"
+             data-qty="${item.qty}"
+             data-item-name="${item.item_name || item.item_code}"
+             ondragstart="handleDragStart(event)"
+             ondragend="handleDragEnd(event)"
+             onclick="selectInventoryItem(event, '${item.item_id}', '${location.id}')">
+            <div class="item-icon">${emoji}</div>
+            <div class="item-name">${item.item_name || item.item_code}</div>
+            <div class="item-qty">×${item.qty}</div>
+            ${tierLabel ? `<div class="item-tier">${tierLabel}</div>` : ''}
+        </div>
+    `;
+}
+
+// Get container class based on kind
+function getContainerClass(kind) {
+    const classes = {
+        'player_warehouse': 'player-warehouse',
+        'company_warehouse': 'company-warehouse',
+        'factory_storage': 'factory-storage',
+        'aircraft': 'aircraft'
+    };
+    return classes[kind] || '';
+}
+
+// Get container icon based on kind
+function getContainerIcon(kind) {
+    const icons = {
+        'player_warehouse': '👤',
+        'company_warehouse': '🏢',
+        'factory_storage': '🏭',
+        'aircraft': '✈️'
+    };
+    return icons[kind] || '📦';
+}
+
+// Show empty inventory state
+function showEmptyInventoryState() {
+    document.getElementById('inventory-grid').style.display = 'none';
+    document.getElementById('inventory-empty-state').style.display = 'block';
+}
+
+// ========================================
+// DRAG AND DROP
+// ========================================
+
+function setupDragAndDrop() {
+    // Add drop zones to all containers
+    document.querySelectorAll('.container-items').forEach(container => {
+        container.addEventListener('dragover', handleDragOver);
+        container.addEventListener('drop', handleDrop);
+        container.addEventListener('dragleave', handleDragLeave);
+    });
+}
+
+function handleDragStart(event) {
+    const itemEl = event.target.closest('.inventory-item');
+    if (!itemEl) return;
+
+    itemEl.classList.add('dragging');
+
+    inventoryData.dragSource = {
+        itemId: itemEl.dataset.itemId,
+        locationId: itemEl.dataset.locationId,
+        qty: parseInt(itemEl.dataset.qty),
+        itemName: itemEl.dataset.itemName
+    };
+
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', JSON.stringify(inventoryData.dragSource));
+}
+
+function handleDragEnd(event) {
+    event.target.classList.remove('dragging');
+    inventoryData.dragSource = null;
+
+    // Remove drag-over class from all containers
+    document.querySelectorAll('.container-items').forEach(container => {
+        container.classList.remove('drag-over');
+    });
+}
+
+function handleDragOver(event) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+
+    const container = event.target.closest('.container-items');
+    if (container && inventoryData.dragSource) {
+        // Only allow drop if different location
+        if (container.dataset.locationId !== inventoryData.dragSource.locationId) {
+            container.classList.add('drag-over');
+        }
+    }
+}
+
+function handleDragLeave(event) {
+    const container = event.target.closest('.container-items');
+    if (container) {
+        container.classList.remove('drag-over');
+    }
+}
+
+function handleDrop(event) {
+    event.preventDefault();
+
+    const container = event.target.closest('.container-items');
+    if (!container) return;
+
+    container.classList.remove('drag-over');
+
+    const toLocationId = container.dataset.locationId;
+
+    if (!inventoryData.dragSource || toLocationId === inventoryData.dragSource.locationId) {
+        return;
+    }
+
+    // Open transfer modal
+    openTransferModal(
+        inventoryData.dragSource.locationId,
+        toLocationId,
+        inventoryData.dragSource.itemId,
+        inventoryData.dragSource.qty,
+        inventoryData.dragSource.itemName
+    );
+}
+
+function selectInventoryItem(event, itemId, locationId) {
+    event.stopPropagation();
+
+    // Toggle selection
+    document.querySelectorAll('.inventory-item').forEach(el => {
+        el.classList.remove('selected');
+    });
+
+    if (inventoryData.selectedItem?.itemId === itemId && inventoryData.selectedItem?.locationId === locationId) {
+        inventoryData.selectedItem = null;
+    } else {
+        event.target.closest('.inventory-item')?.classList.add('selected');
+        inventoryData.selectedItem = { itemId, locationId };
+    }
+}
+
+// ========================================
+// TRANSFER MODAL
+// ========================================
+
+let pendingTransfer = null;
+
+function openTransferModal(fromLocationId, toLocationId, itemId, maxQty, itemName) {
+    console.log('[TRANSFER] Opening modal:', { fromLocationId, toLocationId, itemId, maxQty });
+
+    const fromLocation = inventoryData.locations.find(l => l.id === fromLocationId);
+    const toLocation = inventoryData.locations.find(l => l.id === toLocationId);
+
+    if (!fromLocation || !toLocation) {
+        showToast('Erreur: Location introuvable', 'error');
+        return;
+    }
+
+    // Check same airport
+    if (fromLocation.airport_ident !== toLocation.airport_ident) {
+        showToast(`Transfert inter-aéroport non autorisé. Utilisez un avion.`, 'error');
+        return;
+    }
+
+    pendingTransfer = {
+        fromLocationId,
+        toLocationId,
+        itemId,
+        maxQty
+    };
+
+    // Update modal content
+    document.getElementById('transfer-from-name').textContent = fromLocation.name || fromLocation.kind;
+    document.getElementById('transfer-from-type').textContent = fromLocation.kind;
+    document.getElementById('transfer-to-name').textContent = toLocation.name || toLocation.kind;
+    document.getElementById('transfer-to-type').textContent = toLocation.kind;
+
+    const emoji = getProductEmoji(itemName);
+    document.getElementById('transfer-item-icon').textContent = emoji;
+    document.getElementById('transfer-item-name').textContent = itemName;
+    document.getElementById('transfer-item-available').textContent = maxQty;
+
+    document.getElementById('transfer-qty').value = maxQty;
+    document.getElementById('transfer-qty').max = maxQty;
+    document.getElementById('transfer-error').classList.remove('visible');
+
+    // Show modal
+    document.getElementById('modal-transfer').classList.add('active');
+}
+
+function closeTransferModal() {
+    document.getElementById('modal-transfer').classList.remove('active');
+    pendingTransfer = null;
+}
+
+function setTransferMax() {
+    if (pendingTransfer) {
+        document.getElementById('transfer-qty').value = pendingTransfer.maxQty;
+    }
+}
+
+async function confirmTransfer() {
+    if (!pendingTransfer) return;
+
+    const qty = parseInt(document.getElementById('transfer-qty').value);
+    const errorEl = document.getElementById('transfer-error');
+    const btn = document.getElementById('btn-confirm-transfer');
+
+    if (!qty || qty < 1) {
+        errorEl.textContent = 'Quantité invalide';
+        errorEl.classList.add('visible');
+        return;
+    }
+
+    if (qty > pendingTransfer.maxQty) {
+        errorEl.textContent = `Quantité max: ${pendingTransfer.maxQty}`;
+        errorEl.classList.add('visible');
+        return;
+    }
+
+    btn.classList.add('loading');
+    btn.textContent = 'TRANSFERT...';
+    errorEl.classList.remove('visible');
+
+    try {
+        const response = await fetch(`${API_BASE}/inventory/transfer`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${state.token}`
+            },
+            body: JSON.stringify({
+                from_location_id: pendingTransfer.fromLocationId,
+                to_location_id: pendingTransfer.toLocationId,
+                item_id: pendingTransfer.itemId,
+                qty: qty
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Erreur de transfert');
+        }
+
+        showToast(`Transfert de ${qty} items réussi!`, 'success');
+        closeTransferModal();
+
+        // Refresh inventory
+        await refreshInventory();
+
+    } catch (error) {
+        console.error('[TRANSFER] Error:', error);
+        errorEl.textContent = error.message;
+        errorEl.classList.add('visible');
+    } finally {
+        btn.classList.remove('loading');
+        btn.textContent = 'TRANSFÉRER';
+    }
+}
+
+// ========================================
+// CREATE WAREHOUSE
+// ========================================
+
+function createPlayerWarehouse() {
+    // Check if logged in
+    if (!state.token || state.token === 'demo-token') {
+        showToast('Connectez-vous pour créer un entrepôt', 'warning');
+        return;
+    }
+
+    document.getElementById('warehouse-airport').value = '';
+    document.getElementById('warehouse-create-error').classList.remove('visible');
+    document.getElementById('modal-create-warehouse').classList.add('active');
+}
+
+function closeCreateWarehouseModal() {
+    document.getElementById('modal-create-warehouse').classList.remove('active');
+}
+
+async function submitCreateWarehouse() {
+    const airport = document.getElementById('warehouse-airport').value.trim().toUpperCase();
+    const errorEl = document.getElementById('warehouse-create-error');
+    const btn = document.getElementById('btn-create-warehouse');
+
+    if (!airport || airport.length < 3 || airport.length > 4) {
+        errorEl.textContent = 'Code ICAO invalide (3-4 caractères)';
+        errorEl.classList.add('visible');
+        return;
+    }
+
+    btn.classList.add('loading');
+    btn.textContent = 'CRÉATION...';
+    errorEl.classList.remove('visible');
+
+    try {
+        const response = await fetch(`${API_BASE}/inventory/warehouse/player`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${state.token}`
+            },
+            body: JSON.stringify({
+                airport_ident: airport
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Erreur lors de la création');
+        }
+
+        showToast(`Entrepôt créé à ${airport}!`, 'success');
+        closeCreateWarehouseModal();
+
+        // Refresh inventory
+        await refreshInventory();
+
+    } catch (error) {
+        console.error('[WAREHOUSE] Create error:', error);
+        errorEl.textContent = error.message;
+        errorEl.classList.add('visible');
+    } finally {
+        btn.classList.remove('loading');
+        btn.textContent = 'CRÉER L\'ENTREPÔT';
+    }
 }

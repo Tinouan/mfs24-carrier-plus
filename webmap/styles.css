@@ -2511,3 +2511,514 @@ body::before {
 .transaction-amount.negative {
     color: #ff4444;
 }
+
+/* ============================================================================
+   INVENTORY VIEW V0.7
+   ============================================================================ */
+
+/* Inventory Header */
+.inventory-header-card {
+    background: var(--bg-darker);
+    border: 1px solid var(--border);
+    padding: 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    position: relative;
+}
+
+.inventory-header-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--accent), #00aaff);
+}
+
+.inventory-header-info h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.8rem;
+    letter-spacing: 2px;
+    margin: 0 0 0.5rem 0;
+}
+
+.inventory-stats {
+    display: flex;
+    gap: 2rem;
+}
+
+.inventory-stat {
+    text-align: center;
+}
+
+.inventory-stat-value {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1.5rem;
+    color: var(--accent);
+    display: block;
+}
+
+.inventory-stat-label {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Airport Tabs / Selector */
+.airport-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    background: var(--bg-darker);
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+}
+
+.airport-tab {
+    padding: 0.5rem 1rem;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.airport-tab:hover {
+    border-color: var(--accent);
+    color: var(--text);
+}
+
+.airport-tab.active {
+    background: var(--accent);
+    color: #000;
+    border-color: var(--accent);
+}
+
+.airport-tab .tab-count {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    font-family: 'Share Tech Mono', monospace;
+}
+
+.airport-tab.active .tab-count {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* Inventory Grid - 2 columns */
+.inventory-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+
+@media (max-width: 1200px) {
+    .inventory-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Inventory Container Card */
+.inventory-container {
+    background: var(--bg-darker);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.container-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    background: rgba(0, 0, 0, 0.3);
+}
+
+.container-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+}
+
+.container-icon {
+    font-size: 1.2rem;
+}
+
+.container-name {
+    font-size: 0.9rem;
+}
+
+.container-type {
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-left: 0.5rem;
+}
+
+.container-capacity {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+}
+
+/* Container Items Grid */
+.container-items {
+    padding: 0.75rem;
+    min-height: 100px;
+    max-height: 300px;
+    overflow-y: auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 0.5rem;
+    transition: background 0.2s;
+}
+
+.container-items.drag-over {
+    background: rgba(255, 102, 0, 0.1);
+    border: 2px dashed var(--accent);
+}
+
+.container-items.empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-dim);
+    font-size: 0.85rem;
+}
+
+/* Individual Inventory Item */
+.inventory-item {
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    padding: 0.5rem;
+    cursor: grab;
+    transition: all 0.2s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    border-radius: 4px;
+}
+
+.inventory-item:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(255, 102, 0, 0.2);
+}
+
+.inventory-item.dragging {
+    opacity: 0.5;
+    cursor: grabbing;
+}
+
+.inventory-item.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 10px rgba(255, 102, 0, 0.4);
+}
+
+.item-icon {
+    font-size: 1.5rem;
+}
+
+.item-name {
+    font-size: 0.7rem;
+    color: var(--text);
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.item-qty {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.item-tier {
+    font-size: 0.6rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+}
+
+/* Container Types Styling */
+.inventory-container.player-warehouse .container-header {
+    border-left: 3px solid #00aaff;
+}
+
+.inventory-container.company-warehouse .container-header {
+    border-left: 3px solid var(--accent);
+}
+
+.inventory-container.factory-storage .container-header {
+    border-left: 3px solid var(--success);
+}
+
+.inventory-container.aircraft .container-header {
+    border-left: 3px solid #cc44cc;
+}
+
+/* Transfer Modal */
+.transfer-modal-content {
+    padding: 1rem;
+}
+
+.transfer-preview {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+}
+
+.transfer-preview .transfer-from,
+.transfer-preview .transfer-to {
+    text-align: center;
+    padding: 0.75rem;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    min-width: 120px;
+}
+
+.transfer-preview .transfer-arrow {
+    font-size: 1.5rem;
+    color: var(--accent);
+}
+
+.transfer-preview .location-name {
+    font-weight: 600;
+    font-size: 0.9rem;
+    margin-bottom: 0.25rem;
+}
+
+.transfer-preview .location-type {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+}
+
+.transfer-item-info {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: rgba(255, 102, 0, 0.1);
+    border: 1px solid rgba(255, 102, 0, 0.3);
+    border-radius: 4px;
+    margin-bottom: 1rem;
+}
+
+.transfer-item-info .item-icon {
+    font-size: 2rem;
+}
+
+.transfer-item-info .item-details {
+    flex: 1;
+}
+
+.transfer-item-info .item-name {
+    font-weight: 600;
+    font-size: 1rem;
+    margin-bottom: 0.25rem;
+}
+
+.transfer-item-info .item-available {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+}
+
+.transfer-qty-input {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.transfer-qty-input label {
+    font-size: 0.85rem;
+    color: var(--text-dim);
+}
+
+.transfer-qty-input input {
+    flex: 1;
+    padding: 0.5rem;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1rem;
+    text-align: center;
+}
+
+.transfer-qty-input input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.transfer-qty-input .qty-max-btn {
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+}
+
+.transfer-qty-input .qty-max-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+/* Create Warehouse Button */
+.create-warehouse-card {
+    background: var(--bg-darker);
+    border: 2px dashed var(--border);
+    border-radius: 4px;
+    padding: 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.create-warehouse-card:hover {
+    border-color: var(--accent);
+    background: rgba(255, 102, 0, 0.05);
+}
+
+.create-warehouse-card .plus-icon {
+    font-size: 2rem;
+    color: var(--text-dim);
+    margin-bottom: 0.5rem;
+}
+
+.create-warehouse-card:hover .plus-icon {
+    color: var(--accent);
+}
+
+.create-warehouse-card p {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+}
+
+/* Inventory Tabs */
+.inventory-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 1.5rem;
+    border-bottom: 2px solid var(--border);
+}
+
+.inventory-tab {
+    padding: 0.75rem 1.25rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s;
+    color: var(--text-dim);
+}
+
+.inventory-tab:hover {
+    color: var(--text);
+    background: rgba(255, 102, 0, 0.05);
+}
+
+.inventory-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+
+.inventory-tab span:first-child {
+    font-size: 1rem;
+}
+
+.inventory-tab-content {
+    display: none;
+}
+
+.inventory-tab-content.active {
+    display: block;
+}
+
+/* Weight Bar for Aircraft */
+.weight-bar-container {
+    margin-top: 0.5rem;
+}
+
+.weight-bar {
+    height: 6px;
+    background: var(--bg-dark);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.weight-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--success), var(--warning));
+    transition: width 0.3s ease;
+}
+
+.weight-bar-fill.danger {
+    background: linear-gradient(90deg, var(--warning), var(--danger));
+}
+
+.weight-info {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    margin-top: 0.25rem;
+}
+
+/* Empty Inventory State */
+.inventory-empty-state {
+    text-align: center;
+    padding: 3rem 2rem;
+    background: var(--bg-darker);
+    border: 1px solid var(--border);
+}
+
+.inventory-empty-state .empty-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+.inventory-empty-state h3 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.3rem;
+    letter-spacing: 1px;
+    margin-bottom: 0.5rem;
+}
+
+.inventory-empty-state p {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+}
