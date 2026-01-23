@@ -1,11 +1,117 @@
+"""
+MFS Carrier+ - Inventory Schemas V0.7 (Simplified)
+"""
 from decimal import Decimal
 from pydantic import BaseModel, Field
-import uuid
+from uuid import UUID
+from typing import Optional
 
+
+# ═══════════════════════════════════════════════════════════
+# V0.7 SIMPLIFIED INVENTORY SCHEMAS
+# ═══════════════════════════════════════════════════════════
+
+class InventoryItemOut(BaseModel):
+    """Un item dans l'inventaire - V0.7 Simplified (airport_ident optionnel pour compat legacy)"""
+    item_id: UUID
+    item_name: str
+    tier: int
+    qty: int
+    airport_ident: str = ""  # Optionnel pour compat legacy
+    weight_kg: Decimal
+    total_weight_kg: Decimal
+    base_value: Decimal
+    total_value: Decimal
+
+    class Config:
+        from_attributes = True
+
+
+class AircraftCargoItemOut(BaseModel):
+    """Un item dans le cargo d'un avion (pas d'airport_ident)"""
+    item_id: UUID
+    item_name: str
+    tier: int
+    qty: int
+    weight_kg: Decimal
+    total_weight_kg: Decimal
+
+    class Config:
+        from_attributes = True
+
+
+# ═══════════════════════════════════════════════════════════
+# INVENTAIRE COMPLET
+# ═══════════════════════════════════════════════════════════
+
+class PlayerInventoryOut(BaseModel):
+    """Inventaire complet d'un joueur"""
+    total_items: int
+    total_value: Decimal
+    total_weight_kg: Decimal
+    airports: list[str]  # Liste des aéroports où le joueur a des items
+    items: list[InventoryItemOut]
+
+
+class CompanyInventoryOut(BaseModel):
+    """Inventaire complet d'une company"""
+    company_id: UUID
+    company_name: str
+    total_items: int
+    total_value: Decimal
+    total_weight_kg: Decimal
+    airports: list[str]
+    items: list[InventoryItemOut]
+
+
+class AircraftCargoOut(BaseModel):
+    """Cargo d'un avion"""
+    aircraft_id: UUID
+    aircraft_name: str
+    current_airport: Optional[str] = None
+    cargo_capacity_kg: Decimal
+    current_weight_kg: Decimal
+    available_capacity_kg: Decimal
+    items: list[AircraftCargoItemOut]
+
+
+# ═══════════════════════════════════════════════════════════
+# OPÉRATIONS LOAD/UNLOAD
+# ═══════════════════════════════════════════════════════════
+
+class LoadCargoIn(BaseModel):
+    """Charger des items dans un avion"""
+    aircraft_id: UUID
+    item_id: UUID
+    qty: int = Field(..., ge=1)
+    from_inventory: str = "player"  # "player" ou "company"
+
+
+class UnloadCargoIn(BaseModel):
+    """Décharger des items d'un avion"""
+    aircraft_id: UUID
+    item_id: UUID
+    qty: int = Field(..., ge=1)
+    to_inventory: str = "player"  # "player" ou "company"
+
+
+class CargoOperationOut(BaseModel):
+    """Résultat d'une opération de chargement/déchargement"""
+    success: bool
+    message: str
+    item_name: str
+    qty: int
+    aircraft_id: UUID
+    airport_ident: str
+
+
+# ═══════════════════════════════════════════════════════════
+# LEGACY - À garder pour compatibilité HV (T0/NPC)
+# ═══════════════════════════════════════════════════════════
 
 class LocationOut(BaseModel):
-    id: uuid.UUID
-    company_id: uuid.UUID
+    id: UUID
+    company_id: UUID | None = None
     kind: str
     airport_ident: str
     name: str
@@ -16,7 +122,7 @@ class WarehouseCreateIn(BaseModel):
 
 
 class InventoryLineOut(BaseModel):
-    item_id: uuid.UUID
+    item_id: UUID
     item_code: str
     item_name: str
     qty: int
@@ -26,7 +132,7 @@ class InventoryLineOut(BaseModel):
 
 
 class InventoryOut(BaseModel):
-    location_id: uuid.UUID
+    location_id: UUID
     kind: str
     airport_ident: str
     name: str
@@ -34,25 +140,21 @@ class InventoryOut(BaseModel):
 
 
 class AdjustIn(BaseModel):
-    location_id: uuid.UUID
+    location_id: UUID
     item_code: str = Field(..., min_length=1, max_length=64)
     qty: int = Field(..., ge=1)
 
 
 class MoveIn(BaseModel):
-    from_location_id: uuid.UUID
-    to_location_id: uuid.UUID
+    from_location_id: UUID
+    to_location_id: UUID
     item_code: str = Field(..., min_length=1, max_length=64)
     qty: int = Field(..., ge=1)
 
 
-# ═══════════════════════════════════════════════════════════
-# SCHEMAS VENTE / MARCHÉ
-# ═══════════════════════════════════════════════════════════
-
 class SetForSaleIn(BaseModel):
     """Mettre des items en vente"""
-    location_id: uuid.UUID
+    location_id: UUID
     item_code: str = Field(..., min_length=1, max_length=64)
     for_sale: bool
     sale_price: Decimal | None = Field(None, ge=0, description="Prix unitaire")
@@ -61,11 +163,11 @@ class SetForSaleIn(BaseModel):
 
 class MarketListingOut(BaseModel):
     """Item en vente sur le marché"""
-    location_id: uuid.UUID
+    location_id: UUID
     airport_ident: str
-    company_id: uuid.UUID
+    company_id: UUID
     company_name: str
-    item_id: uuid.UUID
+    item_id: UUID
     item_code: str
     item_name: str
     sale_price: Decimal
@@ -74,42 +176,30 @@ class MarketListingOut(BaseModel):
 
 class BuyFromMarketIn(BaseModel):
     """Acheter sur le marché"""
-    seller_location_id: uuid.UUID
+    seller_location_id: UUID
     item_code: str = Field(..., min_length=1, max_length=64)
     qty: int = Field(..., ge=1)
 
 
 # ═══════════════════════════════════════════════════════════
-# V0.7 UNIFIED INVENTORY SCHEMAS
+# V0.7 UNIFIED INVENTORY LEGACY (keeping for old endpoints)
 # ═══════════════════════════════════════════════════════════
 
 class LocationOutV2(BaseModel):
     """V0.7 Location with owner info"""
-    id: uuid.UUID
+    id: UUID
     kind: str
     airport_ident: str
     name: str
     owner_type: str
-    owner_id: uuid.UUID
-    company_id: uuid.UUID | None = None
-    aircraft_id: uuid.UUID | None = None
-
-
-class InventoryItemOut(BaseModel):
-    """Single inventory item"""
-    item_id: uuid.UUID
-    item_name: str
-    tier: int
-    qty: int
-    weight_kg: Decimal
-    total_weight_kg: Decimal
-    base_value: Decimal
-    total_value: Decimal
+    owner_id: UUID
+    company_id: UUID | None = None
+    aircraft_id: UUID | None = None
 
 
 class ContainerOut(BaseModel):
     """A container (warehouse, aircraft) with its items"""
-    id: uuid.UUID
+    id: UUID
     type: str  # player_warehouse, company_warehouse, aircraft
     name: str
     owner_name: str | None = None
@@ -135,9 +225,9 @@ class InventoryOverviewOut(BaseModel):
 
 class TransferIn(BaseModel):
     """V0.7 Transfer items between locations (same airport only)"""
-    from_location_id: uuid.UUID
-    to_location_id: uuid.UUID
-    item_id: uuid.UUID
+    from_location_id: UUID
+    to_location_id: UUID
+    item_id: UUID
     qty: int = Field(..., ge=1)
 
 
@@ -145,9 +235,9 @@ class TransferOut(BaseModel):
     """Transfer result"""
     success: bool
     message: str
-    from_location_id: uuid.UUID
-    to_location_id: uuid.UUID
-    item_id: uuid.UUID
+    from_location_id: UUID
+    to_location_id: UUID
+    item_id: UUID
     qty: int
 
 
@@ -158,57 +248,12 @@ class PlayerWarehouseCreateIn(BaseModel):
 
 
 # ═══════════════════════════════════════════════════════════
-# V0.7 AIRCRAFT CARGO SCHEMAS
-# ═══════════════════════════════════════════════════════════
-
-class AircraftOut(BaseModel):
-    """Aircraft with cargo info"""
-    id: uuid.UUID
-    aircraft_type: str
-    status: str
-    owner_type: str
-    owner_id: uuid.UUID
-    owner_name: str | None = None
-    current_airport_ident: str | None = None
-    cargo_capacity_kg: int
-    current_cargo_kg: Decimal
-    available_capacity_kg: Decimal
-    condition: float
-    hours: float
-
-
-class AircraftCargoOut(BaseModel):
-    """Aircraft cargo contents"""
-    aircraft_id: uuid.UUID
-    aircraft_type: str
-    current_airport_ident: str | None = None
-    cargo_capacity_kg: int
-    current_cargo_kg: Decimal
-    available_capacity_kg: Decimal
-    items: list[InventoryItemOut]
-
-
-class LoadCargoIn(BaseModel):
-    """Load items into aircraft"""
-    from_location_id: uuid.UUID
-    item_id: uuid.UUID
-    qty: int = Field(..., ge=1)
-
-
-class UnloadCargoIn(BaseModel):
-    """Unload items from aircraft"""
-    to_location_id: uuid.UUID
-    item_id: uuid.UUID
-    qty: int = Field(..., ge=1)
-
-
-# ═══════════════════════════════════════════════════════════
 # V0.7 PERMISSIONS SCHEMAS
 # ═══════════════════════════════════════════════════════════
 
 class CompanyPermissionOut(BaseModel):
     """Company member permissions"""
-    user_id: uuid.UUID
+    user_id: UUID
     username: str | None = None
     can_withdraw_warehouse: bool
     can_deposit_warehouse: bool

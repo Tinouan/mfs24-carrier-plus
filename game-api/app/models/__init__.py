@@ -20,3 +20,8 @@ from .factory_transaction import FactoryTransaction
 # V0.7 Unified Inventory System
 from .company_permission import CompanyPermission
 from .company_aircraft import CompanyAircraft
+
+# V0.7 Simplified Inventory
+from .player_inventory import PlayerInventory
+from .company_inventory import CompanyInventory
+from .aircraft_inventory import AircraftInventory

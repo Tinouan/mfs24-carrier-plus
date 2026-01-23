@@ -27,9 +27,11 @@ Le système de factories permet aux joueurs de transformer des matières premiè
 | `food_capacity` | INT | Capacité max nourriture |
 | `food_consumption_per_hour` | DECIMAL | Consommation horaire |
 
-### `game.factory_storage`
+### `game.factory_storage` (Legacy - T0 uniquement)
 
-Inventaire interne de l'usine.
+> **V0.7 Simplifié:** Les factories T1+ n'utilisent plus `factory_storage`. La production va directement dans `company_inventory`.
+
+Inventaire interne de l'usine (utilisé uniquement par T0/NPC).
 
 | Colonne | Type | Description |
 |---------|------|-------------|
@@ -155,7 +157,11 @@ Les ingrédients sont déduits du `factory_storage` au démarrage du batch.
 
 Le scheduler (`batch_completion` job) vérifie toutes les minutes:
 - Si `NOW() >= estimated_completion`
-- Si oui: status → completed, items ajoutés au storage
+- Si oui: status → completed
+
+**Destination des items produits (V0.7 Simplifié):**
+- **T1-T5**: Items ajoutés directement à `company_inventory` @ `factory.airport_ident`
+- **T0 (NPC)**: Items ajoutés à `inventory_items` via legacy system
 
 ### 5. Bonus Engineer
 
@@ -286,7 +292,7 @@ Voir [workers.md](workers.md) pour la gestion complète des workers.
 
 ## Exemples de Flux
 
-### Créer une usine et lancer une production
+### Créer une usine et lancer une production (V0.7 Simplifié)
 
 ```bash
 # 1. Vérifier les slots disponibles
@@ -321,4 +327,23 @@ POST /api/factories/{id}/production/start
 
 # 8. Vérifier le status
 GET /api/factories/{id}/batches
+
+# 9. [V0.7] Voir les produits finis dans company_inventory
+GET /inventory/company?airport=LFPG
+# → Items produits apparaissent directement ici après completion
 ```
+
+### Flux Production V0.7 Simplifié
+
+```
+[Ingrédients]                    [Produits]
+company_inventory    →  Factory  →  company_inventory
+     @ LFPG             T1+            @ LFPG
+                          ↓
+                   complete_batch()
+```
+
+**Points clés:**
+- Plus besoin de `factory_storage` intermédiaire
+- Les produits arrivent directement dans `company_inventory`
+- La localisation = aéroport de la factory

@@ -3,15 +3,190 @@
 ## Vue d'ensemble
 
 Le système d'inventaire gère le stockage et le transport des items:
-- **Locations** - Emplacements de stockage (player_warehouse, company_warehouse, factory_storage, aircraft)
-- **Items** - Quantités d'items par emplacement
+- **V0.7 Simplifié** - 3 tables dédiées (player_inventory, company_inventory, aircraft_inventory)
+- **Legacy** - Tables originales (inventory_locations, inventory_items) conservées pour T0/NPC et HV
 - **Audit** - Historique de tous les mouvements
-- **Marché** - Système de vente entre joueurs
+- **Marché** - Système de vente entre joueurs (utilise tables legacy)
 - **Permissions V0.7** - Contrôle d'accès granulaire
 
 ---
 
-## V0.7 - Unified Inventory System
+## V0.7 SIMPLIFIÉ - Nouveau Système
+
+### ⚠️ Coexistence avec l'ancien système
+
+Les anciennes tables (`inventory_locations`, `inventory_items`) sont **conservées** pour:
+- Factories T0 (NPC) - Production automatique avec vente
+- Système HV actuel - Marché entre joueurs
+
+Le nouveau système V0.7 utilise **3 tables dédiées** plus simples.
+
+### Principes
+
+1. **Pas de locations intermédiaires** - Items directement liés à player/company/aircraft
+2. **Localisation par aéroport** - `airport_ident` stocké directement dans chaque ligne
+3. **Production directe** - Les factories T1+ écrivent dans `company_inventory` (plus de `factory_storage`)
+4. **Anti-cheat** - Chargement avion = même aéroport obligatoire
+
+### Tables V0.7 Simplified
+
+#### `game.player_inventory`
+
+Inventaire personnel du joueur, localisé par aéroport.
+
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `id` | UUID | Clé primaire |
+| `player_id` | UUID | FK → users |
+| `item_id` | UUID | FK → items |
+| `qty` | INT | Quantité (≥ 0) |
+| `airport_ident` | VARCHAR(8) | Localisation ICAO |
+| `created_at` | TIMESTAMPTZ | Date création |
+| `updated_at` | TIMESTAMPTZ | Dernière modification |
+
+**Contrainte:** `UNIQUE(player_id, item_id, airport_ident)`
+
+#### `game.company_inventory`
+
+Inventaire de la company, localisé par aéroport. Reçoit directement la production des factories T1+.
+
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `id` | UUID | Clé primaire |
+| `company_id` | UUID | FK → companies |
+| `item_id` | UUID | FK → items |
+| `qty` | INT | Quantité (≥ 0) |
+| `airport_ident` | VARCHAR(8) | Localisation ICAO |
+| `created_at` | TIMESTAMPTZ | Date création |
+| `updated_at` | TIMESTAMPTZ | Dernière modification |
+
+**Contrainte:** `UNIQUE(company_id, item_id, airport_ident)`
+
+#### `game.aircraft_inventory`
+
+Cargo d'un avion. Pas de `airport_ident` - la position = position de l'avion.
+
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `id` | UUID | Clé primaire |
+| `aircraft_id` | UUID | FK → company_aircraft |
+| `item_id` | UUID | FK → items |
+| `qty` | INT | Quantité (≥ 0) |
+| `created_at` | TIMESTAMPTZ | Date création |
+| `updated_at` | TIMESTAMPTZ | Dernière modification |
+
+**Contrainte:** `UNIQUE(aircraft_id, item_id)`
+
+### Endpoints V0.7 Simplified
+
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| GET | `/inventory/player` | Inventaire personnel (tous aéroports) |
+| GET | `/inventory/player?airport=LFPG` | Filtrer par aéroport |
+| GET | `/inventory/company` | Inventaire company |
+| GET | `/inventory/company?airport=LFPG` | Filtrer par aéroport |
+| GET | `/inventory/aircraft/{id}` | Cargo d'un avion |
+| POST | `/inventory/load` | Charger items dans avion |
+| POST | `/inventory/unload` | Décharger items de l'avion |
+
+### Réponses API
+
+#### GET /inventory/player
+
+```json
+{
+    "total_items": 150,
+    "total_value": 25000.00,
+    "total_weight_kg": 1500.00,
+    "airports": ["LFPG", "EGLL", "KJFK"],
+    "items": [
+        {
+            "item_id": "uuid",
+            "item_name": "Steel Ingot",
+            "tier": 2,
+            "qty": 50,
+            "airport_ident": "LFPG",
+            "weight_kg": 10.00,
+            "total_weight_kg": 500.00,
+            "base_value": 150.00,
+            "total_value": 7500.00
+        }
+    ]
+}
+```
+
+#### GET /inventory/aircraft/{id}
+
+```json
+{
+    "aircraft_id": "uuid",
+    "aircraft_name": "Boeing 737-800",
+    "current_airport": "LFPG",
+    "cargo_capacity_kg": 20000.00,
+    "current_weight_kg": 5000.00,
+    "available_capacity_kg": 15000.00,
+    "items": [
+        {
+            "item_id": "uuid",
+            "item_name": "Steel Ingot",
+            "tier": 2,
+            "qty": 100,
+            "weight_kg": 10.00,
+            "total_weight_kg": 1000.00
+        }
+    ]
+}
+```
+
+### Load/Unload Cargo
+
+```bash
+# Charger depuis inventaire PLAYER vers avion
+POST /inventory/load
+{
+    "aircraft_id": "uuid",
+    "item_id": "uuid",
+    "qty": 50,
+    "from_inventory": "player"  # ou "company"
+}
+
+# Décharger depuis avion vers inventaire COMPANY
+POST /inventory/unload
+{
+    "aircraft_id": "uuid",
+    "item_id": "uuid",
+    "qty": 50,
+    "to_inventory": "company"  # ou "player"
+}
+```
+
+### Validations Anti-Cheat
+
+1. **Load**: Items doivent être à `aircraft.current_airport_ident`
+2. **Unload**: Items arrivent à `aircraft.current_airport_ident`
+3. **Cargo capacity**: Poids total ne peut pas dépasser capacité avion
+
+### Flux Production V0.7
+
+```
+[Factory T1+] ─complete_batch()─→ [company_inventory @ factory.airport_ident]
+```
+
+La fonction `complete_batch()` dans `production_service.py` écrit **directement** dans `company_inventory` au lieu de `factory_storage`.
+
+### Flux Transport Complet
+
+```
+[company_inventory LFPG] ──load──→ [aircraft_inventory] ──vol──→ [player_inventory KJFK]
+                               ↑                              ↑
+                          même aéroport                 même aéroport
+```
+
+---
+
+## V0.7 LEGACY - Unified Inventory System (anciennes tables)
+
+> **Note:** Cette section décrit les anciennes tables toujours utilisées pour T0/NPC et le marché HV.
 
 ### Principes Anti-Cheat
 
@@ -429,13 +604,25 @@ Liste tous les items en vente à un aéroport (endpoint **public**).
 
 ## Interaction avec Factory System
 
-### Factory Storage → Warehouse
+### V0.7 Simplifié: Production directe
 
-Les factories ont leur propre stockage (`factory_storage`). Pour transférer:
+Les factories T1+ écrivent **directement** dans `company_inventory`:
 
 ```
-[Factory Storage] ──withdraw──→ [Company Warehouse]
+[Factory T1+] ─complete_batch()─→ [company_inventory @ airport]
 ```
+
+**Pas de `factory_storage` intermédiaire** pour les factories T1+.
+
+### Legacy: Factory Storage (T0/NPC uniquement)
+
+Les factories T0 (NPC) utilisent encore le système legacy:
+
+```
+[Factory T0] ──auto_produce──→ [inventory_items via inventory_locations]
+```
+
+Pour transférer depuis `factory_storage` vers warehouse (legacy):
 
 **Endpoint:** `POST /factories/{id}/storage/withdraw`
 
@@ -445,53 +632,62 @@ Les factories ont leur propre stockage (`factory_storage`). Pour transférer:
 3. Ajoute à `inventory_items` du warehouse
 4. Audit dans `factory_transactions` (type: output)
 
-### Warehouse → Factory Storage
-
-**Endpoint:** `POST /factories/{id}/storage/deposit`
-
-**Actions:**
-1. Retire du warehouse
-2. Ajoute à `factory_storage`
-3. Audit dans `factory_transactions` (type: input)
-
 ---
 
 ## Flux Typiques
 
-### Production et vente
+### V0.7 Simplifié: Production et Transport
 
 ```bash
-# 1. Produire dans une factory
+# 1. Produire dans une factory T1+
 POST /factories/{id}/production/start
 {"recipe_id": "uuid"}
 
-# 2. Récupérer les produits (batch terminé)
-# → Automatiquement dans factory_storage
+# 2. Batch terminé automatiquement
+# → Items dans company_inventory @ factory.airport_ident
 
-# 3. Retirer vers warehouse
-POST /factories/{id}/storage/withdraw
-{"item_code": "Steel Ingot", "qty": 100}
+# 3. Voir l'inventaire company
+GET /inventory/company
+# → Liste tous les items par aéroport
 
-# 4. Mettre en vente
+# 4. Charger dans un avion
+POST /inventory/load
+{"aircraft_id": "uuid", "item_id": "uuid", "qty": 50, "from_inventory": "company"}
+
+# 5. Vol (simulateur MSFS) + update position
+PATCH /fleet/{aircraft_id}/location
+{"airport_ident": "KJFK"}
+
+# 6. Décharger à destination
+POST /inventory/unload
+{"aircraft_id": "uuid", "item_id": "uuid", "qty": 50, "to_inventory": "player"}
+```
+
+### Legacy: Production et vente HV
+
+```bash
+# 1. Produire (T0 NPC uniquement via scheduler)
+# → Automatiquement dans inventory_items
+
+# 2. Mettre en vente
 POST /inventory/set-for-sale
-{"location_id": "warehouse-uuid", "item_code": "Steel Ingot", "for_sale": true, "sale_price": 150, "sale_qty": 100}
+{"location_id": "warehouse-uuid", "item_code": "Raw Wheat", "for_sale": true, "sale_price": 10, "sale_qty": 100}
 
-# 5. Un autre joueur achète
+# 3. Un autre joueur achète
 POST /inventory/market/buy
-{"seller_location_id": "warehouse-uuid", "item_code": "Steel Ingot", "qty": 50}
+{"seller_location_id": "warehouse-uuid", "item_code": "Raw Wheat", "qty": 50}
 ```
 
-### Transport entre aéroports (V0.7 ✅)
+### Transport entre aéroports (V0.7 Simplifié)
 
 ```
-[Warehouse LFPG] ──load──→ [Aircraft Cargo] ──flight──→ [Warehouse KJFK]
-                            at LFPG               at KJFK
+[company_inventory LFPG] ──load──→ [aircraft_inventory] ──flight──→ [player_inventory KJFK]
 ```
 
-**Implémenté en V0.7:**
-- `POST /fleet/{id}/load` - Charge depuis warehouse (même aéroport)
+**Endpoints V0.7 Simplifié:**
+- `POST /inventory/load` - Charge depuis player/company inventory (même aéroport que l'avion)
 - `PATCH /fleet/{id}/location` - Update position après vol
-- `POST /fleet/{id}/unload` - Décharge vers warehouse (même aéroport)
+- `POST /inventory/unload` - Décharge vers player/company inventory (à l'aéroport de l'avion)
 
 ---
 
@@ -523,6 +719,9 @@ POST /inventory/market/buy
 - [x] ~~Player warehouses~~ **V0.7 Complété**
 - [x] ~~Permissions granulaires~~ **V0.7 Complété**
 - [x] ~~Anti-cheat cross-airport~~ **V0.7 Complété**
+- [x] ~~Inventaire simplifié (3 tables dédiées)~~ **V0.7 Simplifié Complété**
+- [x] ~~Production directe dans company_inventory~~ **V0.7 Simplifié Complété**
+- [ ] Migration HV vers nouvelles tables
 - [ ] Capacités de stockage par location
 - [ ] Frais de stockage (warehouse rent)
 - [ ] Historique des prix du marché

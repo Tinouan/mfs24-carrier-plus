@@ -14,6 +14,7 @@ from app.models.factory import Factory
 from app.models.production_batch import ProductionBatch
 from app.models.factory_storage import FactoryStorage
 from app.models.factory_transaction import FactoryTransaction
+from app.models.company_inventory import CompanyInventory
 from app.models.recipe import Recipe
 from app.models.worker import Worker
 from app.models.inventory_location import InventoryLocation
@@ -128,22 +129,24 @@ def complete_batch(db: Session, batch: ProductionBatch):
         engineer_bonus = 1.0 + (len(engineers) * 0.1)  # +10% par engineer
         result_qty = int(result_qty * min(engineer_bonus, 1.5))  # Max 50% bonus
 
-    # Ajouter les items produits au factory_storage
-    storage = db.query(FactoryStorage).filter(
-        FactoryStorage.factory_id == batch.factory_id,
-        FactoryStorage.item_id == recipe.result_item_id
+    # V0.7: Ajouter directement à company_inventory (au lieu de factory_storage)
+    company_inv = db.query(CompanyInventory).filter(
+        CompanyInventory.company_id == factory.company_id,
+        CompanyInventory.item_id == recipe.result_item_id,
+        CompanyInventory.airport_ident == factory.airport_ident,
     ).first()
 
-    if not storage:
-        storage = FactoryStorage(
-            factory_id=batch.factory_id,
+    if not company_inv:
+        company_inv = CompanyInventory(
+            company_id=factory.company_id,
             item_id=recipe.result_item_id,
-            quantity=0
+            airport_ident=factory.airport_ident,
+            qty=0,
         )
-        db.add(storage)
+        db.add(company_inv)
         db.flush()
 
-    storage.quantity += result_qty
+    company_inv.qty += result_qty
 
     # Log la transaction
     transaction = FactoryTransaction(

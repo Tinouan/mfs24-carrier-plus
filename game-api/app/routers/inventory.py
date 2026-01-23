@@ -14,7 +14,12 @@ from app.models.inventory_location import InventoryLocation
 from app.models.inventory_item import InventoryItem
 from app.models.inventory_audit import InventoryAudit
 from app.models.user import User
+from app.models.player_inventory import PlayerInventory
+from app.models.company_inventory import CompanyInventory
+from app.models.aircraft_inventory import AircraftInventory
+from app.models.company_aircraft import CompanyAircraft
 from app.schemas.inventory import (
+    # Legacy (HV/T0)
     LocationOut,
     WarehouseCreateIn,
     InventoryOut,
@@ -24,7 +29,7 @@ from app.schemas.inventory import (
     SetForSaleIn,
     MarketListingOut,
     BuyFromMarketIn,
-    # V0.7
+    # V0.7 Unified Legacy
     InventoryOverviewOut,
     AirportInventoryOut,
     ContainerOut,
@@ -33,7 +38,16 @@ from app.schemas.inventory import (
     TransferOut,
     PlayerWarehouseCreateIn,
     LocationOutV2,
+    # V0.7 Simplified
+    AircraftCargoItemOut,
+    PlayerInventoryOut,
+    CompanyInventoryOut,
+    AircraftCargoOut,
+    LoadCargoIn,
+    UnloadCargoIn,
+    CargoOperationOut,
 )
+from sqlalchemy import func
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
@@ -1107,4 +1121,406 @@ def get_inventory_at_airport(
         airport_ident=ident,
         airport_name=ident,
         containers=containers,
+    )
+
+
+# ═══════════════════════════════════════════════════════════
+# V0.7 SIMPLIFIED INVENTORY SYSTEM (NEW TABLES)
+# Uses: player_inventory, company_inventory, aircraft_inventory
+# ═══════════════════════════════════════════════════════════
+
+def _get_user_company_v2(db: Session, user_id: uuid.UUID) -> tuple[Company | None, CompanyMember | None]:
+    """Get user's company and membership"""
+    member = db.query(CompanyMember).filter(CompanyMember.user_id == user_id).first()
+    if not member:
+        return None, None
+    company = db.query(Company).filter(Company.id == member.company_id).first()
+    return company, member
+
+
+def _calculate_aircraft_cargo_weight(db: Session, aircraft_id: uuid.UUID) -> Decimal:
+    """Calculate total weight of cargo in an aircraft"""
+    result = db.query(
+        func.coalesce(func.sum(AircraftInventory.qty * Item.weight_kg), 0)
+    ).join(
+        Item, Item.id == AircraftInventory.item_id
+    ).filter(
+        AircraftInventory.aircraft_id == aircraft_id
+    ).scalar()
+    return Decimal(str(result))
+
+
+@router.get("/player", response_model=PlayerInventoryOut)
+def get_player_inventory(
+    airport: str | None = None,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """
+    V0.7 Simplified - Get player's complete inventory.
+    Optional: filter by airport_ident
+    """
+    query = db.query(PlayerInventory, Item).join(
+        Item, Item.id == PlayerInventory.item_id
+    ).filter(
+        PlayerInventory.player_id == user.id,
+        PlayerInventory.qty > 0
+    )
+
+    if airport:
+        query = query.filter(PlayerInventory.airport_ident == airport.upper())
+
+    rows = query.all()
+
+    # Build response
+    items = []
+    total_value = Decimal("0")
+    total_weight = Decimal("0")
+    airports = set()
+
+    for inv, item in rows:
+        item_total_value = item.base_value * inv.qty
+        item_total_weight = item.weight_kg * inv.qty
+        total_value += item_total_value
+        total_weight += item_total_weight
+        airports.add(inv.airport_ident)
+
+        items.append(InventoryItemOut(
+            item_id=item.id,
+            item_name=item.name,
+            tier=item.tier,
+            qty=inv.qty,
+            airport_ident=inv.airport_ident,
+            weight_kg=item.weight_kg,
+            total_weight_kg=item_total_weight,
+            base_value=item.base_value,
+            total_value=item_total_value,
+        ))
+
+    return PlayerInventoryOut(
+        total_items=sum(i.qty for i in items),
+        total_value=total_value,
+        total_weight_kg=total_weight,
+        airports=sorted(airports),
+        items=items,
+    )
+
+
+@router.get("/company", response_model=CompanyInventoryOut)
+def get_company_inventory(
+    airport: str | None = None,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """
+    V0.7 Simplified - Get company's complete inventory.
+    User must be a member of the company.
+    Optional: filter by airport_ident
+    """
+    company, member = _get_user_company_v2(db, user.id)
+    if not company:
+        raise HTTPException(status_code=404, detail="No company membership")
+
+    query = db.query(CompanyInventory, Item).join(
+        Item, Item.id == CompanyInventory.item_id
+    ).filter(
+        CompanyInventory.company_id == company.id,
+        CompanyInventory.qty > 0
+    )
+
+    if airport:
+        query = query.filter(CompanyInventory.airport_ident == airport.upper())
+
+    rows = query.all()
+
+    items = []
+    total_value = Decimal("0")
+    total_weight = Decimal("0")
+    airports = set()
+
+    for inv, item in rows:
+        item_total_value = item.base_value * inv.qty
+        item_total_weight = item.weight_kg * inv.qty
+        total_value += item_total_value
+        total_weight += item_total_weight
+        airports.add(inv.airport_ident)
+
+        items.append(InventoryItemOut(
+            item_id=item.id,
+            item_name=item.name,
+            tier=item.tier,
+            qty=inv.qty,
+            airport_ident=inv.airport_ident,
+            weight_kg=item.weight_kg,
+            total_weight_kg=item_total_weight,
+            base_value=item.base_value,
+            total_value=item_total_value,
+        ))
+
+    return CompanyInventoryOut(
+        company_id=company.id,
+        company_name=company.name,
+        total_items=sum(i.qty for i in items),
+        total_value=total_value,
+        total_weight_kg=total_weight,
+        airports=sorted(airports),
+        items=items,
+    )
+
+
+@router.get("/aircraft/{aircraft_id}", response_model=AircraftCargoOut)
+def get_aircraft_cargo(
+    aircraft_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """V0.7 Simplified - Get cargo contents of an aircraft"""
+    # Verify user has access to this aircraft
+    company, member = _get_user_company_v2(db, user.id)
+
+    aircraft = db.query(CompanyAircraft).filter(CompanyAircraft.id == aircraft_id).first()
+    if not aircraft:
+        raise HTTPException(status_code=404, detail="Aircraft not found")
+
+    # Check ownership (company or personal)
+    if aircraft.owner_type == "company":
+        if not company or aircraft.company_id != company.id:
+            raise HTTPException(status_code=403, detail="Not authorized to access this aircraft")
+    elif aircraft.owner_type == "player":
+        if aircraft.user_id != user.id:
+            raise HTTPException(status_code=403, detail="Not authorized to access this aircraft")
+
+    # Get cargo
+    rows = db.query(AircraftInventory, Item).join(
+        Item, Item.id == AircraftInventory.item_id
+    ).filter(
+        AircraftInventory.aircraft_id == aircraft_id,
+        AircraftInventory.qty > 0
+    ).all()
+
+    items = []
+    current_weight = Decimal("0")
+
+    for inv, item in rows:
+        item_weight = item.weight_kg * inv.qty
+        current_weight += item_weight
+
+        items.append(AircraftCargoItemOut(
+            item_id=item.id,
+            item_name=item.name,
+            tier=item.tier,
+            qty=inv.qty,
+            weight_kg=item.weight_kg,
+            total_weight_kg=item_weight,
+        ))
+
+    return AircraftCargoOut(
+        aircraft_id=aircraft.id,
+        aircraft_name=aircraft.aircraft_type,
+        current_airport=aircraft.current_airport_ident,
+        cargo_capacity_kg=Decimal(str(aircraft.cargo_capacity_kg)),
+        current_weight_kg=current_weight,
+        available_capacity_kg=Decimal(str(aircraft.cargo_capacity_kg)) - current_weight,
+        items=items,
+    )
+
+
+@router.post("/load", response_model=CargoOperationOut)
+def load_cargo(
+    payload: LoadCargoIn,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """
+    V0.7 Simplified - Load items from inventory into an aircraft.
+    Aircraft must be at the same airport as the items.
+    """
+    if payload.qty <= 0:
+        raise HTTPException(status_code=400, detail="Quantity must be > 0")
+
+    # Get aircraft
+    aircraft = db.query(CompanyAircraft).filter(CompanyAircraft.id == payload.aircraft_id).first()
+    if not aircraft:
+        raise HTTPException(status_code=404, detail="Aircraft not found")
+
+    aircraft_airport = aircraft.current_airport_ident
+    if not aircraft_airport:
+        raise HTTPException(status_code=400, detail="Aircraft location unknown")
+
+    # Get item
+    item = db.query(Item).filter(Item.id == payload.item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    # Check source inventory
+    if payload.from_inventory == "player":
+        source_inv = db.query(PlayerInventory).filter(
+            PlayerInventory.player_id == user.id,
+            PlayerInventory.item_id == payload.item_id,
+            PlayerInventory.airport_ident == aircraft_airport,
+        ).first()
+    else:
+        company, _ = _get_user_company_v2(db, user.id)
+        if not company:
+            raise HTTPException(status_code=404, detail="No company membership")
+        source_inv = db.query(CompanyInventory).filter(
+            CompanyInventory.company_id == company.id,
+            CompanyInventory.item_id == payload.item_id,
+            CompanyInventory.airport_ident == aircraft_airport,
+        ).first()
+
+    if not source_inv or source_inv.qty < payload.qty:
+        available = source_inv.qty if source_inv else 0
+        raise HTTPException(
+            status_code=400,
+            detail=f"Not enough items at {aircraft_airport} ({available} available)"
+        )
+
+    # Check cargo capacity
+    added_weight = item.weight_kg * payload.qty
+    current_weight = _calculate_aircraft_cargo_weight(db, aircraft.id)
+
+    if current_weight + added_weight > aircraft.cargo_capacity_kg:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cargo capacity exceeded ({aircraft.cargo_capacity_kg}kg max, {current_weight}kg current, {added_weight}kg to add)"
+        )
+
+    try:
+        # Remove from source
+        source_inv.qty -= payload.qty
+        if source_inv.qty == 0:
+            db.delete(source_inv)
+
+        # Add to aircraft
+        aircraft_inv = db.query(AircraftInventory).filter(
+            AircraftInventory.aircraft_id == aircraft.id,
+            AircraftInventory.item_id == payload.item_id,
+        ).first()
+
+        if not aircraft_inv:
+            aircraft_inv = AircraftInventory(
+                aircraft_id=aircraft.id,
+                item_id=payload.item_id,
+                qty=0,
+            )
+            db.add(aircraft_inv)
+
+        aircraft_inv.qty += payload.qty
+
+        db.commit()
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return CargoOperationOut(
+        success=True,
+        message=f"Loaded {payload.qty} {item.name} into aircraft",
+        item_name=item.name,
+        qty=payload.qty,
+        aircraft_id=aircraft.id,
+        airport_ident=aircraft_airport,
+    )
+
+
+@router.post("/unload", response_model=CargoOperationOut)
+def unload_cargo(
+    payload: UnloadCargoIn,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """
+    V0.7 Simplified - Unload items from aircraft to inventory.
+    Items will be placed at the aircraft's current location.
+    """
+    if payload.qty <= 0:
+        raise HTTPException(status_code=400, detail="Quantity must be > 0")
+
+    # Get aircraft
+    aircraft = db.query(CompanyAircraft).filter(CompanyAircraft.id == payload.aircraft_id).first()
+    if not aircraft:
+        raise HTTPException(status_code=404, detail="Aircraft not found")
+
+    aircraft_airport = aircraft.current_airport_ident
+    if not aircraft_airport:
+        raise HTTPException(status_code=400, detail="Aircraft location unknown")
+
+    # Get item
+    item = db.query(Item).filter(Item.id == payload.item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    # Check aircraft cargo
+    aircraft_inv = db.query(AircraftInventory).filter(
+        AircraftInventory.aircraft_id == aircraft.id,
+        AircraftInventory.item_id == payload.item_id,
+    ).first()
+
+    if not aircraft_inv or aircraft_inv.qty < payload.qty:
+        available = aircraft_inv.qty if aircraft_inv else 0
+        raise HTTPException(
+            status_code=400,
+            detail=f"Not enough items in aircraft ({available} available)"
+        )
+
+    try:
+        # Remove from aircraft
+        aircraft_inv.qty -= payload.qty
+        if aircraft_inv.qty == 0:
+            db.delete(aircraft_inv)
+
+        # Add to destination inventory (at aircraft's current location!)
+        if payload.to_inventory == "player":
+            dest_inv = db.query(PlayerInventory).filter(
+                PlayerInventory.player_id == user.id,
+                PlayerInventory.item_id == payload.item_id,
+                PlayerInventory.airport_ident == aircraft_airport,
+            ).first()
+
+            if not dest_inv:
+                dest_inv = PlayerInventory(
+                    player_id=user.id,
+                    item_id=payload.item_id,
+                    airport_ident=aircraft_airport,
+                    qty=0,
+                )
+                db.add(dest_inv)
+
+            dest_inv.qty += payload.qty
+        else:
+            company, _ = _get_user_company_v2(db, user.id)
+            if not company:
+                raise HTTPException(status_code=404, detail="No company membership")
+
+            dest_inv = db.query(CompanyInventory).filter(
+                CompanyInventory.company_id == company.id,
+                CompanyInventory.item_id == payload.item_id,
+                CompanyInventory.airport_ident == aircraft_airport,
+            ).first()
+
+            if not dest_inv:
+                dest_inv = CompanyInventory(
+                    company_id=company.id,
+                    item_id=payload.item_id,
+                    airport_ident=aircraft_airport,
+                    qty=0,
+                )
+                db.add(dest_inv)
+
+            dest_inv.qty += payload.qty
+
+        db.commit()
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return CargoOperationOut(
+        success=True,
+        message=f"Unloaded {payload.qty} {item.name} at {aircraft_airport}",
+        item_name=item.name,
+        qty=payload.qty,
+        aircraft_id=aircraft.id,
+        airport_ident=aircraft_airport,
     )
