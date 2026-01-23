@@ -707,16 +707,17 @@ $$ LANGUAGE plpgsql;
 
 ---
 
-### 🎯 État Actuel Projet
+### Etat Actuel Projet
 
-**✅ Fonctionnel (2026-01-22)**
-- PostgreSQL avec **21 tables game** (V0.5 Factories + V0.6 Workers)
-- **84 000+ airports** importés avec système de slots
+**Fonctionnel (2026-01-23)**
+- PostgreSQL avec **22 tables game** (V0.5 Factories + V0.6 Workers + V0.7.1 Fleet)
+- **84 000+ airports** importes avec systeme de slots
 - **31 usines T0** (NPC) en France avec mapping produits
-- **34 items T0** (raw materials) - incluant Raw Water ajouté
+- **34 items T0** (raw materials) - incluant Raw Water ajoute
 - 93 items total (T0: 34, T1: 30, T2: 30)
-- 60 recettes (T1: 30, T2: 30) insérées
-- API FastAPI démarrée (Docker local)
+- 60 recettes (T1: 30, T2: 30) inserees
+- **14 types d'avions** dans le catalogue (turboprops, jets, helicopteres)
+- API FastAPI demarree (Docker local)
 - Auth JWT fonctionnelle
 - Docker containers stables
 - **APScheduler** avec 7 jobs automatiques
@@ -745,11 +746,11 @@ $$ LANGUAGE plpgsql;
 - `/api/company/*` - Membres, profil company
 - `/api/inventory/*` - Inventaire + marché
 
-**⏳ À venir**
-- Prix dynamiques marché (Phase 4)
+**A venir**
+- Prix dynamiques marche (Phase 4)
 - Items T3-T5 (~300 items total)
-- Missions / Logistics (V0.7)
-- Intégration MSFS 2024
+- Missions / Logistics (V0.8)
+- Integration MSFS 2024
 
 ---
 
@@ -822,10 +823,55 @@ Système unifié workers/engineers avec nationalité, stats, pool de recrutement
 
 ---
 
-## V0.7 — Missions / Logistics
+## V0.7 — Inventory Simplifie + Fleet System (DONE)
+
+### V0.7.0 - Inventaire Unifie
+- [x] Systeme d'inventaire simplifie avec InventoryLocation + InventoryItem
+- [x] Support ownership flexible (company ou player)
+- [x] Integration cargo avions
+- [x] Anti-cheat: items localises par aeroport
+
+### V0.7.1 - Fleet System (2026-01-23)
+
+**Documentation complete:** [docs/aircrafts.md](docs/aircrafts.md)
+
+#### Fonctionnalites implementees
+
+**Base de donnees**
+- [x] Table `game.aircraft_catalog` - 14 types d'avions (turboprops, jets, helicopteres)
+- [x] Colonnes ajoutees a `company_aircraft`: registration, name, icao_type, purchase_price, is_active
+
+**API Endpoints**
+| Methode | Endpoint | Description |
+|---------|----------|-------------|
+| GET | `/api/fleet/catalog` | Catalogue d'avions (filtrable) |
+| GET | `/api/fleet/stats` | Statistiques flotte |
+| POST | `/api/fleet` | Acheter/ajouter avion |
+| GET | `/api/fleet/{id}/details` | Details avec cargo |
+| PATCH | `/api/fleet/{id}` | Modifier avion |
+| DELETE | `/api/fleet/{id}` | Retirer avion |
+
+**Frontend**
+- [x] Modal "Ajouter Avion" avec onglets Catalogue/Manuel
+- [x] Modal "Details Avion" avec stats et cargo
+- [x] Liste flotte amelioree dans Company > Flotte
+- [x] Achat depuis catalogue avec deduction solde
+
+**Catalogue d'avions**
+| Categorie | Exemples | Prix |
+|-----------|----------|------|
+| Turboprop | Cessna 208, PC-12, Twin Otter | $250K - $2.5M |
+| Jet Small | Phenom 300, Citation CJ4 | $1.1M - $1.2M |
+| Jet Medium | 737-800BCF, A320P2F | $14M - $15M |
+| Jet Large | 747-8F, 777F | $65M - $80M |
+| Helicopter | H125, S-76 | $350K - $800K |
+
+---
+
+## V0.8 — Missions / Logistics
 
 ### Objectif
-Créer un gameplay "transport / supply chain".
+Creer un gameplay "transport / supply chain".
 
 - [ ] Mission generator
 - [ ] Claim/validation vol (takeoff+landing)
@@ -834,10 +880,10 @@ Créer un gameplay "transport / supply chain".
 
 ---
 
-## V0.8 — Admin Panel MVP
+## V0.9 — Admin Panel MVP
 
 ### Objectif
-Outils de modération + monitoring.
+Outils de moderation + monitoring.
 
 - [ ] RBAC admin/mod
 - [ ] Audit log viewer

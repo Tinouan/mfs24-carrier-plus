@@ -1924,6 +1924,17 @@ function getFactoryEmoji(type) {
     return emojis[type] || '🏭';
 }
 
+// ========================================
+// FLEET SYSTEM
+// ========================================
+
+let fleetState = {
+    aircraft: [],
+    catalog: [],
+    selectedCatalogId: null,
+    selectedAircraftId: null
+};
+
 // Load company fleet
 async function loadCompanyFleet() {
     const container = document.getElementById('company-fleet-list');
@@ -1934,7 +1945,6 @@ async function loadCompanyFleet() {
         });
 
         if (response.status === 404) {
-            // Fleet endpoint might not exist yet
             container.innerHTML = `
                 <div class="empty-state-small">
                     <span>✈️</span>
@@ -1949,6 +1959,7 @@ async function loadCompanyFleet() {
         }
 
         const aircraft = await response.json();
+        fleetState.aircraft = aircraft;
 
         if (aircraft.length === 0) {
             container.innerHTML = `
@@ -1960,23 +1971,36 @@ async function loadCompanyFleet() {
             return;
         }
 
-        container.innerHTML = aircraft.map(plane => `
-            <div class="fleet-card">
-                <div class="fleet-card-icon">✈️</div>
-                <div class="fleet-card-info">
-                    <div class="fleet-card-name">${plane.registration || plane.name}</div>
-                    <div class="fleet-card-meta">
-                        <span>${plane.aircraft_type || 'Unknown'}</span>
-                        <span>📍 ${plane.location || 'N/A'}</span>
+        container.innerHTML = aircraft.map(plane => {
+            const statusLabel = {
+                'parked': 'Disponible',
+                'stored': 'Stocke',
+                'in_flight': 'En vol',
+                'maintenance': 'Maintenance'
+            }[plane.status] || plane.status;
+            const icon = getCategoryIcon(plane.icao_type || plane.aircraft_type);
+
+            return `
+                <div class="fleet-card" onclick="openAircraftDetails('${plane.id}')">
+                    <div class="fleet-card-icon">${icon}</div>
+                    <div class="fleet-card-info">
+                        <div class="fleet-card-reg">${plane.registration || plane.name || plane.aircraft_type}</div>
+                        <div class="fleet-card-type">${plane.aircraft_type || 'Unknown'}</div>
+                        <div class="fleet-card-meta">
+                            <span>📍 ${plane.current_airport_ident || 'N/A'}</span>
+                            <span>📦 ${formatCargoWeight(plane.cargo_capacity_kg)}</span>
+                        </div>
                     </div>
+                    <div class="fleet-card-status ${plane.status}">${statusLabel}</div>
                 </div>
-                <div class="fleet-card-status ${plane.status || 'grounded'}">${plane.status || 'Parked'}</div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
 
         // Update counts
-        document.getElementById('company-aircraft-count').textContent = aircraft.length;
-        document.getElementById('tab-fleet-count').textContent = aircraft.length;
+        const countEl = document.getElementById('company-aircraft-count');
+        if (countEl) countEl.textContent = aircraft.length;
+        const tabCountEl = document.getElementById('tab-fleet-count');
+        if (tabCountEl) tabCountEl.textContent = aircraft.length;
 
     } catch (error) {
         console.log('[COMPANY] Fleet not available:', error.message);
@@ -1987,6 +2011,24 @@ async function loadCompanyFleet() {
             </div>
         `;
     }
+}
+
+function getCategoryIcon(typeStr) {
+    if (!typeStr) return '✈️';
+    const t = typeStr.toUpperCase();
+    if (t.includes('747') || t.includes('777') || t.includes('A380')) return '🛫';
+    if (t.includes('737') || t.includes('A320')) return '🛩️';
+    if (t.includes('HELICOPTER') || t.includes('H125') || t.includes('S76') || t.includes('EC30')) return '🚁';
+    if (t.includes('CARAVAN') || t.includes('PC12') || t.includes('ATR') || t.includes('DHC6')) return '🛩️';
+    return '✈️';
+}
+
+function formatCargoWeight(kg) {
+    if (!kg) return '0 kg';
+    if (kg >= 1000) {
+        return `${(kg / 1000).toFixed(1)}t`;
+    }
+    return `${Math.round(kg)} kg`;
 }
 
 // Load company employees (members)
@@ -2048,17 +2090,386 @@ function goToMapForFactory() {
     showToast('Cliquez sur un aéroport puis sur un slot vide pour créer une usine', 'info');
 }
 
-// Placeholder functions for modals
-function openAddAircraftModal() {
-    showToast('Fonctionnalité à venir: Ajouter un avion', 'info');
+// ========================================
+// ADD AIRCRAFT MODAL
+// ========================================
+
+async function openAddAircraftModal() {
+    console.log('[FLEET] Opening add aircraft modal');
+
+    if (!state.token || state.token === 'demo-token') {
+        showToast('Connectez-vous pour ajouter un avion', 'warning');
+        return;
+    }
+
+    // Reset state
+    fleetState.selectedCatalogId = null;
+    const errorEl = document.getElementById('aircraft-add-error');
+    if (errorEl) errorEl.textContent = '';
+    document.getElementById('catalog-registration-section').style.display = 'none';
+    document.getElementById('catalog-registration').value = '';
+    document.getElementById('aircraft-price-box').style.display = 'none';
+
+    // Reset manual form
+    document.getElementById('manual-registration').value = '';
+    document.getElementById('manual-type').value = '';
+    document.getElementById('manual-icao').value = '';
+    document.getElementById('manual-name').value = '';
+    document.getElementById('manual-capacity').value = '1000';
+    document.getElementById('manual-airport').value = '';
+
+    // Load catalog
+    await loadAircraftCatalog();
+
+    // Load balance
+    await loadCompanyBalanceForModal();
+
+    // Show modal
+    document.getElementById('modal-add-aircraft').classList.add('active');
+    switchAircraftTab('catalog');
 }
 
+function closeAddAircraftModal() {
+    document.getElementById('modal-add-aircraft').classList.remove('active');
+    fleetState.selectedCatalogId = null;
+}
+
+function switchAircraftTab(tabName) {
+    // Update tabs
+    document.querySelectorAll('.aircraft-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.tab === tabName);
+    });
+
+    // Update content
+    document.getElementById('aircraft-tab-catalog').style.display = tabName === 'catalog' ? 'block' : 'none';
+    document.getElementById('aircraft-tab-manual').style.display = tabName === 'manual' ? 'block' : 'none';
+
+    // Hide registration section and price for manual tab
+    if (tabName === 'manual') {
+        document.getElementById('catalog-registration-section').style.display = 'none';
+        document.getElementById('aircraft-price-box').style.display = 'none';
+    }
+
+    // Update button text
+    const btn = document.getElementById('btn-add-aircraft');
+    if (tabName === 'catalog') {
+        btn.textContent = fleetState.selectedCatalogId ? 'ACHETER' : 'SELECTIONNER';
+    } else {
+        btn.textContent = 'AJOUTER';
+    }
+}
+
+async function loadAircraftCatalog() {
+    const container = document.getElementById('catalog-grid');
+    container.innerHTML = '<div class="loading-small">Chargement du catalogue...</div>';
+
+    try {
+        const category = document.getElementById('catalog-category').value;
+        const url = category
+            ? `${API_BASE}/fleet/catalog?category=${category}`
+            : `${API_BASE}/fleet/catalog`;
+
+        const response = await fetch(url);
+
+        if (!response.ok) {
+            throw new Error('Failed to load catalog');
+        }
+
+        fleetState.catalog = await response.json();
+        renderCatalogGrid();
+
+    } catch (error) {
+        console.error('[FLEET] Catalog error:', error);
+        container.innerHTML = '<div class="empty-state-small">Erreur de chargement</div>';
+    }
+}
+
+function filterCatalog() {
+    loadAircraftCatalog();
+}
+
+function renderCatalogGrid() {
+    const container = document.getElementById('catalog-grid');
+
+    if (fleetState.catalog.length === 0) {
+        container.innerHTML = '<div class="empty-state-small">Aucun avion disponible</div>';
+        return;
+    }
+
+    container.innerHTML = fleetState.catalog.map(aircraft => {
+        const isSelected = fleetState.selectedCatalogId === aircraft.id;
+        const icon = getCategoryIcon(aircraft.icao_type);
+
+        return `
+            <div class="catalog-card ${isSelected ? 'selected' : ''}"
+                 onclick="selectCatalogAircraft('${aircraft.id}')">
+                <div class="catalog-card-icon">${icon}</div>
+                <div class="catalog-card-info">
+                    <div class="catalog-card-name">${aircraft.name}</div>
+                    <div class="catalog-card-meta">
+                        <span>${aircraft.manufacturer}</span>
+                        <span>📦 ${formatCargoWeight(aircraft.cargo_capacity_kg)}</span>
+                        ${aircraft.max_range_nm ? `<span>🛫 ${aircraft.max_range_nm} NM</span>` : ''}
+                    </div>
+                </div>
+                <div class="catalog-card-price">${formatMoney(aircraft.base_price)}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+function selectCatalogAircraft(catalogId) {
+    fleetState.selectedCatalogId = catalogId;
+
+    // Update selection visual
+    document.querySelectorAll('.catalog-card').forEach(card => {
+        card.classList.remove('selected');
+    });
+    event.currentTarget.classList.add('selected');
+
+    // Show registration input
+    document.getElementById('catalog-registration-section').style.display = 'block';
+
+    // Update button
+    document.getElementById('btn-add-aircraft').textContent = 'ACHETER';
+
+    // Update price label
+    const aircraft = fleetState.catalog.find(a => a.id === catalogId);
+    if (aircraft) {
+        document.getElementById('aircraft-price-label').textContent = formatMoney(aircraft.base_price);
+        document.getElementById('aircraft-price-box').style.display = 'block';
+    }
+}
+
+async function loadCompanyBalanceForModal() {
+    try {
+        const response = await fetch(`${API_BASE}/company/me`, {
+            headers: { 'Authorization': `Bearer ${state.token}` }
+        });
+        if (response.ok) {
+            const company = await response.json();
+            document.getElementById('aircraft-balance-label').textContent = formatMoney(company.balance || 0);
+        }
+    } catch (e) {
+        document.getElementById('aircraft-balance-label').textContent = '---';
+    }
+}
+
+async function submitAddAircraft() {
+    const errorEl = document.getElementById('aircraft-add-error');
+    const btn = document.getElementById('btn-add-aircraft');
+    const activeTab = document.querySelector('.aircraft-tab.active').dataset.tab;
+
+    let payload = {};
+
+    if (activeTab === 'catalog') {
+        if (!fleetState.selectedCatalogId) {
+            errorEl.textContent = 'Selectionnez un avion du catalogue';
+            return;
+        }
+
+        const registration = document.getElementById('catalog-registration').value.trim();
+        if (!registration) {
+            errorEl.textContent = 'Entrez une immatriculation';
+            return;
+        }
+
+        payload = {
+            catalog_id: fleetState.selectedCatalogId,
+            registration: registration
+        };
+    } else {
+        // Manual
+        const registration = document.getElementById('manual-registration').value.trim();
+        const aircraftType = document.getElementById('manual-type').value.trim();
+
+        if (!registration) {
+            errorEl.textContent = 'Entrez une immatriculation';
+            return;
+        }
+
+        if (!aircraftType) {
+            errorEl.textContent = 'Entrez un type d\'avion';
+            return;
+        }
+
+        payload = {
+            registration: registration,
+            aircraft_type: aircraftType,
+            icao_type: document.getElementById('manual-icao').value.trim() || null,
+            name: document.getElementById('manual-name').value.trim() || null,
+            cargo_capacity_kg: parseInt(document.getElementById('manual-capacity').value) || 1000,
+            current_airport: document.getElementById('manual-airport').value.trim().toUpperCase() || null
+        };
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Ajout en cours...';
+    errorEl.textContent = '';
+
+    try {
+        const response = await fetch(`${API_BASE}/fleet`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${state.token}`
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.detail || 'Erreur lors de l\'ajout');
+        }
+
+        const aircraft = await response.json();
+        showToast(`Avion ${aircraft.registration || aircraft.aircraft_type} ajoute a la flotte!`, 'success');
+        closeAddAircraftModal();
+        await loadCompanyFleet();
+
+    } catch (error) {
+        console.error('[FLEET] Add error:', error);
+        errorEl.textContent = error.message;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = activeTab === 'catalog' ? 'ACHETER' : 'AJOUTER';
+    }
+}
+
+// ========================================
+// AIRCRAFT DETAILS MODAL
+// ========================================
+
+async function openAircraftDetails(aircraftId) {
+    console.log('[FLEET] Opening aircraft details:', aircraftId);
+    fleetState.selectedAircraftId = aircraftId;
+
+    const body = document.getElementById('aircraft-detail-body');
+    body.innerHTML = '<div class="loading-small">Chargement...</div>';
+
+    document.getElementById('modal-aircraft-details').classList.add('active');
+
+    try {
+        const response = await fetch(`${API_BASE}/fleet/${aircraftId}/details`, {
+            headers: { 'Authorization': `Bearer ${state.token}` }
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to load aircraft');
+        }
+
+        const aircraft = await response.json();
+        renderAircraftDetails(aircraft);
+
+    } catch (error) {
+        console.error('[FLEET] Details error:', error);
+        body.innerHTML = '<div class="empty-state-small">Erreur de chargement</div>';
+    }
+}
+
+function renderAircraftDetails(aircraft) {
+    document.getElementById('aircraft-detail-title').textContent = aircraft.registration || aircraft.aircraft_type;
+
+    const statusLabel = {
+        'parked': 'Disponible',
+        'stored': 'Stocke',
+        'in_flight': 'En vol',
+        'maintenance': 'Maintenance'
+    }[aircraft.status] || aircraft.status;
+
+    const icon = getCategoryIcon(aircraft.icao_type || aircraft.aircraft_type);
+
+    document.getElementById('aircraft-detail-body').innerHTML = `
+        <div class="aircraft-detail-header">
+            <div class="aircraft-detail-icon">${icon}</div>
+            <div class="aircraft-detail-info">
+                <div class="aircraft-detail-reg">${aircraft.registration || 'N/A'}</div>
+                <div class="aircraft-detail-type">${aircraft.name || aircraft.aircraft_type}</div>
+            </div>
+            <div class="aircraft-detail-status ${aircraft.status}">${statusLabel}</div>
+        </div>
+
+        <div class="aircraft-stats-grid">
+            <div class="aircraft-stat-box">
+                <div class="aircraft-stat-value">${aircraft.current_airport_ident || 'N/A'}</div>
+                <div class="aircraft-stat-label">📍 Position</div>
+            </div>
+            <div class="aircraft-stat-box">
+                <div class="aircraft-stat-value">${formatCargoWeight(aircraft.cargo_capacity_kg)}</div>
+                <div class="aircraft-stat-label">📦 Capacite</div>
+            </div>
+            <div class="aircraft-stat-box">
+                <div class="aircraft-stat-value">${aircraft.hours?.toFixed(1) || 0}h</div>
+                <div class="aircraft-stat-label">⏱️ Heures de vol</div>
+            </div>
+            <div class="aircraft-stat-box">
+                <div class="aircraft-stat-value">${Math.round((1 - (aircraft.condition || 1)) * 100)}%</div>
+                <div class="aircraft-stat-label">🔧 Usure</div>
+            </div>
+        </div>
+
+        <div class="modal-info-box">
+            <div class="modal-info-row">
+                <span class="modal-info-label">Cargo actuel</span>
+                <span class="modal-info-value">${formatCargoWeight(aircraft.current_cargo_kg)} / ${formatCargoWeight(aircraft.cargo_capacity_kg)}</span>
+            </div>
+            <div class="cargo-bar">
+                <div class="cargo-bar-fill" style="width: ${aircraft.cargo_utilization_percent || 0}%"></div>
+            </div>
+            <div class="modal-info-row" style="margin-top: 0.5rem;">
+                <span class="modal-info-label">Items en cargo</span>
+                <span class="modal-info-value">${aircraft.current_cargo_items || 0}</span>
+            </div>
+            ${aircraft.purchase_price ? `
+            <div class="modal-info-row">
+                <span class="modal-info-label">Prix d'achat</span>
+                <span class="modal-info-value">${formatMoney(aircraft.purchase_price)}</span>
+            </div>
+            ` : ''}
+        </div>
+    `;
+}
+
+function closeAircraftDetailsModal() {
+    document.getElementById('modal-aircraft-details').classList.remove('active');
+    fleetState.selectedAircraftId = null;
+}
+
+async function confirmRemoveAircraft() {
+    if (!fleetState.selectedAircraftId) return;
+
+    if (!confirm('Etes-vous sur de vouloir retirer cet avion de la flotte?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/fleet/${fleetState.selectedAircraftId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${state.token}` }
+        });
+
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.detail || 'Erreur lors de la suppression');
+        }
+
+        showToast('Avion retire de la flotte', 'success');
+        closeAircraftDetailsModal();
+        await loadCompanyFleet();
+
+    } catch (error) {
+        console.error('[FLEET] Remove error:', error);
+        showToast(error.message, 'error');
+    }
+}
+
+// Placeholder functions for other modals
 function openInviteMemberModal() {
-    showToast('Fonctionnalité à venir: Inviter un membre', 'info');
+    showToast('Fonctionnalite a venir: Inviter un membre', 'info');
 }
 
 function showFactoryDetails(factoryId) {
-    showToast('Fonctionnalité à venir: Détails de l\'usine', 'info');
+    showToast('Fonctionnalite a venir: Details de l\'usine', 'info');
 }
 
 // ========================================

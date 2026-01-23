@@ -5,21 +5,99 @@ from typing import Optional
 from datetime import datetime
 
 
+# =====================================================
+# Aircraft Catalog Schemas
+# =====================================================
+
+class AircraftCatalogOut(BaseModel):
+    """Aircraft type in the catalog"""
+    id: UUID
+    name: str
+    icao_type: str
+    manufacturer: str
+    category: str
+    cargo_capacity_kg: int
+    cargo_capacity_m3: Optional[float] = None
+    max_range_nm: Optional[int] = None
+    cruise_speed_kts: Optional[int] = None
+    base_price: Decimal
+    operating_cost_per_hour: Optional[Decimal] = None
+    min_runway_length_m: Optional[int] = None
+    required_license: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+# =====================================================
+# Aircraft CRUD Schemas
+# =====================================================
+
+class AircraftCreateIn(BaseModel):
+    """Create an aircraft from catalog or manually"""
+    catalog_id: Optional[UUID] = None  # If purchasing from catalog
+
+    # Or manual creation
+    registration: str = Field(..., min_length=2, max_length=10)
+    name: Optional[str] = None
+    aircraft_type: Optional[str] = None  # Required if no catalog_id
+    icao_type: Optional[str] = None
+    cargo_capacity_kg: Optional[int] = None
+    current_airport: Optional[str] = None  # ICAO code
+
+
+class AircraftUpdateIn(BaseModel):
+    """Update aircraft details"""
+    name: Optional[str] = None
+    current_airport: Optional[str] = None
+    status: Optional[str] = None
+
+
+# =====================================================
+# Aircraft Output Schemas
+# =====================================================
+
 class AircraftOut(BaseModel):
     id: UUID
     company_id: Optional[UUID] = None
     user_id: Optional[UUID] = None
     owner_type: str = "company"
+    registration: Optional[str] = None
+    name: Optional[str] = None
     aircraft_type: str
+    icao_type: Optional[str] = None
     status: str
     condition: float
     hours: float
     cargo_capacity_kg: int = 500
     current_airport_ident: Optional[str] = None
+    purchase_price: Optional[Decimal] = None
+    is_active: bool = True
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class AircraftDetailOut(AircraftOut):
+    """Detailed aircraft info with cargo summary"""
+    current_cargo_kg: Decimal = Decimal("0")
+    current_cargo_items: int = 0
+    cargo_utilization_percent: float = 0.0
+
+
+# =====================================================
+# Fleet Stats Schema
+# =====================================================
+
+class FleetStatsOut(BaseModel):
+    """Fleet summary statistics"""
+    total_aircraft: int
+    available_count: int  # stored or parked
+    in_flight_count: int
+    maintenance_count: int
+    total_cargo_capacity_kg: int
+    categories: dict[str, int]  # {"turboprop": 3, "jet_medium": 1}
 
 
 # V0.7 Aircraft Cargo Schemas

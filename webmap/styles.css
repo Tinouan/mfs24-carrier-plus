@@ -3419,3 +3419,287 @@ body::before {
         grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
     }
 }
+
+/* ============================================
+   AIRCRAFT MODAL STYLES
+   ============================================ */
+
+.aircraft-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.5rem;
+}
+
+.aircraft-tab {
+    padding: 0.5rem 1rem;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: 4px 4px 0 0;
+    transition: all 0.2s;
+}
+
+.aircraft-tab:hover {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.aircraft-tab.active {
+    background: var(--accent);
+    color: var(--bg-primary);
+    font-weight: 600;
+}
+
+.aircraft-tab-content {
+    display: none;
+}
+
+.aircraft-tab-content.active {
+    display: block;
+}
+
+.catalog-filters {
+    margin-bottom: 1rem;
+}
+
+.catalog-filters select {
+    width: 100%;
+    padding: 0.5rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-primary);
+}
+
+.catalog-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+    max-height: 300px;
+    overflow-y: auto;
+    padding-right: 0.5rem;
+}
+
+.catalog-card {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: var(--bg-secondary);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.catalog-card:hover {
+    border-color: var(--accent);
+    background: rgba(44, 160, 44, 0.05);
+}
+
+.catalog-card.selected {
+    border-color: var(--accent);
+    background: rgba(44, 160, 44, 0.1);
+}
+
+.catalog-card-icon {
+    font-size: 1.5rem;
+    width: 40px;
+    text-align: center;
+}
+
+.catalog-card-info {
+    flex: 1;
+}
+
+.catalog-card-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
+.catalog-card-meta {
+    display: flex;
+    gap: 0.75rem;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
+}
+
+.catalog-card-price {
+    font-weight: 700;
+    color: var(--accent);
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+
+/* Aircraft Details */
+.aircraft-detail-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.aircraft-detail-icon {
+    font-size: 2.5rem;
+}
+
+.aircraft-detail-info {
+    flex: 1;
+}
+
+.aircraft-detail-reg {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.aircraft-detail-type {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.aircraft-detail-status {
+    padding: 0.25rem 0.75rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.aircraft-detail-status.parked,
+.aircraft-detail-status.stored {
+    background: rgba(44, 160, 44, 0.2);
+    color: #2ca02c;
+}
+
+.aircraft-detail-status.in_flight {
+    background: rgba(31, 119, 180, 0.2);
+    color: #1f77b4;
+}
+
+.aircraft-detail-status.maintenance {
+    background: rgba(255, 127, 14, 0.2);
+    color: #ff7f0e;
+}
+
+.aircraft-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.aircraft-stat-box {
+    background: var(--bg-secondary);
+    padding: 0.75rem;
+    border-radius: 6px;
+    text-align: center;
+}
+
+.aircraft-stat-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.aircraft-stat-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 0.25rem;
+}
+
+.cargo-bar {
+    background: var(--bg-tertiary);
+    height: 8px;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 0.5rem;
+}
+
+.cargo-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.3s;
+}
+
+/* Fleet List Card */
+.fleet-card {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.fleet-card:hover {
+    border-color: var(--accent);
+    background: rgba(44, 160, 44, 0.05);
+}
+
+.fleet-card-icon {
+    font-size: 1.5rem;
+    width: 40px;
+    text-align: center;
+}
+
+.fleet-card-info {
+    flex: 1;
+}
+
+.fleet-card-reg {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.fleet-card-type {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+}
+
+.fleet-card-meta {
+    display: flex;
+    gap: 0.75rem;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
+}
+
+.fleet-card-status {
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+.fleet-card-status.parked,
+.fleet-card-status.stored {
+    background: rgba(44, 160, 44, 0.2);
+    color: #2ca02c;
+}
+
+.fleet-card-status.in_flight {
+    background: rgba(31, 119, 180, 0.2);
+    color: #1f77b4;
+}
+
+.fleet-card-status.maintenance {
+    background: rgba(255, 127, 14, 0.2);
+    color: #ff7f0e;
+}
+
+.loading-small {
+    padding: 1rem;
+    text-align: center;
+    color: var(--text-secondary);
+}

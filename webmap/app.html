@@ -922,6 +922,119 @@
         </div>
     </div>
 
+    <!-- ADD AIRCRAFT MODAL -->
+    <div class="modal-overlay" id="modal-add-aircraft">
+        <div class="modal" style="max-width: 600px;">
+            <div class="modal-header">
+                <div class="modal-title">AJOUTER UN AVION</div>
+                <button class="modal-close" onclick="closeAddAircraftModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-error" id="aircraft-add-error"></div>
+
+                <!-- Tabs: Catalogue / Manuel -->
+                <div class="aircraft-tabs">
+                    <button class="aircraft-tab active" data-tab="catalog" onclick="switchAircraftTab('catalog')">
+                        Catalogue
+                    </button>
+                    <button class="aircraft-tab" data-tab="manual" onclick="switchAircraftTab('manual')">
+                        Manuel
+                    </button>
+                </div>
+
+                <!-- Tab: Catalogue -->
+                <div id="aircraft-tab-catalog" class="aircraft-tab-content active">
+                    <div class="catalog-filters">
+                        <select id="catalog-category" onchange="filterCatalog()">
+                            <option value="">Toutes categories</option>
+                            <option value="turboprop">Turboprop</option>
+                            <option value="jet_small">Jet Petit</option>
+                            <option value="jet_medium">Jet Moyen</option>
+                            <option value="jet_large">Gros Porteur</option>
+                            <option value="helicopter">Helicoptere</option>
+                        </select>
+                    </div>
+                    <div class="catalog-grid" id="catalog-grid">
+                        <div class="loading-small">Chargement...</div>
+                    </div>
+                </div>
+
+                <!-- Tab: Manuel -->
+                <div id="aircraft-tab-manual" class="aircraft-tab-content" style="display:none;">
+                    <div class="form-group">
+                        <label class="form-label">Immatriculation *</label>
+                        <input type="text" id="manual-registration" placeholder="F-XXXX" maxlength="10" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Type d'avion *</label>
+                        <input type="text" id="manual-type" placeholder="Cessna 208 Caravan" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Code ICAO</label>
+                        <input type="text" id="manual-icao" placeholder="C208" maxlength="10" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Surnom</label>
+                        <input type="text" id="manual-name" placeholder="Mon avion prefere" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Capacite cargo (kg)</label>
+                        <input type="number" id="manual-capacity" placeholder="1000" value="1000" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Aeroport actuel</label>
+                        <input type="text" id="manual-airport" placeholder="LFPG" maxlength="4" class="form-input">
+                    </div>
+                </div>
+
+                <!-- Registration input (for catalog purchase) -->
+                <div id="catalog-registration-section" style="display: none;">
+                    <div class="form-group">
+                        <label class="form-label">Immatriculation pour le nouvel avion *</label>
+                        <input type="text" id="catalog-registration" placeholder="F-XXXX" maxlength="10" class="form-input">
+                    </div>
+                </div>
+
+                <!-- Price Info -->
+                <div class="modal-info-box" id="aircraft-price-box" style="display:none;">
+                    <div class="modal-info-row">
+                        <span class="modal-info-label">Prix</span>
+                        <span class="modal-info-value" id="aircraft-price-label">0 $</span>
+                    </div>
+                    <div class="modal-info-row">
+                        <span class="modal-info-label">Solde Company</span>
+                        <span class="modal-info-value" id="aircraft-balance-label">0 $</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeAddAircraftModal()">ANNULER</button>
+                <button class="btn" id="btn-add-aircraft" onclick="submitAddAircraft()">
+                    AJOUTER
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AIRCRAFT DETAILS MODAL -->
+    <div class="modal-overlay" id="modal-aircraft-details">
+        <div class="modal" style="max-width: 500px;">
+            <div class="modal-header">
+                <div class="modal-title" id="aircraft-detail-title">DETAILS AVION</div>
+                <button class="modal-close" onclick="closeAircraftDetailsModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="aircraft-detail-body">
+                <div class="loading-small">Chargement...</div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-danger" id="btn-remove-aircraft" onclick="confirmRemoveAircraft()">
+                    RETIRER
+                </button>
+                <button class="btn btn-secondary" onclick="closeAircraftDetailsModal()">FERMER</button>
+            </div>
+        </div>
+    </div>
+
     <!-- SCRIPTS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
