@@ -35,7 +35,21 @@ let state = {
         withFactoriesOnly: false
     },
     showAirports: true,
-    zoomLevel: 6
+    zoomLevel: 6,
+    // Market (HV) state
+    market: {
+        listings: [],
+        stats: null,
+        filters: {
+            search: '',
+            airport: '',
+            tier: '',
+            maxPrice: ''
+        },
+        page: 0,
+        pageSize: 50,
+        selectedListing: null
+    }
 };
 
 // ============================================
@@ -1548,6 +1562,7 @@ function switchView(viewName) {
     document.getElementById('view-company').style.display = 'none';
     document.getElementById('view-profile').style.display = 'none';
     document.getElementById('view-inventory').style.display = 'none';
+    document.getElementById('view-market').style.display = 'none';
 
     // Show selected view
     if (viewName === 'map') {
@@ -1562,6 +1577,9 @@ function switchView(viewName) {
     } else if (viewName === 'inventory') {
         document.getElementById('view-inventory').style.display = 'block';
         loadInventoryView();
+    } else if (viewName === 'market') {
+        document.getElementById('view-market').style.display = 'block';
+        loadMarketView();
     } else {
         // Other views not implemented yet, show map
         document.getElementById('view-map').style.display = 'block';
@@ -2744,4 +2762,358 @@ async function submitCreateWarehouse() {
         btn.classList.remove('loading');
         btn.textContent = 'CRÉER L\'ENTREPÔT';
     }
+}
+
+// ========================================
+// MARKET VIEW (HV - Hôtel des Ventes)
+// ========================================
+
+async function loadMarketView() {
+    console.log('[MARKET] Loading market view...');
+
+    // Reset state
+    state.market.page = 0;
+
+    // Load stats and listings in parallel
+    await Promise.all([
+        loadMarketStats(),
+        loadMarketListings()
+    ]);
+}
+
+async function loadMarketStats() {
+    try {
+        const response = await fetch(`${API_BASE}/inventory/market/stats`, {
+            headers: state.token ? { 'Authorization': `Bearer ${state.token}` } : {}
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to load market stats');
+        }
+
+        const stats = await response.json();
+        state.market.stats = stats;
+
+        // Update header stats
+        document.getElementById('market-total-listings').textContent = stats.total_listings;
+        document.getElementById('market-total-airports').textContent = stats.total_airports;
+        document.getElementById('market-total-value').textContent = formatMoney(stats.total_value);
+
+        // Update tier distribution chips
+        renderTierChips(stats.tier_distribution);
+
+    } catch (error) {
+        console.error('[MARKET] Error loading stats:', error);
+    }
+}
+
+function renderTierChips(tierDist) {
+    const container = document.getElementById('market-tier-chips');
+    if (!container) return;
+
+    if (!tierDist || Object.keys(tierDist).length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+
+    container.innerHTML = Object.entries(tierDist)
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([tier, count]) => `
+            <span class="tier-chip tier-${tier.toLowerCase()}">${tier}: ${count}</span>
+        `)
+        .join('');
+}
+
+async function loadMarketListings() {
+    const container = document.getElementById('market-listings');
+
+    // Show loading
+    container.innerHTML = `
+        <div class="market-loading">
+            <div class="loading-spinner"></div>
+            <p>Chargement du marché...</p>
+        </div>
+    `;
+
+    try {
+        // Build query params
+        const params = new URLSearchParams();
+
+        if (state.market.filters.search) {
+            params.append('item_name', state.market.filters.search);
+        }
+        if (state.market.filters.airport) {
+            params.append('airport', state.market.filters.airport.toUpperCase());
+        }
+        if (state.market.filters.tier !== '') {
+            params.append('tier', state.market.filters.tier);
+        }
+        if (state.market.filters.maxPrice) {
+            params.append('max_price', state.market.filters.maxPrice);
+        }
+
+        params.append('limit', state.market.pageSize);
+        params.append('offset', state.market.page * state.market.pageSize);
+
+        const url = `${API_BASE}/inventory/market?${params.toString()}`;
+
+        const response = await fetch(url, {
+            headers: state.token ? { 'Authorization': `Bearer ${state.token}` } : {}
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to load market listings');
+        }
+
+        const listings = await response.json();
+        state.market.listings = listings;
+
+        renderMarketListings(listings);
+        updateMarketPagination(listings.length);
+
+    } catch (error) {
+        console.error('[MARKET] Error loading listings:', error);
+        container.innerHTML = `
+            <div class="market-error">
+                <span>⚠️</span>
+                <p>Erreur de chargement du marché</p>
+            </div>
+        `;
+    }
+}
+
+function renderMarketListings(listings) {
+    const container = document.getElementById('market-listings');
+
+    if (listings.length === 0) {
+        container.innerHTML = `
+            <div class="market-empty">
+                <span class="market-empty-icon">🏪</span>
+                <h3>Aucune annonce trouvée</h3>
+                <p>Essayez de modifier vos filtres</p>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="market-listings-grid">
+            ${listings.map(listing => renderMarketListing(listing)).join('')}
+        </div>
+    `;
+}
+
+function renderMarketListing(listing) {
+    const icon = listing.item_icon || getProductEmoji(listing.item_code);
+    const tierClass = `tier-t${listing.item_tier}`;
+
+    return `
+        <div class="market-listing-card" onclick="openMarketBuyModal('${listing.location_id}', '${listing.item_id}')">
+            <div class="listing-header">
+                <span class="listing-icon">${icon}</span>
+                <span class="listing-tier ${tierClass}">T${listing.item_tier}</span>
+            </div>
+            <div class="listing-body">
+                <div class="listing-item-name">${listing.item_name}</div>
+                <div class="listing-seller">${listing.company_name}</div>
+                <div class="listing-location">
+                    <span>📍</span> ${listing.airport_ident}
+                </div>
+            </div>
+            <div class="listing-footer">
+                <div class="listing-price">${formatMoney(listing.sale_price)}</div>
+                <div class="listing-qty">× ${listing.sale_qty}</div>
+            </div>
+        </div>
+    `;
+}
+
+function updateMarketPagination(count) {
+    const prevBtn = document.getElementById('market-prev-btn');
+    const nextBtn = document.getElementById('market-next-btn');
+    const info = document.getElementById('market-pagination-info');
+
+    prevBtn.disabled = state.market.page === 0;
+    nextBtn.disabled = count < state.market.pageSize;
+
+    const start = state.market.page * state.market.pageSize + 1;
+    const end = start + count - 1;
+    info.textContent = `${start}-${end}`;
+}
+
+function marketPrevPage() {
+    if (state.market.page > 0) {
+        state.market.page--;
+        loadMarketListings();
+    }
+}
+
+function marketNextPage() {
+    state.market.page++;
+    loadMarketListings();
+}
+
+function applyMarketFilters() {
+    state.market.filters.search = document.getElementById('market-search').value.trim();
+    state.market.filters.airport = document.getElementById('market-airport-filter').value.trim();
+    state.market.filters.tier = document.getElementById('market-tier-filter').value;
+    state.market.filters.maxPrice = document.getElementById('market-max-price').value;
+
+    state.market.page = 0;
+    loadMarketListings();
+}
+
+function resetMarketFilters() {
+    state.market.filters = {
+        search: '',
+        airport: '',
+        tier: '',
+        maxPrice: ''
+    };
+    state.market.page = 0;
+
+    document.getElementById('market-search').value = '';
+    document.getElementById('market-airport-filter').value = '';
+    document.getElementById('market-tier-filter').value = '';
+    document.getElementById('market-max-price').value = '';
+
+    loadMarketListings();
+}
+
+// ========================================
+// MARKET BUY MODAL
+// ========================================
+
+function openMarketBuyModal(locationId, itemId) {
+    // Find the listing
+    const listing = state.market.listings.find(l =>
+        l.location_id === locationId && l.item_id === itemId
+    );
+
+    if (!listing) {
+        showToast('Annonce introuvable', 'error');
+        return;
+    }
+
+    state.market.selectedListing = listing;
+
+    // Update modal content
+    const icon = listing.item_icon || getProductEmoji(listing.item_code);
+    document.getElementById('buy-item-icon').textContent = icon;
+    document.getElementById('buy-item-name').textContent = listing.item_name;
+    document.getElementById('buy-item-tier').textContent = `T${listing.item_tier}`;
+
+    document.getElementById('buy-seller-name').textContent = listing.company_name;
+    document.getElementById('buy-airport').textContent = listing.airport_ident;
+    document.getElementById('buy-unit-price').textContent = formatMoney(listing.sale_price);
+    document.getElementById('buy-available-qty').textContent = listing.sale_qty;
+
+    document.getElementById('buy-qty').value = 1;
+    document.getElementById('buy-qty').max = listing.sale_qty;
+
+    updateBuyTotal();
+
+    document.getElementById('market-buy-error').classList.remove('visible');
+    document.getElementById('modal-market-buy').classList.add('active');
+}
+
+function closeMarketBuyModal() {
+    document.getElementById('modal-market-buy').classList.remove('active');
+    state.market.selectedListing = null;
+}
+
+function setBuyMax() {
+    if (state.market.selectedListing) {
+        document.getElementById('buy-qty').value = state.market.selectedListing.sale_qty;
+        updateBuyTotal();
+    }
+}
+
+function updateBuyTotal() {
+    if (!state.market.selectedListing) return;
+
+    const qty = parseInt(document.getElementById('buy-qty').value) || 0;
+    const unitPrice = parseFloat(state.market.selectedListing.sale_price);
+    const total = qty * unitPrice;
+
+    document.getElementById('buy-total').textContent = formatMoney(total);
+}
+
+async function confirmMarketBuy() {
+    if (!state.market.selectedListing) return;
+
+    const qty = parseInt(document.getElementById('buy-qty').value);
+    const errorEl = document.getElementById('market-buy-error');
+    const btn = document.getElementById('btn-confirm-buy');
+
+    if (!qty || qty < 1) {
+        errorEl.textContent = 'Quantité invalide';
+        errorEl.classList.add('visible');
+        return;
+    }
+
+    if (qty > state.market.selectedListing.sale_qty) {
+        errorEl.textContent = `Quantité max: ${state.market.selectedListing.sale_qty}`;
+        errorEl.classList.add('visible');
+        return;
+    }
+
+    if (!state.token || state.token === 'demo-token') {
+        errorEl.textContent = 'Connectez-vous pour acheter';
+        errorEl.classList.add('visible');
+        return;
+    }
+
+    btn.classList.add('loading');
+    btn.textContent = 'ACHAT...';
+    errorEl.classList.remove('visible');
+
+    try {
+        const response = await fetch(`${API_BASE}/inventory/market/${state.market.selectedListing.airport_ident}/buy`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${state.token}`
+            },
+            body: JSON.stringify({
+                seller_location_id: state.market.selectedListing.location_id,
+                item_id: state.market.selectedListing.item_id,
+                qty: qty
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Erreur lors de l\'achat');
+        }
+
+        const result = await response.json();
+
+        showToast(`Achat réussi! ${qty}× ${state.market.selectedListing.item_name} pour ${formatMoney(result.total_cost)}`, 'success');
+        closeMarketBuyModal();
+
+        // Refresh market listings
+        await loadMarketListings();
+        await loadMarketStats();
+
+    } catch (error) {
+        console.error('[MARKET] Buy error:', error);
+        errorEl.textContent = error.message;
+        errorEl.classList.add('visible');
+    } finally {
+        btn.classList.remove('loading');
+        btn.textContent = 'ACHETER';
+    }
+}
+
+// Format money helper
+function formatMoney(amount) {
+    const num = parseFloat(amount) || 0;
+    if (num >= 1000000) {
+        return `${(num / 1000000).toFixed(1)}M$`;
+    }
+    if (num >= 1000) {
+        return `${(num / 1000).toFixed(1)}K$`;
+    }
+    return `${num.toFixed(0)}$`;
 }

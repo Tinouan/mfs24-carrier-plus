@@ -28,6 +28,7 @@ from app.schemas.inventory import (
     MoveIn,
     SetForSaleIn,
     MarketListingOut,
+    MarketStatsOut,
     BuyFromMarketIn,
     # V0.7 Unified Legacy
     InventoryOverviewOut,
@@ -460,12 +461,120 @@ def set_for_sale(
     return get_inventory(loc.id, db, user)
 
 
+@router.get("/market", response_model=list[MarketListingOut])
+def get_global_market_listings(
+    airport: str | None = None,
+    item_name: str | None = None,
+    tier: int | None = None,
+    min_price: float | None = None,
+    max_price: float | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    """
+    HV (Hôtel des Ventes) - Liste globale des items en vente.
+    Filtres optionnels: airport, item_name (recherche partielle), tier, min_price, max_price
+    Pagination: limit (max 500), offset
+    """
+    query = (
+        db.query(InventoryItem, InventoryLocation, Item, Company)
+        .join(InventoryLocation, InventoryLocation.id == InventoryItem.location_id)
+        .join(Item, Item.id == InventoryItem.item_id)
+        .join(Company, Company.id == InventoryLocation.company_id)
+        .filter(
+            InventoryItem.for_sale == True,
+            InventoryItem.sale_qty > 0,
+        )
+    )
+
+    # Filtres optionnels
+    if airport:
+        query = query.filter(InventoryLocation.airport_ident == airport.upper())
+    if item_name:
+        query = query.filter(Item.name.ilike(f"%{item_name}%"))
+    if tier is not None:
+        query = query.filter(Item.tier == tier)
+    if min_price is not None:
+        query = query.filter(InventoryItem.sale_price >= min_price)
+    if max_price is not None:
+        query = query.filter(InventoryItem.sale_price <= max_price)
+
+    # Pagination (max 500)
+    limit = min(limit, 500)
+    query = query.order_by(Item.name, InventoryItem.sale_price)
+    query = query.offset(offset).limit(limit)
+
+    rows = query.all()
+
+    return [
+        MarketListingOut(
+            location_id=loc.id,
+            airport_ident=loc.airport_ident,
+            company_id=company.id,
+            company_name=company.name,
+            item_id=item.id,
+            item_code=item.name,
+            item_name=item.name,
+            item_tier=item.tier,
+            item_icon=item.icon,
+            sale_price=inv.sale_price,
+            sale_qty=inv.sale_qty,
+        )
+        for (inv, loc, item, company) in rows
+    ]
+
+
+@router.get("/market/stats", response_model=MarketStatsOut)
+def get_market_stats(
+    db: Session = Depends(get_db),
+):
+    """HV - Statistiques globales du marché"""
+    from sqlalchemy import distinct
+
+    # Base query - items for sale
+    base_query = (
+        db.query(InventoryItem, InventoryLocation, Item)
+        .join(InventoryLocation, InventoryLocation.id == InventoryItem.location_id)
+        .join(Item, Item.id == InventoryItem.item_id)
+        .filter(
+            InventoryItem.for_sale == True,
+            InventoryItem.sale_qty > 0,
+        )
+    )
+
+    rows = base_query.all()
+
+    total_listings = len(rows)
+    airports = set()
+    total_items = 0
+    total_value = Decimal("0")
+    tier_counts = {}
+
+    for inv, loc, item in rows:
+        airports.add(loc.airport_ident)
+        total_items += inv.sale_qty
+        total_value += inv.sale_price * inv.sale_qty
+
+        tier_key = f"T{item.tier}"
+        tier_counts[tier_key] = tier_counts.get(tier_key, 0) + 1
+
+    return MarketStatsOut(
+        total_listings=total_listings,
+        total_airports=len(airports),
+        total_items_for_sale=total_items,
+        total_value=total_value,
+        airports_with_listings=sorted(airports),
+        tier_distribution=tier_counts,
+    )
+
+
 @router.get("/market/{airport_ident}", response_model=list[MarketListingOut])
 def get_market_listings(
     airport_ident: str,
     db: Session = Depends(get_db),
 ):
-    """Liste tous les items en vente à un aéroport (endpoint public)"""
+    """Liste tous les items en vente à un aéroport (endpoint public - legacy)"""
     ident = airport_ident.strip().upper()
 
     rows = (
@@ -490,6 +599,8 @@ def get_market_listings(
             item_id=item.id,
             item_code=item.name,
             item_name=item.name,
+            item_tier=item.tier,
+            item_icon=item.icon,
             sale_price=inv.sale_price,
             sale_qty=inv.sale_qty,
         )

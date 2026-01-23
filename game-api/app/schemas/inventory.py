@@ -162,7 +162,7 @@ class SetForSaleIn(BaseModel):
 
 
 class MarketListingOut(BaseModel):
-    """Item en vente sur le marché"""
+    """Item en vente sur le marché (HV - Hôtel des Ventes)"""
     location_id: UUID
     airport_ident: str
     company_id: UUID
@@ -170,8 +170,20 @@ class MarketListingOut(BaseModel):
     item_id: UUID
     item_code: str
     item_name: str
+    item_tier: int
+    item_icon: str | None = None
     sale_price: Decimal
     sale_qty: int
+
+
+class MarketStatsOut(BaseModel):
+    """Statistiques globales du marché"""
+    total_listings: int
+    total_airports: int
+    total_items_for_sale: int
+    total_value: Decimal
+    airports_with_listings: list[str]
+    tier_distribution: dict[str, int]  # {"T0": 10, "T1": 5, ...}
 
 
 class BuyFromMarketIn(BaseModel):

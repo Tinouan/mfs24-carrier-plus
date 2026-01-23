@@ -463,6 +463,85 @@
                 </div>
             </div>
 
+            <!-- MARKET VIEW (HV - Hôtel des Ventes) -->
+            <div class="view-container" id="view-market" style="display:none;">
+                <div class="view-content" style="max-width: 1200px;">
+                    <!-- Market Header -->
+                    <div class="market-header-card">
+                        <div class="market-header-info">
+                            <h1>💰 Marché Global</h1>
+                            <p class="market-subtitle">Hôtel des Ventes - Achetez des ressources de vendeurs du monde entier</p>
+                        </div>
+                        <div class="market-stats">
+                            <div class="market-stat">
+                                <span class="market-stat-value" id="market-total-listings">0</span>
+                                <span class="market-stat-label">Annonces</span>
+                            </div>
+                            <div class="market-stat">
+                                <span class="market-stat-value" id="market-total-airports">0</span>
+                                <span class="market-stat-label">Aéroports</span>
+                            </div>
+                            <div class="market-stat">
+                                <span class="market-stat-value" id="market-total-value">0$</span>
+                                <span class="market-stat-label">Valeur totale</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Market Filters -->
+                    <div class="market-filters">
+                        <div class="market-filter-group">
+                            <label class="filter-label">Recherche</label>
+                            <input type="text" class="form-input" id="market-search" placeholder="Nom de l'item...">
+                        </div>
+                        <div class="market-filter-group">
+                            <label class="filter-label">Aéroport</label>
+                            <input type="text" class="form-input" id="market-airport-filter" placeholder="LFPG, EGLL..." maxlength="4" style="text-transform: uppercase;">
+                        </div>
+                        <div class="market-filter-group">
+                            <label class="filter-label">Tier</label>
+                            <select class="form-select" id="market-tier-filter">
+                                <option value="">Tous</option>
+                                <option value="0">T0 - Matières premières</option>
+                                <option value="1">T1</option>
+                                <option value="2">T2</option>
+                                <option value="3">T3</option>
+                                <option value="4">T4</option>
+                                <option value="5">T5</option>
+                            </select>
+                        </div>
+                        <div class="market-filter-group">
+                            <label class="filter-label">Prix max</label>
+                            <input type="number" class="form-input" id="market-max-price" placeholder="10000">
+                        </div>
+                        <div class="market-filter-group">
+                            <button class="btn" onclick="applyMarketFilters()">FILTRER</button>
+                            <button class="btn btn-secondary" onclick="resetMarketFilters()">RESET</button>
+                        </div>
+                    </div>
+
+                    <!-- Tier Distribution -->
+                    <div class="market-tier-chips" id="market-tier-chips">
+                        <!-- Dynamically populated -->
+                    </div>
+
+                    <!-- Market Listings -->
+                    <div class="market-listings" id="market-listings">
+                        <div class="market-loading">
+                            <div class="loading-spinner"></div>
+                            <p>Chargement du marché...</p>
+                        </div>
+                    </div>
+
+                    <!-- Pagination -->
+                    <div class="market-pagination" id="market-pagination">
+                        <button class="btn btn-secondary" id="market-prev-btn" onclick="marketPrevPage()" disabled>← Précédent</button>
+                        <span class="pagination-info" id="market-pagination-info">Page 1</span>
+                        <button class="btn btn-secondary" id="market-next-btn" onclick="marketNextPage()">Suivant →</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- PROFILE VIEW -->
             <div class="view-container" id="view-profile" style="display:none;">
                 <div class="view-content">
@@ -775,6 +854,69 @@
                 <button class="btn btn-secondary" onclick="closeCreateWarehouseModal()">ANNULER</button>
                 <button class="btn" id="btn-create-warehouse" onclick="submitCreateWarehouse()">
                     CRÉER L'ENTREPÔT
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MARKET BUY MODAL -->
+    <div class="modal-overlay" id="modal-market-buy">
+        <div class="modal" style="max-width: 480px;">
+            <div class="modal-header">
+                <div class="modal-title">ACHETER</div>
+                <button class="modal-close" onclick="closeMarketBuyModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-error" id="market-buy-error"></div>
+
+                <!-- Item Info -->
+                <div class="market-buy-item">
+                    <div class="buy-item-icon" id="buy-item-icon">📦</div>
+                    <div class="buy-item-details">
+                        <div class="buy-item-name" id="buy-item-name">Item</div>
+                        <div class="buy-item-tier" id="buy-item-tier">T0</div>
+                    </div>
+                </div>
+
+                <!-- Seller Info -->
+                <div class="modal-info-box">
+                    <div class="modal-info-row">
+                        <span class="modal-info-label">Vendeur</span>
+                        <span class="modal-info-value" id="buy-seller-name">Company</span>
+                    </div>
+                    <div class="modal-info-row">
+                        <span class="modal-info-label">Aéroport</span>
+                        <span class="modal-info-value" id="buy-airport">LFPG</span>
+                    </div>
+                    <div class="modal-info-row">
+                        <span class="modal-info-label">Prix unitaire</span>
+                        <span class="modal-info-value" id="buy-unit-price">0 $</span>
+                    </div>
+                    <div class="modal-info-row">
+                        <span class="modal-info-label">Quantité disponible</span>
+                        <span class="modal-info-value" id="buy-available-qty">0</span>
+                    </div>
+                </div>
+
+                <!-- Quantity Input -->
+                <div class="form-group">
+                    <label class="form-label">Quantité à acheter</label>
+                    <div class="transfer-qty-input">
+                        <input type="number" id="buy-qty" min="1" value="1" onchange="updateBuyTotal()">
+                        <button class="qty-max-btn" onclick="setBuyMax()">MAX</button>
+                    </div>
+                </div>
+
+                <!-- Total -->
+                <div class="buy-total-box">
+                    <span class="buy-total-label">TOTAL</span>
+                    <span class="buy-total-value" id="buy-total">0 $</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeMarketBuyModal()">ANNULER</button>
+                <button class="btn" id="btn-confirm-buy" onclick="confirmMarketBuy()">
+                    ACHETER
                 </button>
             </div>
         </div>
