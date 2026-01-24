@@ -1,387 +1,346 @@
-# Workers System V0.6 - Documentation Technique
+# Workers System V2 - Documentation Technique
 
 ## Vue d'ensemble
 
-Le système Workers V0.6 unifie les workers et engineers dans un seul modèle avec:
-- Nationalité et stats basées sur le pays
-- Pool de recrutement par aéroport
-- Système de blessures et de mort
-- Consommation de nourriture
-- Salaires horaires
+Le systeme Workers V2 transforme les workers en **items individuels** avec stats uniques:
+- Chaque worker est une instance unique avec ses propres stats
+- Workers sont des items achetables (Worker-FR, Worker-CN, etc.)
+- Stats generees aleatoirement selon la nationalite (±20%)
+- Integration avec l'inventaire company
+- Visible dans la vue Inventaire globale
 
 ---
 
 ## Tables SQL
 
-### `game.workers`
+### `game.worker_instances` (V2 - ACTIF)
 
-Table principale unifiée pour workers et engineers.
+Table principale pour les workers item-based.
 
 | Colonne | Type | Description |
 |---------|------|-------------|
-| `id` | UUID | Clé primaire |
-| `first_name` | VARCHAR(50) | Prénom |
-| `last_name` | VARCHAR(50) | Nom |
+| `id` | UUID | Cle primaire |
+| `owner_company_id` | UUID | FK -> companies (proprietaire) |
+| `owner_player_id` | UUID | FK -> users (proprietaire alternatif) |
+| `item_id` | UUID | FK -> items (Worker-XX item) |
+| `airport_ident` | VARCHAR(8) | Aeroport de localisation |
 | `country_code` | CHAR(2) | Code pays (FR, DE, US...) |
-| `worker_type` | VARCHAR(20) | 'worker' ou 'engineer' |
 | `speed` | INT (1-100) | Vitesse de travail |
-| `resistance` | INT (1-100) | Résistance aux blessures |
-| `tier` | INT (1-5) | Niveau (auto-calculé via XP) |
-| `xp` | INT | Points d'expérience |
+| `resistance` | INT (1-100) | Resistance aux blessures |
+| `xp` | INT | Points d'experience |
+| `tier` | INT (1-5) | Niveau (auto-calcule via XP) |
 | `hourly_salary` | DECIMAL(10,2) | Salaire horaire |
 | `status` | VARCHAR(20) | available, working, injured, dead |
+| `factory_id` | UUID | FK -> factories (si assigne) |
+| `for_sale` | BOOLEAN | En vente sur HV |
+| `sale_price` | DECIMAL(12,2) | Prix de vente HV |
 | `injured_at` | TIMESTAMPTZ | Date de blessure |
-| `location_type` | VARCHAR(20) | 'airport' ou 'factory' |
-| `airport_ident` | VARCHAR(10) | Aéroport de rattachement |
-| `factory_id` | UUID | FK → factories (si assigné) |
-| `company_id` | UUID | FK → companies (si employé) |
+| `created_at` | TIMESTAMPTZ | Date creation |
+| `updated_at` | TIMESTAMPTZ | Date MAJ |
 
 **Contraintes:**
-- `tier BETWEEN 1 AND 5`
 - `speed BETWEEN 1 AND 100`
 - `resistance BETWEEN 1 AND 100`
 - `xp >= 0`
+- `tier BETWEEN 1 AND 5`
+- `hourly_salary > 0`
 - `status IN ('available', 'working', 'injured', 'dead')`
-- `location_type IN ('airport', 'factory')`
-- `worker_type IN ('worker', 'engineer')`
+
+### `game.items` - Worker Items (42 types)
+
+Chaque pays a un item Worker-XX correspondant.
+
+| Item Name | Categorie | Tier | Description |
+|-----------|-----------|------|-------------|
+| Worker-FR | Worker | 0 | Worker francais |
+| Worker-DE | Worker | 0 | Worker allemand |
+| Worker-US | Worker | 0 | Worker americain |
+| Worker-CN | Worker | 0 | Worker chinois |
+| ... | ... | ... | 42 pays au total |
 
 ### `game.country_worker_stats`
 
-Stats de base par nationalité.
+Stats de base par nationalite pour la generation.
 
 | Colonne | Type | Description |
 |---------|------|-------------|
 | `country_code` | CHAR(2) | PK - Code pays ISO |
 | `country_name` | VARCHAR(100) | Nom du pays |
 | `base_speed` | INT | Vitesse de base (30-70) |
-| `base_resistance` | INT | Résistance de base (30-70) |
+| `base_resistance` | INT | Resistance de base (30-70) |
 | `base_hourly_salary` | DECIMAL(10,2) | Salaire horaire de base |
 
-**42 pays configurés** incluant:
+**Exemples de stats par pays:**
 
 | Pays | Speed | Resistance | Salaire/h |
 |------|-------|------------|-----------|
-| France (FR) | 55 | 50 | 15€ |
-| Germany (DE) | 60 | 50 | 16€ |
-| USA (US) | 55 | 52 | 18€ |
-| Japan (JP) | 65 | 45 | 22€ |
-| China (CN) | 52 | 55 | 6€ |
-| India (IN) | 50 | 48 | 4€ |
-
-### `game.worker_xp_thresholds`
-
-Seuils XP pour progression de tier.
-
-| Tier | XP Requis | Nom | Couleur |
-|------|-----------|-----|---------|
-| 1 | 0 | Novice | gray |
-| 2 | 1000 | Apprenti | green |
-| 3 | 3000 | Confirmé | blue |
-| 4 | 7000 | Expert | purple |
-| 5 | 15000 | Maître | gold |
-
-### `game.airport_worker_pools`
-
-Pools de recrutement par aéroport.
-
-| Colonne | Type | Description |
-|---------|------|-------------|
-| `id` | UUID | Clé primaire |
-| `airport_ident` | VARCHAR(10) | Code ICAO |
-| `airport_type` | VARCHAR(20) | Type d'aéroport |
-| `max_workers` | INT | Capacité max workers |
-| `max_engineers` | INT | Capacité max engineers |
-| `current_workers` | INT | Workers disponibles |
-| `current_engineers` | INT | Engineers disponibles |
-| `last_reset_at` | TIMESTAMPTZ | Dernier reset |
-| `next_reset_at` | TIMESTAMPTZ | Prochain reset |
-
-**Capacités par type d'aéroport:**
-
-| Type | Workers Max | Engineers Max |
-|------|-------------|---------------|
-| large_airport | 200 | 20 |
-| medium_airport | 100 | 10 |
+| France (FR) | 55 | 50 | 15$ |
+| Germany (DE) | 60 | 50 | 16$ |
+| USA (US) | 55 | 52 | 18$ |
+| Japan (JP) | 65 | 45 | 22$ |
+| China (CN) | 52 | 55 | 6$ |
+| India (IN) | 50 | 48 | 4$ |
 
 ---
 
-## Cycle de Vie d'un Worker
+## Cycle de Vie d'un Worker V2
 
 ```
-[Pool Aéroport]
-     │
-     │ POST /workers/hire/{company_id}
-     ▼
-[Employé Company] (status: available)
-     │
-     │ POST /workers/{id}/assign
-     ▼
-[Assigné Factory] (status: working)
-     │
-     ├─── Production → +XP, risque blessure
-     │
-     │ POST /workers/{id}/unassign
-     ▼
-[Retour Company] (status: available)
-     │
-     │ DELETE /workers/{id}
-     ▼
-[Retour Pool] ou supprimé si dead
+[Achat/Creation]
+     |
+     | game.create_worker_instance()
+     v
+[Inventaire Company] (status: available, factory_id: NULL)
+     |
+     | POST /workers/v2/{id}/assign
+     v
+[Assigne Factory] (status: working, factory_id: set)
+     |
+     +--- Production -> +XP, risque blessure
+     |
+     | POST /workers/v2/{id}/unassign
+     v
+[Retour Inventaire] (status: available, factory_id: NULL)
+     |
+     +--- Visible dans vue Inventaire
+     +--- Peut etre vendu sur HV (future)
 ```
 
 ---
 
-## Génération des Workers
+## Generation des Workers
 
-### Formule de génération
+### Fonction SQL `create_worker_instance()`
 
-Quand un pool est rafraîchi, les workers sont générés avec:
+```sql
+SELECT game.create_worker_instance(
+    'FR',           -- country_code
+    'LFPG',         -- airport_ident
+    company_id,     -- owner_company_id
+    NULL,           -- owner_player_id (ou company)
+    FALSE,          -- for_sale
+    NULL            -- sale_price
+);
+```
+
+### Formule de generation
 
 ```python
-# Stats de base du pays de l'aéroport
+# Stats de base du pays
 base_speed = country_stats.base_speed
 base_resistance = country_stats.base_resistance
 base_salary = country_stats.base_hourly_salary
 
-# Variation ±20% pour workers
+# Variation ±20%
 speed = base_speed * random(0.8, 1.2)
 resistance = base_resistance * random(0.8, 1.2)
 salary = base_salary * random(0.9, 1.1)
 
-# Engineers: stats légèrement meilleures, salaire x2
-speed = base_speed * random(0.9, 1.3)
-resistance = base_resistance * random(0.9, 1.3)
-salary = base_salary * 2.0 * random(0.9, 1.1)
+# Contraintes: 1-100 pour stats
+speed = CLAMP(speed, 1, 100)
+resistance = CLAMP(resistance, 1, 100)
 ```
 
-### Exemple - LFPG (Paris CDG)
+### Exemple - Worker Francais
 
-L'aéroport LFPG est en France (iso_country=FR).
-Stats France: speed=55, resistance=50, salary=15€
+Stats France: speed=55, resistance=50, salary=15$
 
-Workers générés:
+Worker genere:
 - Speed: 44-66 (55 ± 20%)
 - Resistance: 40-60 (50 ± 20%)
-- Salaire: 13.50€-16.50€ (15€ ± 10%)
-
-Engineers générés:
-- Speed: 49-72 (55 ± 30% vers le haut)
-- Resistance: 45-65 (50 ± 30% vers le haut)
-- Salaire: 27€-33€ (15€ × 2 ± 10%)
+- Salaire: 13.50$-16.50$ (15$ ± 10%)
 
 ---
 
-## Système de Blessures
+## API Endpoints V2
 
-### Risque de blessure
+### Liste Workers (Inventaire)
 
-```python
-base_injury_chance = 0.005  # 0.5% par heure
-
-# Sans nourriture: risque x2
-if not has_food:
-    base_injury_chance *= 2
-
-# Resistance réduit le risque
-injury_chance = base_injury_chance * (100 - worker.resistance) / 100
-
-# Exemple: worker avec resistance=60, sans food
-# 0.01 * (100 - 60) / 100 = 0.004 = 0.4% par heure
-```
-
-### Récupération et mort
-
-| Durée blessure | État |
-|----------------|------|
-| 0-10 jours | Blessé (peut récupérer) |
-| >10 jours | Mort |
-
-**Conséquences de la mort:**
-- Worker supprimé de la company/factory
-- **Pénalité**: -10,000 crédits pour la company
-
-### Guérison
-
-Les workers blessés peuvent guérir naturellement (implémentation future) ou via des soins médicaux.
-
----
-
-## Système de Salaires
-
-### Paiement horaire
-
-Toutes les heures, le scheduler paie les salaires:
-
-```python
-for company in companies_with_workers:
-    total_salary = sum(worker.hourly_salary for worker in company.workers)
-    company.balance -= total_salary
-```
-
-**Important:** Les salaires sont payés même si:
-- Les workers n'ont pas de nourriture
-- Les workers sont en status "available" (non assignés)
-- Seuls les workers "working" ou "available" sont payés
-- Les workers "injured" ou "dead" ne sont pas payés
-
----
-
-## API Endpoints
-
-### Pools de Recrutement
-
-| Méthode | Endpoint | Description |
+| Methode | Endpoint | Description |
 |---------|----------|-------------|
-| GET | `/workers/pools` | Liste tous les pools |
-| GET | `/workers/pool/{airport_ident}` | Détails pool avec workers dispo |
+| GET | `/workers/v2/all` | Tous les workers de la company |
+| GET | `/workers/v2/inventory?airport=LFPG` | Workers disponibles a un aeroport |
 
-**Paramètres /pools:**
-- `airport_type`: Filtrer par type (large_airport, medium_airport)
-- `has_workers`: Seulement les pools avec workers disponibles
-- `limit`: Nombre max de résultats (1-1000)
-
-**Réponse /pool/{airport}:**
+**Reponse /v2/all:**
 ```json
-{
-    "airport_ident": "LFPG",
-    "airport_name": "Paris CDG",
-    "max_workers": 200,
-    "max_engineers": 20,
-    "available_workers": [
-        {
-            "id": "uuid",
-            "first_name": "Jean",
-            "last_name": "Martin",
-            "country_code": "FR",
-            "worker_type": "worker",
-            "tier": 1,
-            "speed": 58,
-            "resistance": 47,
-            "hourly_salary": 14.85
-        }
-    ],
-    "available_engineers": [...]
-}
+[
+    {
+        "id": "uuid",
+        "item_name": "Worker-FR",
+        "country_code": "FR",
+        "speed": 58,
+        "resistance": 47,
+        "tier": 1,
+        "hourly_salary": 14.85,
+        "status": "available",
+        "airport_ident": "LFPG",
+        "factory_id": null
+    },
+    {
+        "id": "uuid2",
+        "item_name": "Worker-DE",
+        "country_code": "DE",
+        "speed": 62,
+        "resistance": 51,
+        "tier": 1,
+        "hourly_salary": 15.20,
+        "status": "working",
+        "airport_ident": "LFPG",
+        "factory_id": "factory-uuid"
+    }
+]
 ```
 
-### Embauche
+### Details Worker
 
-| Méthode | Endpoint | Description |
+| Methode | Endpoint | Description |
 |---------|----------|-------------|
-| POST | `/workers/hire/{company_id}` | Embaucher 1 worker |
-| POST | `/workers/hire-bulk/{company_id}` | Embaucher plusieurs (max 10) |
+| GET | `/workers/v2/{id}` | Details complets d'un worker |
 
-**Body hire:**
-```json
-{"worker_id": "uuid-du-worker"}
-```
+### Assignation Factory
 
-**Body hire-bulk:**
-```json
-{"worker_ids": ["uuid1", "uuid2", "uuid3"]}
-```
-
-### Assignation aux Factories
-
-| Méthode | Endpoint | Description |
+| Methode | Endpoint | Description |
 |---------|----------|-------------|
-| POST | `/workers/{id}/assign` | Assigner à une factory |
-| POST | `/workers/{id}/unassign` | Retirer de la factory |
+| POST | `/workers/v2/{id}/assign` | Assigner a une factory |
+| POST | `/workers/v2/{id}/unassign` | Retirer de la factory |
 
 **Body assign:**
 ```json
 {"factory_id": "uuid-de-la-factory"}
 ```
 
-### Licenciement
+**Validations assign:**
+- Worker doit appartenir a la company
+- Worker doit etre `status: available`
+- Worker doit etre au meme aeroport que la factory
+- Factory ne doit pas etre pleine (`max_workers`)
 
-| Méthode | Endpoint | Description |
+### Workers d'une Factory
+
+| Methode | Endpoint | Description |
 |---------|----------|-------------|
-| DELETE | `/workers/{id}` | Licencier (retour au pool) |
+| GET | `/workers/v2/factory/{factory_id}` | Workers assignes |
 
-### Consultation
-
-| Méthode | Endpoint | Description |
-|---------|----------|-------------|
-| GET | `/workers/{id}` | Détails d'un worker |
-| GET | `/workers/company/{id}` | Workers d'une company |
-| GET | `/workers/factory/{id}` | Workers d'une factory |
-| GET | `/workers/countries` | Stats par pays |
-| GET | `/workers/country/{code}` | Stats d'un pays |
-
-### Admin (DEV)
-
-| Méthode | Endpoint | Description |
-|---------|----------|-------------|
-| POST | `/workers/admin/generate-pool/{airport}` | Générer workers pour un pool |
+**Reponse:**
+```json
+{
+    "factory_id": "uuid",
+    "factory_name": "Ma Factory",
+    "max_workers": 10,
+    "current_workers": 3,
+    "workers": [
+        {
+            "id": "uuid",
+            "item_name": "Worker-FR",
+            "country_code": "FR",
+            "speed": 58,
+            "resistance": 47,
+            "tier": 1,
+            "hourly_salary": 14.85,
+            "status": "working",
+            "airport_ident": "LFPG",
+            "factory_id": "factory-uuid"
+        }
+    ]
+}
+```
 
 ---
 
-## Scheduler Jobs
+## Integration Frontend
+
+### Vue Inventaire
+
+Les workers V2 apparaissent dans la vue Inventaire globale avec:
+- Drapeau du pays (emoji)
+- Status icon: ✅ available, 🔧 working, 🤕 injured
+- Stats affichees: ⚡speed 🛡️resistance
+- Filtres: "Workers" et "En Travail"
+
+### Factory Management Modal
+
+Le modal de gestion factory affiche:
+- Workers actuellement assignes
+- Bouton pour ouvrir le modal d'assignation
+- Liste des workers disponibles a l'aeroport
+
+---
+
+## Differences V1 (Legacy) vs V2
+
+| Aspect | V1 (game.workers) | V2 (worker_instances) |
+|--------|-------------------|------------------------|
+| Modele | Pool + embauche | Item individuel |
+| Identite | first_name, last_name | item_name (Worker-XX) |
+| Stockage | company_id | owner_company_id + airport |
+| Achat | Embauche depuis pool | Achat item ou creation |
+| Inventaire | Separe | Integre vue globale |
+| HV (Marche) | Non | Oui (for_sale) |
+
+---
+
+## Exemples de Flux V2
+
+### Creer des workers de test
+
+```sql
+-- Creer 5 workers FR a LFPG pour une company
+DO $$
+DECLARE
+    v_company_id UUID := 'votre-company-id';
+BEGIN
+    FOR i IN 1..5 LOOP
+        PERFORM game.create_worker_instance(
+            'FR', 'LFPG', v_company_id, NULL, FALSE, NULL
+        );
+    END LOOP;
+END $$;
+```
+
+### Assigner un worker a une factory
+
+```bash
+# 1. Lister mes workers disponibles a LFPG
+GET /workers/v2/inventory?airport=LFPG
+
+# 2. Assigner a ma factory
+POST /workers/v2/{worker-id}/assign
+{"factory_id": "my-factory-id"}
+
+# 3. Verifier les workers de la factory
+GET /workers/v2/factory/my-factory-id
+```
+
+### Retirer un worker de la factory
+
+```bash
+# Le worker retourne a l'inventaire (status: available)
+POST /workers/v2/{worker-id}/unassign
+
+# Visible dans l'inventaire global
+GET /workers/v2/all
+```
+
+---
+
+## Tables Legacy (V0.6)
+
+> **Note:** Ces tables sont conservees pour compatibilite mais ne sont plus utilisees activement.
+
+### `game.workers` (LEGACY)
+
+Ancienne table unifiee workers/engineers avec pool system.
+
+### `game.airport_worker_pools` (LEGACY)
+
+Anciens pools de recrutement par aeroport.
+
+---
+
+## Scheduler Jobs (Future)
 
 | Job | Intervalle | Description |
 |-----|------------|-------------|
-| `food_and_injuries` | 1 heure | Consomme food, check blessures |
-| `salary_payments` | 1 heure | Paie les salaires |
-| `injury_processing` | 1 heure | Traite workers blessés (mort après 10j) |
-| `pool_reset` | 6 heures | Régénère les pools d'aéroports |
-| `dead_workers_cleanup` | 24 heures | Supprime workers morts >30j |
-
----
-
-## Différences Worker vs Engineer
-
-| Aspect | Worker | Engineer |
-|--------|--------|----------|
-| Role | Production directe | Bonus production |
-| Capacité factory | max_workers | max_engineers |
-| Ratio | ~10:1 | ~1:10 |
-| Salaire | 1x base | 2x base |
-| XP gain | Normal | Double |
-| Bonus | Via speed | +10% output par engineer |
-
----
-
-## Exemples de Flux
-
-### Recruter et assigner des workers
-
-```bash
-# 1. Voir les workers disponibles à Paris CDG
-GET /workers/pool/LFPG
-
-# 2. Embaucher un worker
-POST /workers/hire/my-company-id
-{"worker_id": "worker-uuid"}
-
-# 3. Voir mes workers
-GET /workers/company/my-company-id
-
-# 4. Assigner à ma factory
-POST /workers/{worker-id}/assign
-{"factory_id": "my-factory-id"}
-
-# 5. Vérifier les workers de la factory
-GET /workers/factory/my-factory-id
-```
-
-### Gérer la nourriture
-
-```bash
-# 1. Vérifier le status food de la factory
-GET /factories/{id}/food/status
-
-# 2. Déposer de la nourriture
-POST /factories/{id}/food
-{"quantity": 100}
-
-# Note: 1 worker consomme 1 food/heure
-# 10 workers = 240 food/jour
-```
-
-### Licencier un worker
-
-```bash
-# Le worker retourne au pool de son aéroport d'origine
-DELETE /workers/{worker-id}
-```
+| `salary_payments` | 1 heure | Paie les salaires workers V2 |
+| `injury_processing` | 1 heure | Traite blessures (mort apres 10j) |
+| `xp_progression` | Production | +XP selon travail effectue |

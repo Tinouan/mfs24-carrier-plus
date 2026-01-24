@@ -1306,6 +1306,11 @@ function createFactoryPopup(factory, airport) {
     const emoji = getProductEmoji(factory.product, factory.type);
     const tierLabel = factory.tier === 0 ? 'NPC' : `T${factory.tier}`;
 
+    // Add manage button for T1+ factories
+    const manageBtn = factory.tier >= 1
+        ? `<button class="btn btn-small" style="margin-top: 0.5rem; width: 100%;" onclick="openFactoryManageModal('${factory.id}')">⚙️ Gérer</button>`
+        : '';
+
     return `
         <div class="popup-factory">
             <div class="popup-header">${emoji} ${factory.name || 'Usine'}</div>
@@ -1325,6 +1330,7 @@ function createFactoryPopup(factory, airport) {
                 <span>Aéroport</span>
                 <span class="popup-value">${airport.ident}</span>
             </div>
+            ${manageBtn}
         </div>
     `;
 }
@@ -1914,7 +1920,7 @@ async function loadCompanyFactories() {
         }
 
         container.innerHTML = factories.map(factory => `
-            <div class="factory-card" onclick="showFactoryDetails('${factory.id}')">
+            <div class="factory-card">
                 <div class="factory-card-icon">${getFactoryEmoji(factory.factory_type)}</div>
                 <div class="factory-card-info">
                     <div class="factory-card-name">${factory.name}</div>
@@ -1924,6 +1930,9 @@ async function loadCompanyFactories() {
                     </div>
                 </div>
                 <div class="factory-card-status ${factory.status}">${factory.status}</div>
+                <div class="factory-card-actions">
+                    <button class="btn-manage" onclick="event.stopPropagation(); openFactoryManageModal('${factory.id}')">⚙️ Gérer</button>
+                </div>
             </div>
         `).join('');
 
@@ -2718,16 +2727,23 @@ async function refreshInventory() {
     }
 
     try {
-        // Load inventory and my listings in parallel
-        const [invResponse, listingsResponse] = await Promise.all([
+        // Load inventory, my listings, and workers V2 in parallel
+        const [invResponse, listingsResponse, workersResponse] = await Promise.all([
             authFetch(`${API_BASE}/inventory/overview`),
-            authFetch(`${API_BASE}/inventory/my-listings`)
+            authFetch(`${API_BASE}/inventory/my-listings`),
+            authFetch(`${API_BASE}/workers/v2/all`)
         ]);
 
         // Handle my-listings response
         let myListings = [];
         if (listingsResponse.ok) {
             myListings = await listingsResponse.json();
+        }
+
+        // Handle workers V2 response
+        let workersV2 = [];
+        if (workersResponse.ok) {
+            workersV2 = await workersResponse.json();
         }
 
         const response = invResponse;
@@ -2779,9 +2795,41 @@ async function refreshInventory() {
             sale_price: parseFloat(listing.sale_price)
         }));
 
-        inventoryData.flatItems = [...inventoryItems, ...listingItems];
+        // Convert workers V2 to flat items format
+        const workerItems = workersV2.map(worker => {
+            // Determine container based on status
+            let containerName, containerType;
+            if (worker.factory_id) {
+                containerName = `Usine - ${worker.airport_ident}`;
+                containerType = 'factory';
+            } else {
+                containerName = `Workers - ${worker.airport_ident}`;
+                containerType = 'worker_inventory';
+            }
 
-        updateInventorySubtitle(data, myListings);
+            return {
+                item_id: worker.id, // Worker instance ID
+                item_name: worker.item_name || `Worker-${worker.country_code}`,
+                tier: worker.tier,
+                qty: 1, // Each worker is unique
+                weight_kg: 0,
+                value: parseFloat(worker.hourly_salary) * 24, // Daily salary as "value"
+                airport_ident: worker.airport_ident,
+                airport_name: worker.airport_ident,
+                container_id: worker.factory_id || worker.id,
+                container_name: containerName,
+                container_type: containerType,
+                container_owner: 'Company',
+                for_sale: false,
+                is_worker: true, // Flag for special rendering
+                worker_data: worker // Keep full worker data
+            };
+        });
+
+        inventoryData.flatItems = [...inventoryItems, ...listingItems, ...workerItems];
+        inventoryData.workersV2 = workersV2; // Keep raw data
+
+        updateInventorySubtitle(data, myListings, workersV2);
 
         // Initialize or update DataTable
         if (!inventoryDataTable) {
@@ -2802,13 +2850,17 @@ async function refreshInventory() {
 }
 
 // Update inventory subtitle stats
-function updateInventorySubtitle(data, listings = []) {
+function updateInventorySubtitle(data, listings = [], workers = []) {
     const totalItems = data.total_items || 0;
     const totalValue = parseFloat(data.total_value) || 0;
     const airportCount = data.locations?.length || 0;
     const listingsCount = listings.length;
+    const workersCount = workers.length;
 
     let subtitle = `${totalItems} items | ${formatMoney(totalValue)} | ${airportCount} aéroport${airportCount > 1 ? 's' : ''}`;
+    if (workersCount > 0) {
+        subtitle += ` | ${workersCount} worker${workersCount > 1 ? 's' : ''}`;
+    }
     if (listingsCount > 0) {
         subtitle += ` | ${listingsCount} en vente`;
     }
@@ -2884,6 +2936,14 @@ function createInventoryDataTable(data) {
                 label: 'Item',
                 sortable: true,
                 render: (value, row) => {
+                    // Special rendering for workers
+                    if (row.is_worker && row.worker_data) {
+                        const flag = getCountryFlag(row.worker_data.country_code);
+                        const statusIcon = row.worker_data.status === 'working' ? '🔧' :
+                                          row.worker_data.status === 'injured' ? '🤕' :
+                                          row.worker_data.status === 'available' ? '✅' : '⚫';
+                        return `<span class="dt-item-name"><span class="dt-item-icon">${flag}</span> ${value} <span class="worker-status">${statusIcon}</span></span>`;
+                    }
                     const icon = getItemEmoji(value);
                     return `<span class="dt-item-name"><span class="dt-item-icon">${icon}</span> ${value}</span>`;
                 }
@@ -2929,21 +2989,28 @@ function createInventoryDataTable(data) {
                 label: 'Valeur',
                 sortable: true,
                 width: '90px',
-                render: (value) => `<span class="dt-price">${formatMoney(value)}</span>`
+                render: (value, row) => {
+                    // Special rendering for workers - show stats instead of value
+                    if (row.is_worker && row.worker_data) {
+                        const w = row.worker_data;
+                        return `<span class="worker-stats-mini" title="Speed: ${w.speed}, Resistance: ${w.resistance}">⚡${w.speed} 🛡️${w.resistance}</span>`;
+                    }
+                    return `<span class="dt-price">${formatMoney(value)}</span>`;
+                }
             }
         ],
         actions: [
             {
                 label: 'Transférer',
                 icon: '↗️',
-                show: (row) => !row.for_sale,
+                show: (row) => !row.for_sale && !row.is_worker,
                 onClick: (row) => openTransferModalForItem(row.container_id, row.item_id, row.qty, row.item_name, row.airport_ident)
             },
             {
                 label: 'Vendre',
                 icon: '💰',
                 className: 'btn-primary',
-                show: (row) => !row.for_sale,
+                show: (row) => !row.for_sale && !row.is_worker,
                 onClick: (row) => openSellModal(row)
             },
             {
@@ -2980,6 +3047,8 @@ function createInventoryDataTable(data) {
                         { value: 'company_warehouse', label: '🏢 Company' },
                         { value: 'aircraft', label: '✈️ Avion' },
                         { value: 'factory_storage', label: '🏭 Usine' },
+                        { value: 'worker_inventory', label: '👷 Workers' },
+                        { value: 'factory', label: '🔧 En Travail' },
                         { value: 'for_sale', label: '🏷️ En Vente' }
                     ]
                 }
@@ -3307,7 +3376,9 @@ function getContainerIcon(type) {
         'company_warehouse': '🏢',
         'factory_storage': '🏭',
         'aircraft': '✈️',
-        'for_sale': '🏷️'
+        'for_sale': '🏷️',
+        'worker_inventory': '👷',
+        'factory': '🔧'
     };
     return icons[type] || '📦';
 }
@@ -4689,4 +4760,1355 @@ function formatMoney(amount) {
         return `${(num / 1000).toFixed(1)}K$`;
     }
     return `${num.toFixed(0)}$`;
+}
+
+// ========================================
+// FACTORY MANAGEMENT MODAL (V0.7.2)
+// ========================================
+
+// State for factory management (V2)
+const factoryManageState = {
+    currentFactoryId: null,
+    factoryData: null,
+    recipeData: null,        // Selected/detected recipe
+    workersData: [],
+    engineersData: [],       // Engineers assigned to factory
+    inventoryData: [],       // company_inventory items at airport
+    allRecipes: [],          // All recipes loaded from API
+    selectedIngredients: [], // [{slot: 0, item_id, item_name, qty}]
+    detectedRecipes: [],     // Recipes matching selected ingredients
+    itemSelectMode: null,    // Legacy - for food modal
+    selectedItems: []        // Legacy - for food modal
+};
+
+// Open factory management modal
+async function openFactoryManageModal(factoryId) {
+    console.log('[FACTORY] Opening manage modal for:', factoryId);
+
+    if (!state.token || state.token === 'demo-token') {
+        showToast('Connectez-vous pour gérer vos usines', 'warning');
+        return;
+    }
+
+    factoryManageState.currentFactoryId = factoryId;
+
+    // Show modal with loading state
+    document.getElementById('factory-manage-loading').style.display = 'flex';
+    document.getElementById('factory-manage-content').style.display = 'none';
+    document.getElementById('modal-factory-manage').classList.add('active');
+
+    // Load factory details
+    await loadFactoryDetails(factoryId);
+}
+
+// Close factory management modal
+function closeFactoryManageModal() {
+    document.getElementById('modal-factory-manage').classList.remove('active');
+    factoryManageState.currentFactoryId = null;
+    factoryManageState.factoryData = null;
+}
+
+// Load factory details from API
+async function loadFactoryDetails(factoryId) {
+    try {
+        // Fetch factory details
+        const factoryResponse = await authFetch(`${API_BASE}/factories/${factoryId}`);
+        if (!factoryResponse.ok) {
+            throw new Error('Erreur lors du chargement de l\'usine');
+        }
+        const factory = await factoryResponse.json();
+        factoryManageState.factoryData = factory;
+
+        console.log('[FACTORY] Factory data:', factory);
+
+        // Update modal header
+        document.getElementById('factory-manage-icon').textContent = getFactoryEmoji(factory.factory_type);
+        document.getElementById('factory-manage-name').textContent = factory.name || 'Usine';
+        document.getElementById('factory-manage-tier').textContent = `T${factory.tier}`;
+        document.getElementById('factory-manage-tier').className = `badge tier-t${factory.tier}`;
+
+        // Update info bar
+        document.getElementById('factory-manage-airport').textContent = `📍 ${factory.airport_ident}`;
+        const statusEl = document.getElementById('factory-manage-status');
+        statusEl.textContent = factory.status || 'idle';
+        statusEl.className = `factory-manage-status ${factory.status || 'idle'}`;
+
+        // V2: Load company inventory + all recipes in parallel
+        await Promise.all([
+            loadCompanyInventoryForFactory(factory.airport_ident),
+            loadAllRecipes(),
+            loadFactoryWorkers(factoryId)
+        ]);
+
+        // V2: Render ingredient slots based on tier
+        renderIngredientSlots(factory.tier);
+
+        // Calculate and display efficiency
+        updateEfficiencyDisplay();
+
+        // Update production status
+        updateProductionDisplay(factory);
+
+        // Update food display
+        updateFoodDisplay(factory);
+
+        // Hide loading, show content
+        document.getElementById('factory-manage-loading').style.display = 'none';
+        document.getElementById('factory-manage-content').style.display = 'block';
+
+    } catch (error) {
+        console.error('[FACTORY] Error loading factory details:', error);
+        showToast(error.message || 'Erreur de chargement', 'error');
+        closeFactoryManageModal();
+    }
+}
+
+// Load factory recipe details
+async function loadFactoryRecipe(recipeId) {
+    try {
+        const response = await authFetch(`${API_BASE}/recipes/${recipeId}`);
+        if (!response.ok) {
+            throw new Error('Erreur lors du chargement de la recette');
+        }
+        const recipe = await response.json();
+        factoryManageState.recipeData = recipe;
+
+        console.log('[FACTORY] Recipe data:', recipe);
+
+        // Update recipe display
+        document.getElementById('factory-recipe-name').textContent = recipe.name || recipe.output_item_name;
+        document.getElementById('factory-recipe-tier').textContent = `T${recipe.tier}`;
+        document.getElementById('factory-recipe-tier').style.display = 'inline-block';
+
+        // Build ingredients list
+        renderIngredientsDisplay(recipe);
+
+    } catch (error) {
+        console.error('[FACTORY] Error loading recipe:', error);
+        factoryManageState.recipeData = null;
+    }
+}
+
+// Render ingredients list with stock status
+function renderIngredientsDisplay(recipe) {
+    const container = document.getElementById('ingredients-list');
+    const factory = factoryManageState.factoryData;
+
+    if (!recipe.inputs || recipe.inputs.length === 0) {
+        container.innerHTML = '<p class="workers-empty">Aucun ingrédient requis</p>';
+        return;
+    }
+
+    // Get factory storage from factory data
+    const storage = factory.storage || {};
+
+    container.innerHTML = recipe.inputs.map(input => {
+        const emoji = getItemEmoji(input.item_name);
+        const inStock = storage[input.item_code] || 0;
+        const required = input.qty;
+        let statusClass = 'ok';
+        let statusText = `${inStock}/${required}`;
+
+        if (inStock === 0) {
+            statusClass = 'missing';
+        } else if (inStock < required) {
+            statusClass = 'partial';
+        }
+
+        return `
+            <div class="ingredient-row">
+                <span class="ingredient-name">
+                    <span class="ingredient-icon">${emoji}</span>
+                    ${input.item_name}
+                </span>
+                <span class="ingredient-status ${statusClass}">${statusText}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+// Load factory workers (V2)
+async function loadFactoryWorkers(factoryId) {
+    try {
+        // V2 endpoint
+        const response = await authFetch(`${API_BASE}/workers/v2/factory/${factoryId}`);
+        if (!response.ok) {
+            throw new Error('Erreur lors du chargement des workers');
+        }
+        const data = await response.json();
+
+        // V2 API returns { factory_id, factory_name, max_workers, current_workers, workers: [] }
+        const workers = data.workers || [];
+        factoryManageState.workersData = workers;
+        factoryManageState.engineersData = []; // V2 n'a pas d'engineers séparés
+
+        const factory = factoryManageState.factoryData;
+        const tier = factory?.tier || 1;
+        const maxWorkers = MAX_WORKERS_BY_TIER[tier] || data.max_workers || 10;
+
+        // Update workers count
+        document.getElementById('workers-current').textContent = workers.length;
+        document.getElementById('workers-max').textContent = maxWorkers;
+
+        // Render workers list
+        const container = document.getElementById('workers-list');
+        if (workers.length === 0) {
+            container.innerHTML = '<p class="workers-empty">Aucun worker assigné</p>';
+        } else {
+            container.innerHTML = workers.map(worker => `
+                <div class="worker-card" data-worker-id="${worker.id}">
+                    <span class="worker-avatar">👷</span>
+                    <div class="worker-info">
+                        <div class="worker-name">${worker.item_name || 'Worker-' + worker.country_code}</div>
+                        <div class="worker-meta">
+                            <span class="worker-flag">${getCountryFlag(worker.country_code)}</span>
+                            <span>T${worker.tier}</span>
+                            <span>SPD: ${worker.speed}</span>
+                            <span>RES: ${worker.resistance}</span>
+                        </div>
+                    </div>
+                    <button class="btn btn-small btn-danger" onclick="unassignWorkerV2('${worker.id}')" title="Retirer">✕</button>
+                </div>
+            `).join('');
+        }
+
+        // Update efficiency display
+        updateEfficiencyDisplay();
+
+    } catch (error) {
+        console.error('[FACTORY] Error loading workers:', error);
+        factoryManageState.workersData = [];
+        factoryManageState.engineersData = [];
+    }
+}
+
+// Get country flag emoji from country code
+function getCountryFlag(countryCode) {
+    if (!countryCode || countryCode.length !== 2) return '🏳️';
+    const codePoints = countryCode
+        .toUpperCase()
+        .split('')
+        .map(char => 127397 + char.charCodeAt(0));
+    return String.fromCodePoint(...codePoints);
+}
+
+// Unassign worker from factory (V2)
+async function unassignWorkerV2(workerId) {
+    const factoryId = factoryManageState.currentFactoryId;
+    if (!factoryId) return;
+
+    try {
+        const response = await authFetch(`${API_BASE}/workers/v2/${workerId}/unassign`, {
+            method: 'POST'
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Erreur');
+        }
+
+        showToast('Worker retiré de l\'usine', 'success');
+
+        // Reload workers list
+        await loadFactoryWorkers(factoryId);
+
+    } catch (error) {
+        console.error('[FACTORY] Error unassigning worker:', error);
+        showToast(error.message, 'error');
+    }
+}
+
+// Calculate and display efficiency
+function updateEfficiencyDisplay() {
+    const factory = factoryManageState.factoryData;
+    const workers = factoryManageState.workersData || [];
+    const engineers = factoryManageState.engineersData || [];
+
+    if (!factory) return;
+
+    const tier = factory.tier || 1;
+    const maxWorkers = MAX_WORKERS_BY_TIER[tier] || factory.max_workers || 10;
+    const maxEngineers = MAX_ENGINEERS_BY_TIER[tier] || 0;
+    const currentWorkers = workers.length;
+    const currentEngineers = engineers.length;
+    const foodStock = factory.food_stock || 0;
+
+    // Worker efficiency: (currentWorkers / maxWorkers) * 100
+    const workerEfficiency = maxWorkers > 0 ? (currentWorkers / maxWorkers) * 100 : 0;
+
+    // Food efficiency: binary (OK if food > 0, else 0%)
+    const foodOk = foodStock > 0;
+
+    // Total efficiency: workerEfficiency * food factor
+    const totalEfficiency = foodOk ? workerEfficiency : 0;
+
+    // Update gauge
+    const gaugeFill = document.getElementById('efficiency-gauge-fill');
+    const gaugeValue = document.getElementById('efficiency-value');
+
+    gaugeFill.style.width = `${totalEfficiency}%`;
+
+    // Color based on efficiency
+    let colorClass = 'green';
+    if (totalEfficiency < 30) colorClass = 'red';
+    else if (totalEfficiency < 70) colorClass = 'yellow';
+
+    gaugeFill.className = `efficiency-gauge-fill ${colorClass}`;
+    gaugeValue.className = `efficiency-value ${colorClass}`;
+    gaugeValue.textContent = `${Math.round(totalEfficiency)}%`;
+
+    // Update breakdown
+    document.getElementById('efficiency-workers').textContent = `Workers: ${Math.round(workerEfficiency)}% (${currentWorkers}/${maxWorkers})`;
+    document.getElementById('efficiency-engineers').textContent = `Ingénieurs: ${currentEngineers}/${maxEngineers}`;
+    document.getElementById('efficiency-food').textContent = `Food: ${foodOk ? 'OK' : 'VIDE'}`;
+    document.getElementById('efficiency-food').style.color = foodOk ? 'var(--success)' : 'var(--danger)';
+
+    // Update upgrade button visibility (hide for T10)
+    const upgradeBtn = document.getElementById('btn-factory-upgrade');
+    if (upgradeBtn) {
+        upgradeBtn.style.display = tier >= 10 ? 'none' : 'inline-block';
+    }
+}
+
+// Update production display
+function updateProductionDisplay(factory) {
+    const statusEl = document.getElementById('production-status');
+    const progressEl = document.getElementById('production-progress');
+    const btnStart = document.getElementById('btn-start-production');
+    const btnStop = document.getElementById('btn-stop-production');
+
+    if (factory.status === 'producing') {
+        // Show progress
+        statusEl.style.display = 'none';
+        progressEl.style.display = 'block';
+
+        // Calculate progress
+        const progress = factory.production_progress || 0;
+        document.getElementById('production-progress-fill').style.width = `${progress}%`;
+        document.getElementById('production-progress-pct').textContent = `${Math.round(progress)}%`;
+
+        // Calculate time left
+        if (factory.production_ends_at) {
+            const endsAt = new Date(factory.production_ends_at);
+            const now = new Date();
+            const secondsLeft = Math.max(0, (endsAt - now) / 1000);
+            document.getElementById('production-time-left').textContent = formatTimeRemaining(secondsLeft);
+        } else {
+            document.getElementById('production-time-left').textContent = '--';
+        }
+
+        btnStart.disabled = true;
+        btnStop.disabled = false;
+    } else {
+        // Show status message
+        statusEl.style.display = 'block';
+        progressEl.style.display = 'none';
+
+        if (factory.status === 'paused') {
+            document.getElementById('production-message').textContent = 'Production en pause';
+            document.getElementById('production-message').className = 'production-message warning';
+            btnStart.disabled = false;
+        } else {
+            // V2: updateStartButton handles the message based on recipe detection
+            btnStop.disabled = true;
+        }
+    }
+}
+
+// Check if factory can produce
+function checkCanProduce() {
+    const factory = factoryManageState.factoryData;
+    const recipe = factoryManageState.recipeData;
+    const workers = factoryManageState.workersData;
+
+    if (!recipe) {
+        return { ok: false, reason: 'Aucune recette définie' };
+    }
+
+    if (workers.length === 0) {
+        return { ok: false, reason: 'Aucun worker assigné' };
+    }
+
+    if ((factory.food_stock || 0) <= 0) {
+        return { ok: false, reason: 'Stock de food vide' };
+    }
+
+    // Check ingredients
+    const storage = factory.storage || {};
+    for (const input of recipe.inputs || []) {
+        const inStock = storage[input.item_code] || 0;
+        if (inStock < input.qty) {
+            return { ok: false, reason: `Ingrédient manquant: ${input.item_name}` };
+        }
+    }
+
+    return { ok: true };
+}
+
+// Update food display
+function updateFoodDisplay(factory) {
+    const foodStock = factory.food_stock || 0;
+    const foodCapacity = factory.food_capacity || 100;
+    const percentage = (foodStock / foodCapacity) * 100;
+
+    document.getElementById('food-stock').textContent = foodStock;
+    document.getElementById('food-capacity').textContent = foodCapacity;
+
+    // Calculate hours of food
+    const consumptionPerHour = factory.food_consumption_rate || 1;
+    const hoursLeft = consumptionPerHour > 0 ? Math.floor(foodStock / consumptionPerHour) : 0;
+    document.getElementById('food-hours').textContent = `(${hoursLeft}h)`;
+
+    // Update gauge
+    const gaugeFill = document.getElementById('food-gauge-fill');
+    gaugeFill.style.width = `${Math.min(100, percentage)}%`;
+    gaugeFill.className = `food-gauge-fill ${percentage < 20 ? 'low' : ''}`;
+}
+
+// Format time remaining
+function formatTimeRemaining(seconds) {
+    if (seconds < 60) return `${Math.round(seconds)}s`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
+    return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
+}
+
+// ========================================
+// PRODUCTION CONTROLS
+// ========================================
+
+async function startProduction() {
+    const factoryId = factoryManageState.currentFactoryId;
+    if (!factoryId) return;
+
+    const recipe = factoryManageState.recipeData;
+    const workers = factoryManageState.workersData;
+    const factory = factoryManageState.factoryData;
+
+    // V2: Validate locally before API call
+    if (!recipe || !recipe.id) {
+        showToast('Aucune recette détectée - sélectionnez des ingrédients', 'warning');
+        return;
+    }
+
+    if (workers.length === 0) {
+        showToast('Aucun worker assigné', 'warning');
+        return;
+    }
+
+    if ((factory?.food_stock || 0) <= 0) {
+        showToast('Stock de food vide', 'warning');
+        return;
+    }
+
+    const btn = document.getElementById('btn-start-production');
+    btn.disabled = true;
+    btn.textContent = 'Démarrage...';
+
+    try {
+        // V2: Only send recipe_id - backend handles ingredient consumption
+        const response = await authFetch(`${API_BASE}/factories/${factoryId}/production`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                recipe_id: recipe.id
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Erreur au démarrage');
+        }
+
+        showToast('Production démarrée!', 'success');
+        await loadFactoryDetails(factoryId);
+
+    } catch (error) {
+        console.error('[FACTORY] Start error:', error);
+        showToast(error.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'START';
+    }
+}
+
+async function stopProduction() {
+    const factoryId = factoryManageState.currentFactoryId;
+    if (!factoryId) return;
+
+    const btn = document.getElementById('btn-stop-production');
+    btn.disabled = true;
+    btn.textContent = 'Arrêt...';
+
+    try {
+        const response = await authFetch(`${API_BASE}/factories/${factoryId}/production/stop`, {
+            method: 'POST'
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Erreur à l\'arrêt');
+        }
+
+        showToast('Production arrêtée', 'success');
+        await loadFactoryDetails(factoryId);
+
+    } catch (error) {
+        console.error('[FACTORY] Stop error:', error);
+        showToast(error.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'STOP';
+    }
+}
+
+// ========================================
+// ITEM SELECT SUB-MODAL
+// ========================================
+
+async function openItemSelectModal(mode) {
+    const factory = factoryManageState.factoryData;
+    if (!factory) return;
+
+    factoryManageState.itemSelectMode = mode;
+    factoryManageState.selectedItems = [];
+
+    // Update title
+    const title = mode === 'food' ? 'Charger Food' : 'Charger Ingrédients';
+    document.getElementById('item-select-title').textContent = title;
+
+    // Update airport
+    document.getElementById('item-select-airport').textContent = `📍 ${factory.airport_ident}`;
+
+    // Reset filters
+    document.getElementById('item-select-search').value = '';
+    setItemSelectFilter('all');
+
+    // Show modal and load inventory
+    document.getElementById('item-select-list').innerHTML = '<div class="loading-small">Chargement...</div>';
+    document.getElementById('modal-item-select').classList.add('active');
+
+    await loadItemSelectInventory();
+}
+
+function closeItemSelectModal() {
+    document.getElementById('modal-item-select').classList.remove('active');
+    factoryManageState.itemSelectMode = null;
+    factoryManageState.selectedItems = [];
+}
+
+// Load inventory items for selection
+async function loadItemSelectInventory() {
+    const factory = factoryManageState.factoryData;
+    if (!factory) return;
+
+    try {
+        // Fetch company inventory at this airport
+        const response = await authFetch(`${API_BASE}/inventory/overview`);
+        if (!response.ok) {
+            throw new Error('Erreur lors du chargement de l\'inventaire');
+        }
+        const data = await response.json();
+
+        // Find containers at this airport
+        const airportData = data.locations?.find(l => l.airport_ident === factory.airport_ident);
+        if (!airportData) {
+            document.getElementById('item-select-list').innerHTML = '<div class="item-select-empty">Aucun stock à cet aéroport</div>';
+            return;
+        }
+
+        // Collect all items from warehouses (not factory storage)
+        const items = [];
+        for (const container of airportData.containers) {
+            if (container.type === 'company_warehouse' || container.type === 'player_warehouse') {
+                for (const item of container.items || []) {
+                    items.push({
+                        ...item,
+                        container_id: container.id,
+                        container_name: container.name
+                    });
+                }
+            }
+        }
+
+        factoryManageState.inventoryData = items;
+        renderItemSelectList();
+
+    } catch (error) {
+        console.error('[FACTORY] Error loading inventory:', error);
+        document.getElementById('item-select-list').innerHTML = '<div class="item-select-empty">Erreur de chargement</div>';
+    }
+}
+
+// Set filter for item select
+function setItemSelectFilter(filter) {
+    // Update chip states
+    document.querySelectorAll('.item-select-chips .filter-chip').forEach(chip => {
+        chip.classList.toggle('active', chip.dataset.filter === filter);
+    });
+
+    factoryManageState.itemSelectFilter = filter;
+    renderItemSelectList();
+}
+
+// Filter item select list based on search
+function filterItemSelectList() {
+    renderItemSelectList();
+}
+
+// Render item select list
+function renderItemSelectList() {
+    const container = document.getElementById('item-select-list');
+    const mode = factoryManageState.itemSelectMode;
+    const filter = factoryManageState.itemSelectFilter || 'all';
+    const searchValue = document.getElementById('item-select-search').value.toLowerCase();
+    const recipe = factoryManageState.recipeData;
+
+    let items = [...factoryManageState.inventoryData];
+
+    // Apply filter
+    if (mode === 'food' || filter === 'food') {
+        // Filter for food items (items with is_food flag or name contains food-related terms)
+        items = items.filter(item =>
+            item.is_food ||
+            item.item_name.toLowerCase().includes('food') ||
+            item.item_name.toLowerCase().includes('meal') ||
+            item.item_name.toLowerCase().includes('bread') ||
+            item.item_name.toLowerCase().includes('sandwich')
+        );
+    } else if (filter === 'required' && recipe) {
+        // Filter for required ingredients
+        const requiredCodes = (recipe.inputs || []).map(i => i.item_code);
+        items = items.filter(item => requiredCodes.includes(item.item_code));
+    }
+
+    // Apply search
+    if (searchValue) {
+        items = items.filter(item =>
+            item.item_name.toLowerCase().includes(searchValue) ||
+            item.item_code?.toLowerCase().includes(searchValue)
+        );
+    }
+
+    if (items.length === 0) {
+        container.innerHTML = '<div class="item-select-empty">Aucun item correspondant</div>';
+        return;
+    }
+
+    container.innerHTML = items.map((item) => {
+        const emoji = getItemEmoji(item.item_name);
+        const isSelected = factoryManageState.selectedItems.some(s => s.item_id === item.item_id);
+        const selectedItem = factoryManageState.selectedItems.find(s => s.item_id === item.item_id);
+        const qtyValue = selectedItem ? selectedItem.qty : item.qty;
+
+        return `
+            <div class="item-select-row">
+                <input type="checkbox" class="item-select-checkbox"
+                    data-item-id="${item.item_id}"
+                    ${isSelected ? 'checked' : ''}
+                    onchange="toggleItemSelection('${item.item_id}')">
+                <span class="item-select-icon">${emoji}</span>
+                <div class="item-select-info">
+                    <div class="item-select-name">${item.item_name}</div>
+                    <div class="item-select-stock">Stock: ${item.qty} | ${item.container_name}</div>
+                </div>
+                <div class="item-select-qty">
+                    <input type="number" min="1" max="${item.qty}" value="${qtyValue}"
+                        data-item-id="${item.item_id}"
+                        onchange="updateItemQty('${item.item_id}', this.value)"
+                        ${!isSelected ? 'disabled' : ''}>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Toggle item selection
+function toggleItemSelection(itemId) {
+    const item = factoryManageState.inventoryData.find(i => i.item_id === itemId);
+    if (!item) return;
+
+    const existingIndex = factoryManageState.selectedItems.findIndex(s => s.item_id === itemId);
+
+    if (existingIndex >= 0) {
+        factoryManageState.selectedItems.splice(existingIndex, 1);
+    } else {
+        factoryManageState.selectedItems.push({
+            item_id: item.item_id,
+            item_code: item.item_code,
+            container_id: item.container_id,
+            qty: item.qty
+        });
+    }
+
+    // Re-render to update disabled states
+    renderItemSelectList();
+}
+
+// Update item quantity
+function updateItemQty(itemId, value) {
+    const item = factoryManageState.inventoryData.find(i => i.item_id === itemId);
+    if (!item) return;
+
+    const qty = Math.min(Math.max(1, parseInt(value) || 1), item.qty);
+    const selected = factoryManageState.selectedItems.find(s => s.item_id === itemId);
+    if (selected) {
+        selected.qty = qty;
+    }
+}
+
+// Submit item deposit
+async function submitItemDeposit() {
+    const factoryId = factoryManageState.currentFactoryId;
+    const mode = factoryManageState.itemSelectMode;
+    const selectedItems = factoryManageState.selectedItems;
+
+    if (!factoryId || selectedItems.length === 0) {
+        showToast('Sélectionnez au moins un item', 'warning');
+        return;
+    }
+
+    const btn = document.getElementById('btn-confirm-deposit');
+    btn.disabled = true;
+    btn.textContent = 'Chargement...';
+
+    try {
+        // Deposit each selected item
+        for (const selected of selectedItems) {
+            const endpoint = mode === 'food'
+                ? `${API_BASE}/factories/${factoryId}/food/deposit`
+                : `${API_BASE}/factories/${factoryId}/storage/deposit`;
+
+            const response = await authFetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    item_id: selected.item_id,
+                    quantity: selected.qty
+                })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Erreur lors du dépôt');
+            }
+        }
+
+        showToast(`${selectedItems.length} item(s) chargé(s)!`, 'success');
+        closeItemSelectModal();
+
+        // Refresh factory details
+        await loadFactoryDetails(factoryId);
+
+    } catch (error) {
+        console.error('[FACTORY] Deposit error:', error);
+        showToast(error.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'CHARGER SÉLECTION';
+    }
+}
+
+// Open workers management modal (V2)
+async function openManageWorkersModal() {
+    const factory = factoryManageState.factoryData;
+    if (!factory) return;
+
+    // Update airport in modal
+    document.getElementById('workers-modal-airport').textContent = factory.airport_ident;
+
+    // Show modal
+    document.getElementById('modal-workers-manage').classList.add('active');
+
+    // Load available workers
+    await loadAvailableWorkersV2();
+}
+
+// Close workers modal
+function closeWorkersModal() {
+    document.getElementById('modal-workers-manage').classList.remove('active');
+}
+
+// Load available workers from inventory (V2)
+async function loadAvailableWorkersV2() {
+    const factory = factoryManageState.factoryData;
+    if (!factory) return;
+
+    const container = document.getElementById('workers-available-list');
+    container.innerHTML = '<div class="loading-small">Chargement...</div>';
+
+    try {
+        const response = await authFetch(`${API_BASE}/workers/v2/inventory?airport=${factory.airport_ident}`);
+        if (!response.ok) {
+            throw new Error('Erreur lors du chargement des workers');
+        }
+        const data = await response.json();
+        const workers = data.workers || [];
+
+        if (workers.length === 0) {
+            container.innerHTML = '<p class="workers-empty">Aucun worker disponible à cet aéroport</p>';
+            return;
+        }
+
+        // Check current factory capacity
+        const currentWorkers = factoryManageState.workersData?.length || 0;
+        const tier = factory.tier || 1;
+        const maxWorkers = MAX_WORKERS_BY_TIER[tier] || factory.max_workers || 10;
+        const canAddMore = currentWorkers < maxWorkers;
+
+        container.innerHTML = workers.map(worker => `
+            <div class="worker-available-card" data-worker-id="${worker.id}">
+                <div class="worker-available-info">
+                    <span class="worker-flag">${getCountryFlag(worker.country_code)}</span>
+                    <span class="worker-name">${worker.item_name || 'Worker-' + worker.country_code}</span>
+                    <span class="worker-tier badge">T${worker.tier}</span>
+                </div>
+                <div class="worker-available-stats">
+                    <span>SPD: ${worker.speed}</span>
+                    <span>RES: ${worker.resistance}</span>
+                    <span>${worker.hourly_salary.toFixed(2)}€/h</span>
+                </div>
+                <button class="btn btn-small" onclick="assignWorkerV2('${worker.id}')" ${canAddMore ? '' : 'disabled'}>
+                    Ajouter
+                </button>
+            </div>
+        `).join('');
+
+        if (!canAddMore) {
+            container.insertAdjacentHTML('afterbegin',
+                `<div class="workers-capacity-warning">⚠️ Usine pleine (${currentWorkers}/${maxWorkers})</div>`
+            );
+        }
+
+    } catch (error) {
+        console.error('[FACTORY] Error loading available workers:', error);
+        container.innerHTML = '<p class="workers-empty">Erreur de chargement</p>';
+    }
+}
+
+// Assign worker to factory (V2)
+async function assignWorkerV2(workerId) {
+    const factoryId = factoryManageState.currentFactoryId;
+    if (!factoryId) return;
+
+    try {
+        const response = await authFetch(`${API_BASE}/workers/v2/${workerId}/assign`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ factory_id: factoryId })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Erreur');
+        }
+
+        showToast('Worker assigné à l\'usine', 'success');
+
+        // Reload both lists
+        await Promise.all([
+            loadFactoryWorkers(factoryId),
+            loadAvailableWorkersV2()
+        ]);
+
+    } catch (error) {
+        console.error('[FACTORY] Error assigning worker:', error);
+        showToast(error.message, 'error');
+    }
+}
+
+// Upgrade factory (placeholder)
+function upgradeFactory() {
+    const factory = factoryManageState.factoryData;
+    if (!factory) return;
+
+    const currentTier = factory.tier || 1;
+    const nextTier = currentTier + 1;
+
+    if (nextTier > 10) {
+        showToast('Cette usine est déjà au niveau maximum (T10)', 'info');
+        return;
+    }
+
+    // TODO: Implement upgrade logic
+    // - Check upgrade cost
+    // - Check requirements
+    // - Call API to upgrade
+    showToast(`Upgrade T${currentTier} → T${nextTier} - À venir`, 'info');
+}
+
+// Get factory emoji helper
+function getFactoryEmoji(factoryType) {
+    const emojis = {
+        'farm': '🌾',
+        'mine': '⛏️',
+        'refinery': '🏭',
+        'factory': '🏭',
+        'bakery': '🍞',
+        'brewery': '🍺',
+        'sawmill': '🪵',
+        'steel_mill': '🔩',
+        'food_factory': '🍔',
+        'textile': '🧵'
+    };
+    return emojis[factoryType] || '🏭';
+}
+
+// ========================================
+// FACTORY MANAGEMENT V2: SLOTS & DETECTION
+// ========================================
+
+// V2.1 Official factory tier values
+const SLOTS_BY_TIER = {
+    1: 2, 2: 2,           // T1-T2: 2 slots
+    3: 3, 4: 3,           // T3-T4: 3 slots
+    5: 4, 6: 4,           // T5-T6: 4 slots
+    7: 5, 8: 5, 9: 5, 10: 5  // T7-T10: 5 slots
+};
+
+const MAX_WORKERS_BY_TIER = {
+    1: 10, 2: 20, 3: 30, 4: 40, 5: 50,
+    6: 60, 7: 70, 8: 80, 9: 90, 10: 100
+};
+
+const MAX_ENGINEERS_BY_TIER = {
+    1: 0, 2: 1, 3: 1, 4: 2, 5: 2,
+    6: 3, 7: 3, 8: 4, 9: 4, 10: 5
+};
+
+// Load company inventory at specified airport
+async function loadCompanyInventoryForFactory(airportIdent) {
+    try {
+        const response = await authFetch(`${API_BASE}/inventory/company`);
+        if (!response.ok) {
+            throw new Error('Erreur chargement inventaire');
+        }
+        const data = await response.json();
+
+        // Filter items at this airport
+        const items = (data.items || []).filter(item => item.airport_ident === airportIdent);
+        factoryManageState.inventoryData = items;
+
+        console.log('[FACTORY V2] Inventory loaded:', items.length, 'items at', airportIdent);
+
+    } catch (error) {
+        console.error('[FACTORY V2] Error loading inventory:', error);
+        factoryManageState.inventoryData = [];
+    }
+}
+
+// Load all recipes from API
+async function loadAllRecipes() {
+    try {
+        const response = await fetch(`${API_BASE}/world/recipes?limit=500`);
+        if (!response.ok) {
+            throw new Error('Erreur chargement recettes');
+        }
+        const recipes = await response.json();
+        factoryManageState.allRecipes = recipes;
+
+        console.log('[FACTORY V2] Recipes loaded:', recipes.length);
+
+    } catch (error) {
+        console.error('[FACTORY V2] Error loading recipes:', error);
+        factoryManageState.allRecipes = [];
+    }
+}
+
+// Render ingredient slots based on factory tier
+function renderIngredientSlots(tier) {
+    const container = document.getElementById('ingredient-slots');
+    const numSlots = SLOTS_BY_TIER[tier] || 2;
+    const items = factoryManageState.inventoryData;
+
+    // Reset selected ingredients
+    factoryManageState.selectedIngredients = [];
+    factoryManageState.recipeData = null;
+    factoryManageState.detectedRecipes = [];
+
+    // Build dropdown options
+    const itemOptions = items.map(item => {
+        const emoji = getItemEmoji(item.item_name);
+        return `<option value="${item.item_id}" data-name="${item.item_name}" data-qty="${item.qty}">${emoji} ${item.item_name} (${item.qty})</option>`;
+    }).join('');
+
+    // Build slots
+    let slotsHtml = '';
+    for (let i = 0; i < numSlots; i++) {
+        slotsHtml += `
+            <div class="ingredient-slot" data-slot="${i}">
+                <select class="slot-item-select" data-slot="${i}" onchange="onIngredientChange(${i})">
+                    <option value="">-- Slot ${i + 1} --</option>
+                    ${itemOptions}
+                </select>
+                <input type="number" class="slot-qty" data-slot="${i}" min="1" value="1"
+                    onchange="onIngredientQtyChange(${i})" disabled>
+                <button class="slot-clear" onclick="clearSlot(${i})" title="Vider">✕</button>
+            </div>
+        `;
+    }
+
+    container.innerHTML = slotsHtml;
+
+    // Reset recipe display
+    updateRecipeDisplay();
+    updateStartButton();
+}
+
+// When ingredient is selected in a slot
+function onIngredientChange(slotIndex) {
+    const select = document.querySelector(`.slot-item-select[data-slot="${slotIndex}"]`);
+    const qtyInput = document.querySelector(`.slot-qty[data-slot="${slotIndex}"]`);
+
+    const itemId = select.value;
+    const selectedOption = select.options[select.selectedIndex];
+
+    // Update or remove from selected ingredients
+    const existingIndex = factoryManageState.selectedIngredients.findIndex(s => s.slot === slotIndex);
+
+    if (itemId) {
+        const itemName = selectedOption.dataset.name;
+        const maxQty = parseInt(selectedOption.dataset.qty) || 1;
+
+        qtyInput.disabled = false;
+        qtyInput.max = maxQty;
+        qtyInput.value = Math.min(parseInt(qtyInput.value) || 1, maxQty);
+
+        const ingredient = {
+            slot: slotIndex,
+            item_id: itemId,
+            item_name: itemName,
+            qty: parseInt(qtyInput.value)
+        };
+
+        if (existingIndex >= 0) {
+            factoryManageState.selectedIngredients[existingIndex] = ingredient;
+        } else {
+            factoryManageState.selectedIngredients.push(ingredient);
+        }
+    } else {
+        qtyInput.disabled = true;
+        qtyInput.value = 1;
+        if (existingIndex >= 0) {
+            factoryManageState.selectedIngredients.splice(existingIndex, 1);
+        }
+    }
+
+    // Detect matching recipes
+    detectMatchingRecipes();
+}
+
+// When quantity changes in a slot
+function onIngredientQtyChange(slotIndex) {
+    const qtyInput = document.querySelector(`.slot-qty[data-slot="${slotIndex}"]`);
+    const ingredient = factoryManageState.selectedIngredients.find(s => s.slot === slotIndex);
+
+    if (ingredient) {
+        ingredient.qty = parseInt(qtyInput.value) || 1;
+    }
+
+    // Re-detect (qty might affect validity)
+    detectMatchingRecipes();
+}
+
+// Clear a slot
+function clearSlot(slotIndex) {
+    const select = document.querySelector(`.slot-item-select[data-slot="${slotIndex}"]`);
+    const qtyInput = document.querySelector(`.slot-qty[data-slot="${slotIndex}"]`);
+
+    select.value = '';
+    qtyInput.disabled = true;
+    qtyInput.value = 1;
+
+    const existingIndex = factoryManageState.selectedIngredients.findIndex(s => s.slot === slotIndex);
+    if (existingIndex >= 0) {
+        factoryManageState.selectedIngredients.splice(existingIndex, 1);
+    }
+
+    detectMatchingRecipes();
+}
+
+// Detect recipes that match the selected ingredients
+function detectMatchingRecipes() {
+    const selected = factoryManageState.selectedIngredients;
+    const allRecipes = factoryManageState.allRecipes;
+    const factory = factoryManageState.factoryData;
+
+    console.log('[RECIPE DETECT] Selected ingredients:', selected);
+    console.log('[RECIPE DETECT] All recipes count:', allRecipes.length);
+    console.log('[RECIPE DETECT] Factory tier:', factory?.tier);
+    console.log('[RECIPE DETECT] Sample recipe (first):', allRecipes[0]);
+
+    if (selected.length === 0) {
+        factoryManageState.detectedRecipes = [];
+        factoryManageState.recipeData = null;
+        updateRecipeDisplay();
+        updateStartButton();
+        return;
+    }
+
+    // Get unique selected item names (lowercase for matching)
+    const selectedItemNames = [...new Set(selected.map(s => s.item_name.toLowerCase()))];
+    console.log('[RECIPE DETECT] Selected item names:', selectedItemNames);
+
+    // Find recipes where ALL inputs match selected items
+    const matching = allRecipes.filter(recipe => {
+        // Recipe must be same tier or lower than factory
+        if (recipe.tier > factory.tier) return false;
+
+        // Check if all recipe inputs are in selected items
+        const inputs = recipe.inputs || [];
+        if (inputs.length === 0) return false;
+
+        // Get recipe input names
+        const recipeInputNames = inputs.map(i => (i.item_name || i.name || '').toLowerCase());
+
+        // Check if selected items match recipe inputs (exact match)
+        const allInputsSelected = recipeInputNames.every(name => selectedItemNames.includes(name));
+        const allSelectedAreInputs = selectedItemNames.every(name => recipeInputNames.includes(name));
+
+        if (!allInputsSelected || !allSelectedAreInputs) {
+            return false;
+        }
+
+        // Log potential match
+        console.log(`[RECIPE DETECT] Checking "${recipe.name}":`, recipeInputNames);
+
+        // Check if we have enough quantity for each input
+        for (const input of inputs) {
+            const inputName = (input.item_name || input.name || '').toLowerCase();
+            const matchingSelected = selected.filter(s => s.item_name.toLowerCase() === inputName);
+            const totalQty = matchingSelected.reduce((sum, s) => sum + s.qty, 0);
+            const requiredQty = input.quantity_required || input.qty || 1;
+            console.log(`[RECIPE DETECT]   - ${inputName}: have ${totalQty}, need ${requiredQty}`);
+            if (totalQty < requiredQty) {
+                console.log(`[RECIPE DETECT]   => FAILED (not enough ${inputName})`);
+                return false;
+            }
+        }
+
+        console.log(`[RECIPE DETECT]   => MATCH!`);
+        return true;
+    });
+
+    console.log('[RECIPE DETECT] Matching recipes:', matching.length, matching.map(r => r.name));
+
+    factoryManageState.detectedRecipes = matching;
+
+    // Auto-select if only one match
+    if (matching.length === 1) {
+        factoryManageState.recipeData = matching[0];
+    } else if (matching.length > 1) {
+        // Multiple matches - let user choose
+        factoryManageState.recipeData = matching[0]; // Default to first
+    } else {
+        factoryManageState.recipeData = null;
+    }
+
+    updateRecipeDisplay();
+    updateStartButton();
+}
+
+// Update the recipe display section
+function updateRecipeDisplay() {
+    const noRecipeEl = document.getElementById('no-recipe-message');
+    const recipeFoundEl = document.getElementById('recipe-found');
+    const selectorEl = document.getElementById('recipe-selector');
+    const detected = factoryManageState.detectedRecipes;
+    const recipe = factoryManageState.recipeData;
+
+    if (!recipe) {
+        noRecipeEl.style.display = 'block';
+        recipeFoundEl.style.display = 'none';
+        return;
+    }
+
+    noRecipeEl.style.display = 'none';
+    recipeFoundEl.style.display = 'block';
+
+    // Update recipe info
+    const emoji = getItemEmoji(recipe.output_item_name || recipe.name);
+    document.getElementById('detected-recipe-icon').textContent = emoji;
+    document.getElementById('detected-recipe-name').textContent = recipe.output_item_name || recipe.name;
+    document.getElementById('detected-recipe-tier').textContent = `T${recipe.tier}`;
+    document.getElementById('detected-recipe-time').textContent = formatTimeRemaining(recipe.base_time_seconds || 60);
+    document.getElementById('detected-recipe-output').textContent = `${recipe.output_qty || 1}x`;
+
+    // Show selector if multiple recipes match
+    if (detected.length > 1) {
+        selectorEl.style.display = 'block';
+        selectorEl.innerHTML = detected.map((r, i) => {
+            const rEmoji = getItemEmoji(r.output_item_name || r.name);
+            return `<option value="${i}" ${r.id === recipe.id ? 'selected' : ''}>${rEmoji} ${r.output_item_name || r.name} (T${r.tier})</option>`;
+        }).join('');
+    } else {
+        selectorEl.style.display = 'none';
+    }
+}
+
+// When user selects a recipe from dropdown (multiple matches)
+function onRecipeSelect() {
+    const selectorEl = document.getElementById('recipe-selector');
+    const index = parseInt(selectorEl.value);
+    const detected = factoryManageState.detectedRecipes;
+
+    if (detected[index]) {
+        factoryManageState.recipeData = detected[index];
+        updateRecipeDisplay();
+        updateStartButton();
+    }
+}
+
+// Update START button state
+function updateStartButton() {
+    const btnStart = document.getElementById('btn-start-production');
+    const messageEl = document.getElementById('production-message');
+    const factory = factoryManageState.factoryData;
+    const recipe = factoryManageState.recipeData;
+    const workers = factoryManageState.workersData;
+
+    // If already producing, don't change
+    if (factory?.status === 'producing') {
+        return;
+    }
+
+    if (!recipe) {
+        btnStart.disabled = true;
+        messageEl.textContent = 'Sélectionnez des ingrédients pour détecter une recette';
+        messageEl.className = 'production-message warning';
+        return;
+    }
+
+    if (workers.length === 0) {
+        btnStart.disabled = true;
+        messageEl.textContent = 'Aucun worker assigné';
+        messageEl.className = 'production-message warning';
+        return;
+    }
+
+    if ((factory?.food_stock || 0) <= 0) {
+        btnStart.disabled = true;
+        messageEl.textContent = 'Stock de food vide';
+        messageEl.className = 'production-message warning';
+        return;
+    }
+
+    btnStart.disabled = false;
+    messageEl.textContent = 'Prêt à produire';
+    messageEl.className = 'production-message';
+}
+
+// ========================================
+// FOOD MODAL V2
+// ========================================
+
+function openFoodModal() {
+    const factory = factoryManageState.factoryData;
+    if (!factory) return;
+
+    // Show modal
+    document.getElementById('modal-food-select').classList.add('active');
+
+    // Load food items from inventory
+    loadFoodItems();
+}
+
+function closeFoodModal() {
+    document.getElementById('modal-food-select').classList.remove('active');
+}
+
+async function loadFoodItems() {
+    const factory = factoryManageState.factoryData;
+    const items = factoryManageState.inventoryData;
+
+    // Filter for food items
+    const foodItems = items.filter(item => {
+        const name = item.item_name.toLowerCase();
+        return item.is_food ||
+            name.includes('food') ||
+            name.includes('meal') ||
+            name.includes('bread') ||
+            name.includes('sandwich') ||
+            name.includes('pizza') ||
+            name.includes('soup');
+    });
+
+    const selectEl = document.getElementById('food-item-select');
+    if (selectEl) {
+        if (foodItems.length === 0) {
+            selectEl.innerHTML = '<option value="">Aucun food disponible</option>';
+        } else {
+            selectEl.innerHTML = foodItems.map(item => {
+                const emoji = getItemEmoji(item.item_name);
+                return `<option value="${item.item_id}" data-max="${item.qty}">${emoji} ${item.item_name} (${item.qty})</option>`;
+            }).join('');
+        }
+    }
+
+    // Update max qty
+    updateFoodMaxQty();
+}
+
+function updateFoodMaxQty() {
+    const selectEl = document.getElementById('food-item-select');
+    const qtyInput = document.getElementById('food-qty-input');
+
+    if (selectEl && qtyInput) {
+        const selectedOption = selectEl.options[selectEl.selectedIndex];
+        const maxQty = selectedOption ? parseInt(selectedOption.dataset.max) || 0 : 0;
+        qtyInput.max = maxQty;
+        qtyInput.value = Math.min(parseInt(qtyInput.value) || 1, maxQty);
+    }
+}
+
+async function submitFoodDeposit() {
+    const factoryId = factoryManageState.currentFactoryId;
+    const selectEl = document.getElementById('food-item-select');
+    const qtyInput = document.getElementById('food-qty-input');
+
+    if (!factoryId || !selectEl || !qtyInput) return;
+
+    const itemId = selectEl.value;
+    const qty = parseInt(qtyInput.value) || 0;
+
+    if (!itemId || qty <= 0) {
+        showToast('Sélectionnez un item et une quantité', 'warning');
+        return;
+    }
+
+    const btn = document.getElementById('btn-confirm-food');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Chargement...';
+    }
+
+    try {
+        const response = await authFetch(`${API_BASE}/factories/${factoryId}/food/deposit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                item_id: itemId,
+                quantity: qty
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Erreur lors du dépôt');
+        }
+
+        showToast('Food rechargé!', 'success');
+        closeFoodModal();
+
+        // Refresh factory
+        await loadFactoryDetails(factoryId);
+
+    } catch (error) {
+        console.error('[FACTORY] Food deposit error:', error);
+        showToast(error.message, 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'CHARGER';
+        }
+    }
 }

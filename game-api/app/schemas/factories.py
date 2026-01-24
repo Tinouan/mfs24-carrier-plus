@@ -65,6 +65,19 @@ class RecipeListOut(BaseModel):
     result_quantity: int
 
 
+class RecipeWithInputsOut(BaseModel):
+    """Recipe with inputs for detection (V2.1)."""
+    id: uuid.UUID
+    name: str
+    tier: int
+    production_time_hours: float
+    base_time_seconds: int  # For frontend display
+    result_quantity: int
+    output_item_name: str
+    output_item_icon: str | None = None
+    inputs: list[RecipeIngredientOut]
+
+
 # =====================================================
 # WORKERS (V0.6 Unified System)
 # =====================================================
@@ -333,9 +346,10 @@ class ProductionBatchOut(BaseModel):
 
 
 class StartProductionIn(BaseModel):
-    """Start production input."""
+    """Start production input (V2). Only recipe_id is required."""
     recipe_id: uuid.UUID
-    workers_assigned: int = Field(..., ge=1, le=100)
+    # V2: workers_assigned is now optional - backend uses workers assigned to factory
+    workers_assigned: int | None = Field(default=None, ge=1, le=100)
 
 
 # =====================================================

@@ -18,6 +18,7 @@ from app.schemas.factories import (
     RecipeOut,
     RecipeListOut,
     RecipeIngredientOut,
+    RecipeWithInputsOut,
     AirportSlotOut,
     AirportOut,
 )
@@ -114,35 +115,58 @@ def search_items_by_name(
 # RECIPES
 # =====================================================
 
-@router.get("/recipes", response_model=list[RecipeListOut])
+@router.get("/recipes", response_model=list[RecipeWithInputsOut])
 def list_recipes(
-    tier: int | None = Query(None, ge=1, le=5, description="Filter by tier (1-5)"),
+    tier: int | None = Query(None, ge=1, le=10, description="Filter by tier (1-10)"),
     tag: str | None = Query(None, description="Filter by tag (food, construction, etc.)"),
     limit: int = Query(100, ge=1, le=500, description="Max results"),
     db: Session = Depends(get_db),
 ):
-    """List all recipes (with filters)."""
+    """List all recipes with inputs (V2.1 - for recipe detection)."""
     query = db.query(Recipe)
 
     if tier is not None:
         query = query.filter(Recipe.tier == tier)
 
-    # Note: tags filter removed - Recipe model no longer has tags field
-    # if tag is not None:
-    #     query = query.filter(Recipe.tags.contains([tag]))
-
     recipes = query.order_by(Recipe.tier, Recipe.name).limit(limit).all()
 
-    return [
-        RecipeListOut(
+    result = []
+    for recipe in recipes:
+        # Get output item
+        output_item = db.query(Item).filter(Item.id == recipe.result_item_id).first()
+        output_name = output_item.name if output_item else recipe.name
+        output_icon = output_item.icon if output_item else None
+
+        # Get inputs with item details
+        ingredients_data = db.query(RecipeIngredient, Item).join(
+            Item, RecipeIngredient.item_id == Item.id
+        ).filter(
+            RecipeIngredient.recipe_id == recipe.id
+        ).all()
+
+        inputs = [
+            RecipeIngredientOut(
+                item_id=ingredient.item_id,
+                item_name=item.name,
+                item_icon=item.icon,
+                quantity_required=ingredient.quantity,
+            )
+            for ingredient, item in ingredients_data
+        ]
+
+        result.append(RecipeWithInputsOut(
             id=recipe.id,
             name=recipe.name,
             tier=recipe.tier,
             production_time_hours=float(recipe.production_time_hours),
+            base_time_seconds=int(recipe.production_time_hours * 3600),
             result_quantity=recipe.result_quantity,
-        )
-        for recipe in recipes
-    ]
+            output_item_name=output_name,
+            output_item_icon=output_icon,
+            inputs=inputs,
+        ))
+
+    return result
 
 
 @router.get("/recipes/{recipe_id}", response_model=RecipeOut)

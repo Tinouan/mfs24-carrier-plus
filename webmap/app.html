@@ -1109,6 +1109,197 @@
         </div>
     </div>
 
+    <!-- FACTORY MANAGEMENT MODAL V2 -->
+    <div class="modal-overlay" id="modal-factory-manage">
+        <div class="modal" style="max-width: 600px;">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <span id="factory-manage-icon">🏭</span>
+                    <span id="factory-manage-name">Usine</span>
+                    <span class="badge" id="factory-manage-tier">T1</span>
+                    <button class="btn btn-small btn-upgrade" id="btn-factory-upgrade" onclick="upgradeFactory()">UPGRADE</button>
+                </div>
+                <button class="modal-close" onclick="closeFactoryManageModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="factory-manage-body">
+                <!-- Loading State -->
+                <div class="factory-manage-loading" id="factory-manage-loading">
+                    <div class="loading-spinner"></div>
+                    <p>Chargement des données...</p>
+                </div>
+
+                <!-- Content (hidden while loading) -->
+                <div id="factory-manage-content" style="display: none;">
+                    <!-- Factory Info -->
+                    <div class="factory-manage-info">
+                        <span id="factory-manage-airport">LFPG</span>
+                        <span class="factory-manage-status" id="factory-manage-status">idle</span>
+                    </div>
+
+                    <!-- Efficiency Section -->
+                    <div class="factory-section">
+                        <div class="factory-section-title">EFFICACITÉ</div>
+                        <div class="efficiency-container">
+                            <div class="efficiency-gauge">
+                                <div class="efficiency-gauge-fill" id="efficiency-gauge-fill" style="width: 0%"></div>
+                            </div>
+                            <span class="efficiency-value" id="efficiency-value">0%</span>
+                        </div>
+                        <div class="efficiency-breakdown">
+                            <span id="efficiency-workers">Workers: 0% (0/10)</span>
+                            <span id="efficiency-engineers">Ingénieurs: 0/0</span>
+                            <span id="efficiency-food">Food: OK</span>
+                        </div>
+                    </div>
+
+                    <!-- Ingredients Slots Section (V2) -->
+                    <div class="factory-section">
+                        <div class="factory-section-title">INGRÉDIENTS</div>
+                        <div class="ingredient-slots" id="ingredient-slots">
+                            <!-- Dynamically generated based on factory tier -->
+                        </div>
+                    </div>
+
+                    <!-- Detected Recipe Section (V2) -->
+                    <div class="factory-section">
+                        <div class="factory-section-title">RECETTE DÉTECTÉE</div>
+                        <div class="detected-recipe" id="detected-recipe">
+                            <div class="no-recipe" id="no-recipe-message">
+                                Sélectionnez des ingrédients pour détecter une recette
+                            </div>
+                            <div class="recipe-found" id="recipe-found" style="display: none;">
+                                <div class="recipe-info-v2">
+                                    <span class="recipe-icon" id="detected-recipe-icon">🍖</span>
+                                    <span class="recipe-name" id="detected-recipe-name">-</span>
+                                    <span class="recipe-tier-badge" id="detected-recipe-tier">T1</span>
+                                </div>
+                                <div class="recipe-details">
+                                    <span>Temps: <strong id="detected-recipe-time">-</strong></span>
+                                    <span>Output: <strong id="detected-recipe-output">-</strong></span>
+                                </div>
+                                <select id="recipe-selector" class="form-select" style="display: none;" onchange="onRecipeSelect()">
+                                    <!-- Options populated when multiple recipes match -->
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Production Section -->
+                    <div class="factory-section">
+                        <div class="factory-section-title">PRODUCTION</div>
+                        <div class="production-status" id="production-status">
+                            <span id="production-message">Sélectionnez une recette</span>
+                        </div>
+                        <div class="production-progress" id="production-progress" style="display: none;">
+                            <div class="production-progress-bar">
+                                <div class="production-progress-fill" id="production-progress-fill" style="width: 0%"></div>
+                            </div>
+                            <div class="production-progress-text">
+                                <span id="production-progress-pct">0%</span>
+                                <span id="production-time-left">--</span>
+                            </div>
+                        </div>
+                        <div class="production-controls">
+                            <button class="btn btn-danger" id="btn-stop-production" onclick="stopProduction()" disabled>
+                                STOP
+                            </button>
+                            <button class="btn" id="btn-start-production" onclick="startProduction()" disabled>
+                                START
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Food Section -->
+                    <div class="factory-section">
+                        <div class="factory-section-title">FOOD</div>
+                        <div class="food-status">
+                            <span class="food-icon">🍎</span>
+                            <span id="food-stock">0</span> / <span id="food-capacity">100</span>
+                            <span class="food-hours" id="food-hours">(0h)</span>
+                        </div>
+                        <div class="food-gauge">
+                            <div class="food-gauge-fill" id="food-gauge-fill" style="width: 0%"></div>
+                        </div>
+                        <button class="btn btn-small btn-secondary" onclick="openFoodModal()">
+                            Recharger
+                        </button>
+                    </div>
+
+                    <!-- Workers Section -->
+                    <div class="factory-section">
+                        <div class="factory-section-title">
+                            WORKERS
+                            <span class="workers-count">(<span id="workers-current">0</span>/<span id="workers-max">5</span>)</span>
+                        </div>
+                        <div class="workers-list" id="workers-list">
+                            <!-- Dynamically populated -->
+                        </div>
+                        <button class="btn btn-small btn-secondary" onclick="openManageWorkersModal()">
+                            Gérer workers
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeFactoryManageModal()">FERMER</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- FOOD SELECT SUB-MODAL -->
+    <div class="modal-overlay" id="modal-food-select" style="z-index: 10100;">
+        <div class="modal" style="max-width: 400px;">
+            <div class="modal-header">
+                <div class="modal-title">🍎 Recharger Food</div>
+                <button class="modal-close" onclick="closeFoodModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="food-select-info">
+                    <p>Sélectionnez un item food depuis votre inventaire company.</p>
+                </div>
+                <div class="food-select-form">
+                    <div class="form-group">
+                        <label>Item Food:</label>
+                        <select id="food-item-select" class="form-select" onchange="updateFoodMaxQty()">
+                            <option value="">Chargement...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Quantité:</label>
+                        <input type="number" id="food-qty-input" class="form-input" min="1" max="100" value="10">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeFoodModal()">ANNULER</button>
+                <button class="btn" id="btn-confirm-food" onclick="submitFoodDeposit()">
+                    CHARGER
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- WORKERS MANAGEMENT SUB-MODAL (V2) -->
+    <div class="modal-overlay" id="modal-workers-manage" style="z-index: 10100;">
+        <div class="modal" style="max-width: 500px;">
+            <div class="modal-header">
+                <div class="modal-title">👷 Ajouter Workers</div>
+                <button class="modal-close" onclick="closeWorkersModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="workers-modal-info">
+                    <p>Workers disponibles à <strong id="workers-modal-airport">LFPG</strong></p>
+                </div>
+                <div class="workers-available-list" id="workers-available-list">
+                    <div class="loading-small">Chargement...</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeWorkersModal()">FERMER</button>
+            </div>
+        </div>
+    </div>
+
     <!-- SCRIPTS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>

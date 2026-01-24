@@ -22,6 +22,7 @@ from app.models.factory_transaction import FactoryTransaction
 from app.models.airport import Airport
 from app.models.inventory_location import InventoryLocation
 from app.models.inventory_item import InventoryItem
+from app.models.company_inventory import CompanyInventory
 from app.schemas.factories import (
     FactoryOut,
     FactoryListOut,
@@ -161,10 +162,16 @@ def create_factory(
         company_id=factory.company_id,
         airport_ident=factory.airport_ident,
         name=factory.name,
+        tier=factory.tier,
         factory_type=factory.factory_type,
         status=factory.status,
         current_recipe_id=factory.current_recipe_id,
         is_active=factory.is_active,
+        max_workers=factory.max_workers,
+        max_engineers=factory.max_engineers,
+        food_stock=factory.food_stock,
+        food_capacity=factory.food_capacity,
+        food_consumption_per_hour=float(factory.food_consumption_per_hour),
         created_at=factory.created_at,
         updated_at=factory.updated_at,
     )
@@ -188,10 +195,16 @@ def get_factory_details(
         company_id=factory.company_id,
         airport_ident=factory.airport_ident,
         name=factory.name,
+        tier=factory.tier,
         factory_type=factory.factory_type,
         status=factory.status,
         current_recipe_id=factory.current_recipe_id,
         is_active=factory.is_active,
+        max_workers=factory.max_workers,
+        max_engineers=factory.max_engineers,
+        food_stock=factory.food_stock,
+        food_capacity=factory.food_capacity,
+        food_consumption_per_hour=float(factory.food_consumption_per_hour),
         created_at=factory.created_at,
         updated_at=factory.updated_at,
     )
@@ -239,10 +252,16 @@ def update_factory(
         company_id=factory.company_id,
         airport_ident=factory.airport_ident,
         name=factory.name,
+        tier=factory.tier,
         factory_type=factory.factory_type,
         status=factory.status,
         current_recipe_id=factory.current_recipe_id,
         is_active=factory.is_active,
+        max_workers=factory.max_workers,
+        max_engineers=factory.max_engineers,
+        food_stock=factory.food_stock,
+        food_capacity=factory.food_capacity,
+        food_consumption_per_hour=float(factory.food_consumption_per_hour),
         created_at=factory.created_at,
         updated_at=factory.updated_at,
     )
@@ -313,7 +332,10 @@ def start_production(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Start production batch."""
+    """
+    Start production batch (V2).
+    Consumes ingredients directly from company_inventory at factory's airport.
+    """
     c, _cm = _get_my_company(db, user.id)
     if not c:
         raise HTTPException(status_code=404, detail="No company")
@@ -329,62 +351,67 @@ def start_production(
     if not recipe:
         raise HTTPException(status_code=404, detail="Recipe not found")
 
-    # Check if factory has enough ingredients in storage
+    # V2: Check if company has enough ingredients in company_inventory at factory's airport
     recipe_ingredients = db.query(RecipeIngredient).filter(
         RecipeIngredient.recipe_id == recipe.id
     ).all()
 
     for ingredient in recipe_ingredients:
-        storage = db.query(FactoryStorage).filter(
-            FactoryStorage.factory_id == factory.id,
-            FactoryStorage.item_id == ingredient.item_id
+        inv_item = db.query(CompanyInventory).filter(
+            CompanyInventory.company_id == c.id,
+            CompanyInventory.item_id == ingredient.item_id,
+            CompanyInventory.airport_ident == factory.airport_ident
         ).first()
 
-        available_qty = storage.quantity if storage else 0
+        available_qty = inv_item.qty if inv_item else 0
         if available_qty < ingredient.quantity:
             # Get item name for error message
             item = db.query(Item).filter(Item.id == ingredient.item_id).first()
             item_name = item.name if item else str(ingredient.item_id)
             raise HTTPException(
                 status_code=400,
-                detail=f"Insufficient {item_name} in storage. Required: {ingredient.quantity}, Available: {available_qty}"
+                detail=f"Insufficient {item_name} in inventory at {factory.airport_ident}. Required: {ingredient.quantity}, Available: {available_qty}"
             )
 
-    # Check if workers assigned <= available workers in factory
-    available_workers = db.query(func.count(Worker.id)).filter(
+    # Count workers assigned to this factory
+    workers_count = db.query(func.count(Worker.id)).filter(
         Worker.factory_id == factory.id,
         Worker.is_active == True
     ).scalar()
 
-    if data.workers_assigned > available_workers:
+    if workers_count == 0:
         raise HTTPException(
             status_code=400,
-            detail=f"Cannot assign {data.workers_assigned} workers. Only {available_workers} available."
+            detail="No workers assigned to this factory"
         )
 
     # Check for engineer bonus (1 engineer per factory)
-    engineer = db.query(Engineer).filter(
-        Engineer.factory_id == factory.id,
-        Engineer.is_active == True
-    ).first()
-
-    engineer_bonus = engineer is not None
+    try:
+        from app.models.engineer import Engineer
+        engineer = db.query(Engineer).filter(
+            Engineer.factory_id == factory.id,
+            Engineer.is_active == True
+        ).first()
+        engineer_bonus = engineer is not None
+    except:
+        engineer_bonus = False
 
     # Calculate estimated completion
     production_time = float(recipe.production_time_hours)
     from datetime import timedelta
     estimated_completion = datetime.utcnow() + timedelta(hours=production_time)
 
-    # Consume ingredients from storage
+    # V2: Consume ingredients from company_inventory
     for ingredient in recipe_ingredients:
-        storage = db.query(FactoryStorage).filter(
-            FactoryStorage.factory_id == factory.id,
-            FactoryStorage.item_id == ingredient.item_id
+        inv_item = db.query(CompanyInventory).filter(
+            CompanyInventory.company_id == c.id,
+            CompanyInventory.item_id == ingredient.item_id,
+            CompanyInventory.airport_ident == factory.airport_ident
         ).first()
 
-        storage.quantity -= ingredient.quantity
-        if storage.quantity == 0:
-            db.delete(storage)
+        inv_item.qty -= ingredient.quantity
+        if inv_item.qty == 0:
+            db.delete(inv_item)
 
         # Log consumption transaction
         transaction = FactoryTransaction(
@@ -401,7 +428,7 @@ def start_production(
         factory_id=factory.id,
         recipe_id=data.recipe_id,
         status="pending",
-        workers_assigned=data.workers_assigned,
+        workers_assigned=workers_count,
         result_quantity=recipe.result_quantity,
         engineer_bonus_applied=engineer_bonus,
         started_at=datetime.utcnow(),
@@ -597,7 +624,7 @@ def deposit_to_storage(
     # Check if item exists in company inventory at factory airport
     warehouse = db.query(InventoryLocation).filter(
         InventoryLocation.company_id == c.id,
-        InventoryLocation.kind == "warehouse",
+        InventoryLocation.kind.in_(["warehouse", "company_warehouse"]),
         InventoryLocation.airport_ident == factory.airport_ident
     ).first()
 
