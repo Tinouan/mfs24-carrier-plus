@@ -3024,6 +3024,340 @@ body::before {
 }
 
 /* ============================================================================
+   INVENTORY VIEW V0.7.1 - Grouped by Airport
+   ============================================================================ */
+
+/* Inventory Subtitle */
+.inventory-subtitle {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    margin: 0.25rem 0 0 0;
+    font-family: 'Share Tech Mono', monospace;
+}
+
+/* Inventory Filters Bar */
+.inventory-filters {
+    background: var(--bg-darker);
+    border: 1px solid var(--border);
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.inv-search-group {
+    flex: 1;
+    min-width: 200px;
+}
+
+.inv-search-group .form-input {
+    width: 100%;
+}
+
+.inv-filter-group {
+    min-width: 150px;
+}
+
+.inv-filter-group .form-select {
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.inv-filter-group .form-select:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+/* Airport Groups */
+.inv-airport-group {
+    background: var(--bg-darker);
+    border: 1px solid var(--border);
+    margin-bottom: 1rem;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.inv-airport-group.expanded {
+    border-color: var(--accent);
+}
+
+.inv-airport-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    cursor: pointer;
+    transition: background 0.2s;
+    background: rgba(0, 0, 0, 0.3);
+    border-bottom: 1px solid transparent;
+}
+
+.inv-airport-group.expanded .inv-airport-header {
+    border-bottom: 1px solid var(--border);
+}
+
+.inv-airport-header:hover {
+    background: rgba(255, 102, 0, 0.1);
+}
+
+.inv-airport-toggle {
+    color: var(--accent);
+    font-size: 0.8rem;
+    width: 1rem;
+}
+
+.inv-airport-icon {
+    font-size: 1.2rem;
+}
+
+.inv-airport-name {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.3rem;
+    letter-spacing: 1px;
+    color: var(--accent);
+}
+
+.inv-airport-fullname {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    margin-left: 0.5rem;
+}
+
+.inv-airport-stats {
+    margin-left: auto;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+}
+
+/* Airport Content Grid */
+.inv-airport-content {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+    padding: 1rem;
+}
+
+/* Container Card */
+.inv-container-card {
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    transition: all 0.2s;
+}
+
+.inv-container-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.inv-container-card.player-warehouse {
+    border-left: 3px solid #00aaff;
+}
+
+.inv-container-card.company-warehouse {
+    border-left: 3px solid var(--accent);
+}
+
+.inv-container-card.factory-storage {
+    border-left: 3px solid var(--success);
+}
+
+.inv-container-card.aircraft {
+    border-left: 3px solid #cc44cc;
+}
+
+.inv-container-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.inv-container-icon {
+    font-size: 1.5rem;
+}
+
+.inv-container-info {
+    flex: 1;
+}
+
+.inv-container-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.inv-container-owner {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Container Items */
+.inv-container-items {
+    padding: 0.75rem 1rem;
+    min-height: 80px;
+    transition: background 0.2s;
+}
+
+.inv-container-items.drag-over {
+    background: rgba(255, 102, 0, 0.15);
+}
+
+.inv-container-empty {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    text-align: center;
+    padding: 1rem 0;
+}
+
+.inv-item-preview {
+    font-size: 0.8rem;
+    padding: 0.25rem 0;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.inv-item-more {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    font-style: italic;
+    padding: 0.25rem 0;
+}
+
+/* Cargo Bar */
+.inv-cargo-bar {
+    height: 4px;
+    background: var(--bg-darker);
+    margin: 0 1rem 0.5rem;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.inv-cargo-bar-fill {
+    height: 100%;
+    background: var(--success);
+    transition: width 0.3s;
+}
+
+.inv-cargo-bar-fill.warning {
+    background: var(--warning);
+}
+
+.inv-cargo-bar-fill.danger {
+    background: var(--danger);
+}
+
+.inv-cargo-text {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    text-align: center;
+    padding-bottom: 0.5rem;
+}
+
+/* Container Footer */
+.inv-container-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    border-top: 1px solid var(--border);
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.inv-container-value {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.9rem;
+    color: var(--accent);
+}
+
+.inv-container-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.inv-container-actions .btn-small {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.75rem;
+}
+
+/* Inventory No Results */
+.inventory-no-results {
+    text-align: center;
+    padding: 2rem;
+    color: var(--text-dim);
+    font-size: 0.9rem;
+}
+
+/* ============================================================================
+   INVENTORY DETAIL MODAL
+   ============================================================================ */
+
+.detail-items-table {
+    margin-top: 1rem;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.items-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.items-table th,
+.items-table td {
+    padding: 0.75rem 0.5rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+
+.items-table th {
+    background: var(--bg-dark);
+    color: var(--text-dim);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.items-table tr:hover {
+    background: rgba(255, 102, 0, 0.05);
+}
+
+.items-table td:last-child {
+    text-align: right;
+}
+
+.detail-empty {
+    text-align: center;
+    padding: 2rem;
+    color: var(--text-dim);
+}
+
+.detail-empty span {
+    font-size: 2rem;
+    display: block;
+    margin-bottom: 0.5rem;
+    opacity: 0.5;
+}
+
+/* ============================================================================
    MARKET VIEW (HV - Hôtel des Ventes)
    ============================================================================ */
 

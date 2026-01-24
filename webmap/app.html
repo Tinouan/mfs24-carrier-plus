@@ -402,49 +402,31 @@
                     <div class="inventory-header-card">
                         <div class="inventory-header-info">
                             <h1>📦 Inventaire</h1>
+                            <p class="inventory-subtitle" id="inv-subtitle">0 items | 0$ | 0 aéroports</p>
                         </div>
-                        <div class="inventory-stats">
-                            <div class="inventory-stat">
-                                <span class="inventory-stat-value" id="inv-total-items">0</span>
-                                <span class="inventory-stat-label">Items</span>
-                            </div>
-                            <div class="inventory-stat">
-                                <span class="inventory-stat-value" id="inv-total-locations">0</span>
-                                <span class="inventory-stat-label">Locations</span>
-                            </div>
-                            <div class="inventory-stat">
-                                <span class="inventory-stat-value" id="inv-total-value">0$</span>
-                                <span class="inventory-stat-label">Valeur</span>
-                            </div>
+                        <button class="btn" onclick="createPlayerWarehouse()">
+                            + Warehouse
+                        </button>
+                    </div>
+
+                    <!-- Search & Filters -->
+                    <div class="inventory-filters">
+                        <div class="inv-search-group">
+                            <input type="text" class="form-input inv-search" id="inv-search" placeholder="🔍 Rechercher un item...">
+                        </div>
+                        <div class="inv-filter-group">
+                            <select class="form-select" id="inv-type-filter" onchange="filterInventory()">
+                                <option value="all">Tous types</option>
+                                <option value="player_warehouse">👤 Entrepôts perso</option>
+                                <option value="company_warehouse">🏢 Entrepôts company</option>
+                                <option value="aircraft">✈️ Avions</option>
+                                <option value="factory_storage">🏭 Usines</option>
+                            </select>
                         </div>
                     </div>
 
-                    <!-- Inventory Tabs -->
-                    <div class="inventory-tabs">
-                        <div class="inventory-tab active" data-tab="all" onclick="switchInventoryTab('all')">
-                            <span>📦</span> Tout
-                        </div>
-                        <div class="inventory-tab" data-tab="personal" onclick="switchInventoryTab('personal')">
-                            <span>👤</span> Personnel
-                        </div>
-                        <div class="inventory-tab" data-tab="company" onclick="switchInventoryTab('company')">
-                            <span>🏢</span> Company
-                        </div>
-                        <div class="inventory-tab" data-tab="aircraft" onclick="switchInventoryTab('aircraft')">
-                            <span>✈️</span> Avions
-                        </div>
-                    </div>
-
-                    <!-- Airport Selector -->
-                    <div class="airport-tabs" id="inventory-airport-tabs">
-                        <!-- Dynamically populated -->
-                        <div class="airport-tab active" data-airport="all">
-                            🌍 Tous les aéroports
-                        </div>
-                    </div>
-
-                    <!-- Inventory Content -->
-                    <div class="inventory-tab-content active" id="inventory-tab-all">
+                    <!-- Inventory Content - Grouped by Airport -->
+                    <div class="inventory-content" id="inventory-content">
                         <!-- Empty State -->
                         <div class="inventory-empty-state" id="inventory-empty-state" style="display:none;">
                             <div class="empty-icon">📦</div>
@@ -455,9 +437,9 @@
                             </button>
                         </div>
 
-                        <!-- Inventory Grid -->
-                        <div class="inventory-grid" id="inventory-grid">
-                            <!-- Dynamically populated with inventory containers -->
+                        <!-- Airport Groups (dynamically populated) -->
+                        <div class="inventory-airports" id="inventory-airports">
+                            <!-- Each airport group will be rendered here -->
                         </div>
                     </div>
                 </div>
@@ -849,12 +831,71 @@
                     <input type="text" class="form-input" id="warehouse-airport" placeholder="LFPG" maxlength="4" style="text-transform: uppercase;">
                     <div class="form-hint">Code ICAO de l'aéroport où créer votre entrepôt personnel</div>
                 </div>
+                <div class="form-group">
+                    <label class="form-label">Nom (optionnel)</label>
+                    <input type="text" class="form-input" id="warehouse-name" placeholder="Mon Entrepôt">
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeCreateWarehouseModal()">ANNULER</button>
                 <button class="btn" id="btn-create-warehouse" onclick="submitCreateWarehouse()">
                     CRÉER L'ENTREPÔT
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- INVENTORY DETAIL MODAL -->
+    <div class="modal-overlay" id="modal-inventory-detail">
+        <div class="modal" style="max-width: 600px;">
+            <div class="modal-header">
+                <div class="modal-title" id="detail-container-title">CONTENU</div>
+                <button class="modal-close" onclick="closeInventoryDetailModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- Container Info -->
+                <div class="modal-info-box" id="detail-container-info">
+                    <div class="modal-info-row">
+                        <span class="modal-info-label">Type</span>
+                        <span class="modal-info-value" id="detail-container-type">-</span>
+                    </div>
+                    <div class="modal-info-row">
+                        <span class="modal-info-label">Aéroport</span>
+                        <span class="modal-info-value" id="detail-container-airport">-</span>
+                    </div>
+                    <div class="modal-info-row">
+                        <span class="modal-info-label">Valeur totale</span>
+                        <span class="modal-info-value" id="detail-container-value">0 $</span>
+                    </div>
+                </div>
+
+                <!-- Items Table -->
+                <div class="detail-items-table" id="detail-items-table">
+                    <table class="items-table">
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th>Tier</th>
+                                <th>Qté</th>
+                                <th>Poids</th>
+                                <th>Valeur</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detail-items-body">
+                            <!-- Dynamically populated -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Empty state -->
+                <div class="detail-empty" id="detail-empty" style="display:none;">
+                    <span>📦</span>
+                    <p>Ce conteneur est vide</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeInventoryDetailModal()">FERMER</button>
             </div>
         </div>
     </div>

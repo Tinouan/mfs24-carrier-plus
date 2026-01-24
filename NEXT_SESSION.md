@@ -1,9 +1,28 @@
 # Prochaine Session - Points de Reprise
 
-**Date session précédente:** 2026-01-21
-**Phase actuelle:** Factory System Phase 2B ✅ COMPLÉTÉE
+**Date session précédente:** 2026-01-24
+**Phase actuelle:** Inventory UI V0.7.1 ✅ COMPLÉTÉE
 
 ## 🎉 Ce qui a été fait
+
+### Inventory UI V0.7.1 - 100% Complété (2026-01-24)
+
+**Frontend (webmap/):**
+- ✅ Vue groupée par aéroport avec expand/collapse
+- ✅ Barre de recherche temps réel
+- ✅ Filtres par type de conteneur
+- ✅ Cards conteneurs avec preview items (3 premiers)
+- ✅ Barre cargo colorée pour avions
+- ✅ Modal détail conteneur avec table complète
+- ✅ Modal création warehouse avec nom optionnel
+- ✅ Transfert via modal ou drag & drop
+- ✅ Intégration switchView('inventory')
+
+**Fichiers modifiés:**
+- `webmap/app.html` - Structure HTML + modals
+- `webmap/app.js` - Logique JS refactorisée
+- `webmap/styles.css` - Styles groupes aéroport + cards
+- `docs/inventory.md` - Documentation UI
 
 ### Factory System Phase 2B - 100% Complété
 

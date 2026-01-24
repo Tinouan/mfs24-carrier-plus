@@ -2607,16 +2607,17 @@ async function loadProfileTransactions() {
 }
 
 // ========================================
-// INVENTORY VIEW V0.7
+// INVENTORY VIEW V0.7.1 - Grouped by Airport
 // ========================================
 
 let inventoryData = {
-    locations: [],
-    items: {},
-    currentAirport: 'all',
-    currentTab: 'all',
+    overview: null,           // Full overview from API
+    expandedAirports: {},     // Track which airports are expanded
+    currentFilter: 'all',     // Type filter
+    searchQuery: '',          // Search query
     selectedItem: null,
-    dragSource: null
+    dragSource: null,
+    currentDetailContainer: null  // For detail modal
 };
 
 // Load inventory view
@@ -2627,24 +2628,45 @@ async function loadInventoryView() {
     if (!state.token || state.token === 'demo-token') {
         showToast('Connectez-vous pour voir votre inventaire', 'warning');
         document.getElementById('inventory-empty-state').style.display = 'block';
-        document.getElementById('inventory-grid').style.display = 'none';
+        document.getElementById('inventory-airports').style.display = 'none';
         return;
+    }
+
+    // Setup search listener
+    const searchInput = document.getElementById('inv-search');
+    if (searchInput && !searchInput._hasListener) {
+        searchInput._hasListener = true;
+        searchInput.addEventListener('input', debounce(() => {
+            inventoryData.searchQuery = searchInput.value.trim().toLowerCase();
+            renderInventoryAirportGroups();
+        }, 300));
     }
 
     await refreshInventory();
 }
 
+// Debounce helper
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
 // Refresh inventory data
 async function refreshInventory() {
     try {
-        // Load inventory overview
         const response = await fetch(`${API_BASE}/inventory/overview`, {
             headers: { 'Authorization': `Bearer ${state.token}` }
         });
 
         if (!response.ok) {
             if (response.status === 404) {
-                // No inventory yet
                 showEmptyInventoryState();
                 return;
             }
@@ -2654,23 +2676,15 @@ async function refreshInventory() {
         const data = await response.json();
         console.log('[INVENTORY] Loaded:', data);
 
-        inventoryData.locations = data.locations || [];
-        inventoryData.items = {};
+        inventoryData.overview = data;
 
-        // Build items map by location
-        if (data.items) {
-            data.items.forEach(item => {
-                const locId = item.location_id;
-                if (!inventoryData.items[locId]) {
-                    inventoryData.items[locId] = [];
-                }
-                inventoryData.items[locId].push(item);
-            });
+        // Expand first airport by default
+        if (data.locations && data.locations.length > 0) {
+            inventoryData.expandedAirports[data.locations[0].airport_ident] = true;
         }
 
-        updateInventoryStats(data);
-        updateAirportTabs();
-        renderInventoryContainers();
+        updateInventorySubtitle(data);
+        renderInventoryAirportGroups();
 
     } catch (error) {
         console.error('[INVENTORY] Error:', error);
@@ -2678,214 +2692,330 @@ async function refreshInventory() {
     }
 }
 
-// Update inventory stats
-function updateInventoryStats(data) {
-    const totalItems = data.items?.reduce((sum, item) => sum + (item.qty || 0), 0) || 0;
-    const totalLocations = inventoryData.locations.length;
-    const totalValue = data.items?.reduce((sum, item) => sum + ((item.qty || 0) * (item.base_value || 0)), 0) || 0;
+// Update inventory subtitle stats
+function updateInventorySubtitle(data) {
+    const totalItems = data.total_items || 0;
+    const totalValue = parseFloat(data.total_value) || 0;
+    const airportCount = data.locations?.length || 0;
 
-    document.getElementById('inv-total-items').textContent = totalItems.toLocaleString();
-    document.getElementById('inv-total-locations').textContent = totalLocations;
-    document.getElementById('inv-total-value').textContent = `${totalValue.toLocaleString()}$`;
+    const subtitle = `${totalItems} items | ${formatMoney(totalValue)} | ${airportCount} aéroport${airportCount > 1 ? 's' : ''}`;
+    document.getElementById('inv-subtitle').textContent = subtitle;
 }
 
-// Update airport tabs
-function updateAirportTabs() {
-    const container = document.getElementById('inventory-airport-tabs');
-    const airports = new Set();
-
-    inventoryData.locations.forEach(loc => {
-        if (loc.airport_ident) {
-            airports.add(loc.airport_ident);
-        }
-    });
-
-    const airportList = Array.from(airports).sort();
-
-    let html = `
-        <div class="airport-tab ${inventoryData.currentAirport === 'all' ? 'active' : ''}"
-             data-airport="all" onclick="selectAirportTab('all')">
-            🌍 Tous
-            <span class="tab-count">${inventoryData.locations.length}</span>
-        </div>
-    `;
-
-    airportList.forEach(ident => {
-        const count = inventoryData.locations.filter(l => l.airport_ident === ident).length;
-        html += `
-            <div class="airport-tab ${inventoryData.currentAirport === ident ? 'active' : ''}"
-                 data-airport="${ident}" onclick="selectAirportTab('${ident}')">
-                ✈️ ${ident}
-                <span class="tab-count">${count}</span>
-            </div>
-        `;
-    });
-
-    container.innerHTML = html;
+// Filter inventory type
+function filterInventory() {
+    inventoryData.currentFilter = document.getElementById('inv-type-filter').value;
+    renderInventoryAirportGroups();
 }
 
-// Select airport tab
-function selectAirportTab(airport) {
-    inventoryData.currentAirport = airport;
-    updateAirportTabs();
-    renderInventoryContainers();
+// Toggle airport group expand/collapse
+function toggleAirportGroup(ident) {
+    inventoryData.expandedAirports[ident] = !inventoryData.expandedAirports[ident];
+    renderInventoryAirportGroups();
 }
 
-// Switch inventory tab (all, personal, company, aircraft)
-function switchInventoryTab(tabName) {
-    inventoryData.currentTab = tabName;
-
-    // Update tab buttons
-    document.querySelectorAll('.inventory-tab').forEach(tab => {
-        tab.classList.toggle('active', tab.dataset.tab === tabName);
-    });
-
-    renderInventoryContainers();
-}
-
-// Render inventory containers
-function renderInventoryContainers() {
-    const grid = document.getElementById('inventory-grid');
+// Render inventory grouped by airport
+function renderInventoryAirportGroups() {
+    const container = document.getElementById('inventory-airports');
     const emptyState = document.getElementById('inventory-empty-state');
 
-    // Filter locations
-    let locations = inventoryData.locations.filter(loc => {
-        // Airport filter
-        if (inventoryData.currentAirport !== 'all' && loc.airport_ident !== inventoryData.currentAirport) {
-            return false;
-        }
-
-        // Tab filter
-        switch (inventoryData.currentTab) {
-            case 'personal':
-                return loc.owner_type === 'player';
-            case 'company':
-                return loc.owner_type === 'company' && loc.kind !== 'aircraft';
-            case 'aircraft':
-                return loc.kind === 'aircraft';
-            default:
-                return true;
-        }
-    });
-
-    if (locations.length === 0) {
-        grid.style.display = 'none';
+    if (!inventoryData.overview || !inventoryData.overview.locations || inventoryData.overview.locations.length === 0) {
+        container.style.display = 'none';
         emptyState.style.display = 'block';
         return;
     }
 
-    grid.style.display = 'grid';
+    container.style.display = 'block';
     emptyState.style.display = 'none';
 
-    grid.innerHTML = locations.map(loc => renderInventoryContainer(loc)).join('');
+    let html = '';
+
+    inventoryData.overview.locations.forEach(airport => {
+        // Filter containers by type
+        let containers = airport.containers || [];
+        if (inventoryData.currentFilter !== 'all') {
+            containers = containers.filter(c => c.type === inventoryData.currentFilter);
+        }
+
+        // Filter by search query
+        if (inventoryData.searchQuery) {
+            containers = containers.filter(c => {
+                // Check container name
+                if (c.name && c.name.toLowerCase().includes(inventoryData.searchQuery)) return true;
+                // Check items
+                return c.items && c.items.some(item =>
+                    item.item_name && item.item_name.toLowerCase().includes(inventoryData.searchQuery)
+                );
+            });
+        }
+
+        if (containers.length === 0) return;
+
+        const isExpanded = inventoryData.expandedAirports[airport.airport_ident];
+        const totalItems = containers.reduce((sum, c) => sum + (c.total_items || 0), 0);
+        const totalValue = containers.reduce((sum, c) => sum + parseFloat(c.total_value || 0), 0);
+
+        html += `
+            <div class="inv-airport-group ${isExpanded ? 'expanded' : ''}">
+                <div class="inv-airport-header" onclick="toggleAirportGroup('${airport.airport_ident}')">
+                    <span class="inv-airport-toggle">${isExpanded ? '▼' : '▶'}</span>
+                    <span class="inv-airport-icon">📍</span>
+                    <span class="inv-airport-name">${airport.airport_ident}</span>
+                    <span class="inv-airport-fullname">${airport.airport_name || ''}</span>
+                    <span class="inv-airport-stats">${containers.length} conteneur${containers.length > 1 ? 's' : ''} | ${totalItems} items | ${formatMoney(totalValue)}</span>
+                </div>
+                <div class="inv-airport-content" style="display: ${isExpanded ? 'grid' : 'none'};">
+                    ${containers.map(c => renderInventoryContainerCard(c, airport.airport_ident)).join('')}
+                </div>
+            </div>
+        `;
+    });
+
+    if (!html) {
+        container.innerHTML = '<div class="inventory-no-results">Aucun résultat pour ces filtres</div>';
+    } else {
+        container.innerHTML = html;
+    }
 
     // Setup drag and drop
     setupDragAndDrop();
 }
 
-// Render a single inventory container
-function renderInventoryContainer(location) {
-    const items = inventoryData.items[location.id] || [];
-    const containerClass = getContainerClass(location.kind);
-    const containerIcon = getContainerIcon(location.kind);
+// Render a single container card
+function renderInventoryContainerCard(container, airportIdent) {
+    const containerClass = getContainerClass(container.type);
+    const containerIcon = getContainerIcon(container.type);
+    const items = container.items || [];
 
-    // For aircraft, show weight info
-    let capacityHtml = '';
-    if (location.kind === 'aircraft' && location.cargo_capacity_kg) {
-        const currentWeight = items.reduce((sum, item) => sum + (item.weight_kg || 0) * item.qty, 0);
-        const percent = (currentWeight / location.cargo_capacity_kg) * 100;
-        const isDanger = percent > 80;
+    // Preview first 3 items
+    const previewItems = items.slice(0, 3);
+    let itemsPreviewHtml = '';
 
-        capacityHtml = `
-            <div class="weight-bar-container">
-                <div class="weight-bar">
-                    <div class="weight-bar-fill ${isDanger ? 'danger' : ''}" style="width: ${Math.min(percent, 100)}%"></div>
-                </div>
-                <div class="weight-info">
-                    <span>${currentWeight.toFixed(1)} kg</span>
-                    <span>${location.cargo_capacity_kg} kg max</span>
-                </div>
-            </div>
-        `;
-    }
-
-    let itemsHtml = '';
     if (items.length === 0) {
-        itemsHtml = `<div class="container-items empty">Vide</div>`;
+        itemsPreviewHtml = '<div class="inv-container-empty">📦 Vide</div>';
     } else {
-        itemsHtml = `
-            <div class="container-items" data-location-id="${location.id}"
-                 ondragover="handleDragOver(event)" ondrop="handleDrop(event)">
-                ${items.map(item => renderInventoryItem(item, location)).join('')}
+        itemsPreviewHtml = previewItems.map(item => {
+            const emoji = getItemEmoji(item.item_name);
+            return `<div class="inv-item-preview">${emoji} ${item.item_name} ×${item.qty}</div>`;
+        }).join('');
+
+        if (items.length > 3) {
+            itemsPreviewHtml += `<div class="inv-item-more">+${items.length - 3} autres...</div>`;
+        }
+    }
+
+    // Cargo bar for aircraft
+    let cargoBarHtml = '';
+    if (container.type === 'aircraft' && container.cargo_capacity_kg) {
+        const currentWeight = items.reduce((sum, item) => sum + parseFloat(item.total_weight_kg || 0), 0);
+        const capacity = parseFloat(container.cargo_capacity_kg);
+        const percent = capacity > 0 ? (currentWeight / capacity) * 100 : 0;
+        const barClass = percent > 90 ? 'danger' : (percent > 70 ? 'warning' : '');
+
+        cargoBarHtml = `
+            <div class="inv-cargo-bar">
+                <div class="inv-cargo-bar-fill ${barClass}" style="width: ${Math.min(percent, 100)}%"></div>
             </div>
+            <div class="inv-cargo-text">${currentWeight.toFixed(0)}/${capacity}kg</div>
         `;
     }
 
     return `
-        <div class="inventory-container ${containerClass}" data-location-id="${location.id}">
-            <div class="container-header">
-                <div class="container-title">
-                    <span class="container-icon">${containerIcon}</span>
-                    <span class="container-name">${location.name || location.kind}</span>
-                    <span class="container-type">${location.airport_ident}</span>
+        <div class="inv-container-card ${containerClass}" data-container-id="${container.id}" data-airport="${airportIdent}">
+            <div class="inv-container-header">
+                <span class="inv-container-icon">${containerIcon}</span>
+                <div class="inv-container-info">
+                    <div class="inv-container-name">${container.name || container.type}</div>
+                    <div class="inv-container-owner">${container.owner_name || ''}</div>
                 </div>
-                <div class="container-capacity">${items.length} items</div>
             </div>
-            ${itemsHtml}
-            ${capacityHtml}
+            <div class="inv-container-items" data-location-id="${container.id}"
+                 ondragover="handleDragOver(event)" ondrop="handleDrop(event)">
+                ${itemsPreviewHtml}
+            </div>
+            ${cargoBarHtml}
+            <div class="inv-container-footer">
+                <span class="inv-container-value">${formatMoney(parseFloat(container.total_value || 0))}</span>
+                <div class="inv-container-actions">
+                    <button class="btn btn-small btn-secondary" onclick="openInventoryDetailModal('${container.id}', '${airportIdent}')">Voir</button>
+                    <button class="btn btn-small" onclick="openTransferFromContainer('${container.id}', '${airportIdent}')">🔄</button>
+                </div>
+            </div>
         </div>
     `;
 }
 
-// Render a single inventory item
-function renderInventoryItem(item, location) {
-    const emoji = getProductEmoji(item.item_code, item.tag);
-    const tierLabel = item.tier !== undefined ? `T${item.tier}` : '';
+// Get item emoji from name
+function getItemEmoji(name) {
+    if (!name) return '📦';
+    const lowerName = name.toLowerCase();
 
-    return `
-        <div class="inventory-item"
-             draggable="true"
-             data-item-id="${item.item_id}"
-             data-location-id="${location.id}"
-             data-qty="${item.qty}"
-             data-item-name="${item.item_name || item.item_code}"
-             ondragstart="handleDragStart(event)"
-             ondragend="handleDragEnd(event)"
-             onclick="selectInventoryItem(event, '${item.item_id}', '${location.id}')">
-            <div class="item-icon">${emoji}</div>
-            <div class="item-name">${item.item_name || item.item_code}</div>
-            <div class="item-qty">×${item.qty}</div>
-            ${tierLabel ? `<div class="item-tier">${tierLabel}</div>` : ''}
-        </div>
-    `;
+    const emojiMap = {
+        'blé': '🌾', 'wheat': '🌾', 'ble': '🌾',
+        'lait': '🥛', 'milk': '🥛',
+        'boeuf': '🥩', 'beef': '🥩', 'viande': '🥩',
+        'fromage': '🧀', 'cheese': '🧀',
+        'pain': '🍞', 'bread': '🍞',
+        'vin': '🍷', 'wine': '🍷',
+        'poisson': '🐟', 'fish': '🐟',
+        'fruit': '🍎', 'fruits': '🍎',
+        'légume': '🥬', 'legume': '🥬', 'vegetables': '🥬',
+        'pétrole': '🛢️', 'petrole': '🛢️', 'oil': '🛢️',
+        'carburant': '⛽', 'fuel': '⛽',
+        'fer': '🪨', 'iron': '🪨',
+        'acier': '🔩', 'steel': '🔩',
+        'bois': '🪵', 'wood': '🪵',
+        'charbon': '�ite', 'coal': '🪨',
+        'électronique': '📱', 'electronics': '📱',
+        'textile': '🧶', 'fabric': '🧶',
+        'plastique': '🧪', 'plastic': '🧪'
+    };
+
+    for (const [key, emoji] of Object.entries(emojiMap)) {
+        if (lowerName.includes(key)) return emoji;
+    }
+    return '📦';
 }
 
-// Get container class based on kind
-function getContainerClass(kind) {
+// Get container class based on type
+function getContainerClass(type) {
     const classes = {
         'player_warehouse': 'player-warehouse',
         'company_warehouse': 'company-warehouse',
         'factory_storage': 'factory-storage',
         'aircraft': 'aircraft'
     };
-    return classes[kind] || '';
+    return classes[type] || '';
 }
 
-// Get container icon based on kind
-function getContainerIcon(kind) {
+// Get container icon based on type
+function getContainerIcon(type) {
     const icons = {
-        'player_warehouse': '👤',
-        'company_warehouse': '🏢',
-        'factory_storage': '🏭',
+        'player_warehouse': '🏢',
+        'company_warehouse': '🏭',
+        'factory_storage': '⚙️',
         'aircraft': '✈️'
     };
-    return icons[kind] || '📦';
+    return icons[type] || '📦';
 }
 
 // Show empty inventory state
 function showEmptyInventoryState() {
-    document.getElementById('inventory-grid').style.display = 'none';
+    const airports = document.getElementById('inventory-airports');
+    if (airports) airports.style.display = 'none';
     document.getElementById('inventory-empty-state').style.display = 'block';
+}
+
+// ========================================
+// INVENTORY DETAIL MODAL
+// ========================================
+
+function openInventoryDetailModal(containerId, airportIdent) {
+    // Find the container in our data
+    let container = null;
+    if (inventoryData.overview && inventoryData.overview.locations) {
+        for (const airport of inventoryData.overview.locations) {
+            if (airport.airport_ident === airportIdent) {
+                container = airport.containers.find(c => c.id === containerId);
+                break;
+            }
+        }
+    }
+
+    if (!container) {
+        showToast('Conteneur introuvable', 'error');
+        return;
+    }
+
+    inventoryData.currentDetailContainer = { container, airportIdent };
+
+    // Update modal content
+    document.getElementById('detail-container-title').textContent = container.name || container.type;
+    document.getElementById('detail-container-type').textContent = getContainerIcon(container.type) + ' ' + (container.type || '-');
+    document.getElementById('detail-container-airport').textContent = airportIdent;
+    document.getElementById('detail-container-value').textContent = formatMoney(parseFloat(container.total_value || 0));
+
+    const items = container.items || [];
+    const tbody = document.getElementById('detail-items-body');
+    const emptyEl = document.getElementById('detail-empty');
+    const tableEl = document.getElementById('detail-items-table');
+
+    if (items.length === 0) {
+        tableEl.style.display = 'none';
+        emptyEl.style.display = 'block';
+    } else {
+        tableEl.style.display = 'block';
+        emptyEl.style.display = 'none';
+
+        tbody.innerHTML = items.map(item => {
+            const emoji = getItemEmoji(item.item_name);
+            return `
+                <tr>
+                    <td>${emoji} ${item.item_name}</td>
+                    <td>T${item.tier}</td>
+                    <td>${item.qty}</td>
+                    <td>${item.total_weight_kg}kg</td>
+                    <td>${formatMoney(parseFloat(item.total_value || 0))}</td>
+                    <td>
+                        <button class="btn btn-small" onclick="openTransferModalForItem('${containerId}', '${item.item_id}', ${item.qty}, '${item.item_name}', '${airportIdent}')">
+                            🔄
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    document.getElementById('modal-inventory-detail').classList.add('active');
+}
+
+function closeInventoryDetailModal() {
+    document.getElementById('modal-inventory-detail').classList.remove('active');
+    inventoryData.currentDetailContainer = null;
+}
+
+// Open transfer from container button
+function openTransferFromContainer(containerId, airportIdent) {
+    // Find container and first item
+    let container = null;
+    if (inventoryData.overview && inventoryData.overview.locations) {
+        for (const airport of inventoryData.overview.locations) {
+            if (airport.airport_ident === airportIdent) {
+                container = airport.containers.find(c => c.id === containerId);
+                break;
+            }
+        }
+    }
+
+    if (!container || !container.items || container.items.length === 0) {
+        showToast('Aucun item à transférer', 'warning');
+        return;
+    }
+
+    // Open detail modal to select which item to transfer
+    openInventoryDetailModal(containerId, airportIdent);
+}
+
+// Open transfer modal for a specific item
+function openTransferModalForItem(fromContainerId, itemId, maxQty, itemName, airportIdent) {
+    // Find other containers at the same airport
+    let destinations = [];
+    if (inventoryData.overview && inventoryData.overview.locations) {
+        for (const airport of inventoryData.overview.locations) {
+            if (airport.airport_ident === airportIdent) {
+                destinations = airport.containers.filter(c => c.id !== fromContainerId);
+                break;
+            }
+        }
+    }
+
+    if (destinations.length === 0) {
+        showToast('Aucune destination disponible au même aéroport', 'warning');
+        return;
+    }
+
+    // Use first destination as default
+    openTransferModal(fromContainerId, destinations[0].id, itemId, maxQty, itemName);
 }
 
 // ========================================
@@ -2893,8 +3023,8 @@ function showEmptyInventoryState() {
 // ========================================
 
 function setupDragAndDrop() {
-    // Add drop zones to all containers
-    document.querySelectorAll('.container-items').forEach(container => {
+    // Add drop zones to all containers (both old .container-items and new .inv-container-items)
+    document.querySelectorAll('.container-items, .inv-container-items').forEach(container => {
         container.addEventListener('dragover', handleDragOver);
         container.addEventListener('drop', handleDrop);
         container.addEventListener('dragleave', handleDragLeave);
@@ -2923,7 +3053,7 @@ function handleDragEnd(event) {
     inventoryData.dragSource = null;
 
     // Remove drag-over class from all containers
-    document.querySelectorAll('.container-items').forEach(container => {
+    document.querySelectorAll('.container-items, .inv-container-items').forEach(container => {
         container.classList.remove('drag-over');
     });
 }
@@ -2932,7 +3062,7 @@ function handleDragOver(event) {
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
 
-    const container = event.target.closest('.container-items');
+    const container = event.target.closest('.container-items, .inv-container-items');
     if (container && inventoryData.dragSource) {
         // Only allow drop if different location
         if (container.dataset.locationId !== inventoryData.dragSource.locationId) {
@@ -2942,7 +3072,7 @@ function handleDragOver(event) {
 }
 
 function handleDragLeave(event) {
-    const container = event.target.closest('.container-items');
+    const container = event.target.closest('.container-items, .inv-container-items');
     if (container) {
         container.classList.remove('drag-over');
     }
@@ -2951,7 +3081,7 @@ function handleDragLeave(event) {
 function handleDrop(event) {
     event.preventDefault();
 
-    const container = event.target.closest('.container-items');
+    const container = event.target.closest('.container-items, .inv-container-items');
     if (!container) return;
 
     container.classList.remove('drag-over');
@@ -2994,11 +3124,24 @@ function selectInventoryItem(event, itemId, locationId) {
 
 let pendingTransfer = null;
 
+// Helper to find a container by ID in the new overview structure
+function findContainerById(containerId) {
+    if (!inventoryData.overview || !inventoryData.overview.locations) return null;
+
+    for (const airport of inventoryData.overview.locations) {
+        const container = airport.containers.find(c => c.id === containerId);
+        if (container) {
+            return { ...container, airport_ident: airport.airport_ident };
+        }
+    }
+    return null;
+}
+
 function openTransferModal(fromLocationId, toLocationId, itemId, maxQty, itemName) {
     console.log('[TRANSFER] Opening modal:', { fromLocationId, toLocationId, itemId, maxQty });
 
-    const fromLocation = inventoryData.locations.find(l => l.id === fromLocationId);
-    const toLocation = inventoryData.locations.find(l => l.id === toLocationId);
+    const fromLocation = findContainerById(fromLocationId);
+    const toLocation = findContainerById(toLocationId);
 
     if (!fromLocation || !toLocation) {
         showToast('Erreur: Location introuvable', 'error');
@@ -3019,12 +3162,12 @@ function openTransferModal(fromLocationId, toLocationId, itemId, maxQty, itemNam
     };
 
     // Update modal content
-    document.getElementById('transfer-from-name').textContent = fromLocation.name || fromLocation.kind;
-    document.getElementById('transfer-from-type').textContent = fromLocation.kind;
-    document.getElementById('transfer-to-name').textContent = toLocation.name || toLocation.kind;
-    document.getElementById('transfer-to-type').textContent = toLocation.kind;
+    document.getElementById('transfer-from-name').textContent = fromLocation.name || fromLocation.type;
+    document.getElementById('transfer-from-type').textContent = fromLocation.type;
+    document.getElementById('transfer-to-name').textContent = toLocation.name || toLocation.type;
+    document.getElementById('transfer-to-type').textContent = toLocation.type;
 
-    const emoji = getProductEmoji(itemName);
+    const emoji = getItemEmoji(itemName);
     document.getElementById('transfer-item-icon').textContent = emoji;
     document.getElementById('transfer-item-name').textContent = itemName;
     document.getElementById('transfer-item-available').textContent = maxQty;
@@ -3119,6 +3262,8 @@ function createPlayerWarehouse() {
     }
 
     document.getElementById('warehouse-airport').value = '';
+    const nameField = document.getElementById('warehouse-name');
+    if (nameField) nameField.value = '';
     document.getElementById('warehouse-create-error').classList.remove('visible');
     document.getElementById('modal-create-warehouse').classList.add('active');
 }
@@ -3129,6 +3274,7 @@ function closeCreateWarehouseModal() {
 
 async function submitCreateWarehouse() {
     const airport = document.getElementById('warehouse-airport').value.trim().toUpperCase();
+    const name = document.getElementById('warehouse-name')?.value.trim() || '';
     const errorEl = document.getElementById('warehouse-create-error');
     const btn = document.getElementById('btn-create-warehouse');
 
@@ -3142,6 +3288,10 @@ async function submitCreateWarehouse() {
     btn.textContent = 'CRÉATION...';
     errorEl.classList.remove('visible');
 
+    // Build request body
+    const body = { airport_ident: airport };
+    if (name) body.name = name;
+
     try {
         const response = await fetch(`${API_BASE}/inventory/warehouse/player`, {
             method: 'POST',
@@ -3149,9 +3299,7 @@ async function submitCreateWarehouse() {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${state.token}`
             },
-            body: JSON.stringify({
-                airport_ident: airport
-            })
+            body: JSON.stringify(body)
         });
 
         if (!response.ok) {

@@ -3,11 +3,69 @@
 ## Vue d'ensemble
 
 Le système d'inventaire gère le stockage et le transport des items:
+- **V0.7.1 UI** - Interface groupée par aéroport avec recherche et filtres
 - **V0.7 Simplifié** - 3 tables dédiées (player_inventory, company_inventory, aircraft_inventory)
 - **Legacy** - Tables originales (inventory_locations, inventory_items) conservées pour T0/NPC et HV
 - **Audit** - Historique de tous les mouvements
 - **Marché** - Système de vente entre joueurs (utilise tables legacy)
 - **Permissions V0.7** - Contrôle d'accès granulaire
+
+---
+
+## V0.7.1 UI - Interface Utilisateur
+
+### Fonctionnalités
+
+L'interface inventaire offre:
+- **Vue groupée par aéroport** - Conteneurs regroupés par aéroport avec expand/collapse
+- **Recherche temps réel** - Filtrage des items par nom
+- **Filtres par type** - Entrepôts perso/company, avions, usines
+- **Modal détail** - Vue table complète du contenu d'un conteneur
+- **Transfert drag & drop** - Glisser-déposer entre conteneurs (même aéroport)
+- **Création warehouse** - Modal pour créer un entrepôt personnel
+
+### Structure UI
+
+```
+┌─────────────────────────────────────────────────────┐
+│ 📦 INVENTAIRE                      [+ Warehouse]    │
+│ 72 items | 1,250$ | 3 aéroports                     │
+├─────────────────────────────────────────────────────┤
+│ 🔍 Rechercher...              [Type: Tous ▼]        │
+├─────────────────────────────────────────────────────┤
+│ ▼ 📍 LFPG                           2 conteneurs    │
+│   ┌──────────────────┐  ┌──────────────────┐       │
+│   │ 🏢 Mon Entrepôt  │  │ ✈️ F-TINO        │       │
+│   │ 🌾 Blé x50       │  │ 📦 Vide          │       │
+│   │ 170$ [Voir][🔄]  │  │ 0$ [Voir][🔄]    │       │
+│   └──────────────────┘  └──────────────────┘       │
+│ ▶ 📍 LFML                           1 conteneur     │
+└─────────────────────────────────────────────────────┘
+```
+
+### Icônes Conteneurs
+
+| Type | Icône | Couleur bordure |
+|------|-------|-----------------|
+| `player_warehouse` | 🏢 | Bleu (#00aaff) |
+| `company_warehouse` | 🏭 | Orange (accent) |
+| `factory_storage` | ⚙️ | Vert (success) |
+| `aircraft` | ✈️ | Violet (#cc44cc) |
+
+### Barre Cargo (Avions)
+
+Affichage visuel de la capacité cargo:
+- **Vert** - < 70% rempli
+- **Orange** - 70-90% rempli
+- **Rouge** - > 90% rempli
+
+### Fichiers Frontend
+
+| Fichier | Contenu |
+|---------|---------|
+| `webmap/app.html` | Structure HTML (view-inventory, modals) |
+| `webmap/app.js` | Logique JS (renderInventoryAirportGroups, etc.) |
+| `webmap/styles.css` | Styles CSS (.inv-airport-group, .inv-container-card)
 
 ---
 
@@ -721,6 +779,7 @@ POST /inventory/market/buy
 - [x] ~~Anti-cheat cross-airport~~ **V0.7 Complété**
 - [x] ~~Inventaire simplifié (3 tables dédiées)~~ **V0.7 Simplifié Complété**
 - [x] ~~Production directe dans company_inventory~~ **V0.7 Simplifié Complété**
+- [x] ~~UI groupée par aéroport avec recherche/filtres~~ **V0.7.1 Complété**
 - [ ] Migration HV vers nouvelles tables
 - [ ] Capacités de stockage par location
 - [ ] Frais de stockage (warehouse rent)
