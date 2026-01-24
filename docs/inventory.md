@@ -3,12 +3,59 @@
 ## Vue d'ensemble
 
 Le système d'inventaire gère le stockage et le transport des items:
+- **V0.8 Vente** - Items déduits de l'inventaire lors de la mise en vente, filtre "En Vente", annulation
 - **V0.7.1 UI** - Interface groupée par aéroport avec recherche et filtres
 - **V0.7 Simplifié** - 3 tables dédiées (player_inventory, company_inventory, aircraft_inventory)
 - **Legacy** - Tables originales (inventory_locations, inventory_items) conservées pour T0/NPC et HV
 - **Audit** - Historique de tous les mouvements
 - **Marché** - Système de vente entre joueurs (utilise tables legacy)
 - **Permissions V0.7** - Contrôle d'accès granulaire
+
+---
+
+## V0.8 - Système de Vente Amélioré
+
+### Principe: Items déduits lors de la mise en vente
+
+Les items mis en vente sont **retirés de l'inventaire normal** et stockés séparément jusqu'à la vente ou l'annulation:
+
+```
+Mise en vente:    inventory.qty -= sale_qty  →  for_sale=true, sale_qty=X
+Annulation:       inventory.qty += sale_qty  ←  for_sale=false, sale_qty=0
+```
+
+### Filtre "En Vente"
+
+Un nouveau chip de filtre permet d'afficher uniquement les items en vente:
+
+| Filtre | Description |
+|--------|-------------|
+| Tous | Tous les items |
+| Perso | player_warehouse uniquement |
+| Company | company_warehouse uniquement |
+| Avions | aircraft uniquement |
+| Usines | factory_storage uniquement |
+| **En Vente** | Items avec `for_sale=true` |
+
+### Actions conditionnelles
+
+Les actions disponibles dépendent du statut de l'item:
+- **Item normal** → Actions: Voir, Vendre, Transférer
+- **Item en vente** → Actions: Voir, **Annuler** (bouton rouge)
+
+### Endpoints V0.8
+
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| GET | `/inventory/my-listings` | Mes items en vente |
+| POST | `/inventory/set-for-sale` | Mettre en vente (déduit du stock) |
+| POST | `/inventory/cancel-sale` | Annuler vente (retourne au stock) |
+
+### Wallets dans le header
+
+Le header Inventaire affiche les deux wallets:
+- 👤 **Wallet Perso** - `user.wallet`
+- 🏢 **Wallet Company** - `company.balance`
 
 ---
 
@@ -19,23 +66,23 @@ Le système d'inventaire gère le stockage et le transport des items:
 L'interface inventaire offre:
 - **Vue groupée par aéroport** - Conteneurs regroupés par aéroport avec expand/collapse
 - **Recherche temps réel** - Filtrage des items par nom
-- **Filtres par type** - Entrepôts perso/company, avions, usines
+- **Filtres par type** - Entrepôts perso/company, avions, usines, **en vente (V0.8)**
 - **Modal détail** - Vue table complète du contenu d'un conteneur
 - **Transfert drag & drop** - Glisser-déposer entre conteneurs (même aéroport)
-- **Création warehouse** - Modal pour créer un entrepôt personnel
+- **Wallets header** - Affichage wallet perso et company (V0.8)
 
-### Structure UI
+### Structure UI (V0.8)
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│ 📦 INVENTAIRE                      [+ Warehouse]    │
+│ 📦 INVENTAIRE          👤 5,000$ | 🏢 25,000$       │
 │ 72 items | 1,250$ | 3 aéroports                     │
 ├─────────────────────────────────────────────────────┤
-│ 🔍 Rechercher...              [Type: Tous ▼]        │
+│ 🔍 Rechercher...     [Tous][Perso][Company][EnVente]│
 ├─────────────────────────────────────────────────────┤
 │ ▼ 📍 LFPG                           2 conteneurs    │
 │   ┌──────────────────┐  ┌──────────────────┐       │
-│   │ 🏢 Mon Entrepôt  │  │ ✈️ F-TINO        │       │
+│   │ 👤 Stock Perso   │  │ ✈️ F-TINO        │       │
 │   │ 🌾 Blé x50       │  │ 📦 Vide          │       │
 │   │ 170$ [Voir][🔄]  │  │ 0$ [Voir][🔄]    │       │
 │   └──────────────────┘  └──────────────────┘       │
@@ -43,14 +90,14 @@ L'interface inventaire offre:
 └─────────────────────────────────────────────────────┘
 ```
 
-### Icônes Conteneurs
+### Icônes Conteneurs (V0.8)
 
-| Type | Icône | Couleur bordure |
-|------|-------|-----------------|
-| `player_warehouse` | 🏢 | Bleu (#00aaff) |
-| `company_warehouse` | 🏭 | Orange (accent) |
-| `factory_storage` | ⚙️ | Vert (success) |
-| `aircraft` | ✈️ | Violet (#cc44cc) |
+| Type | Icône | Nom affiché |
+|------|-------|-------------|
+| `player_warehouse` | 👤 | Stock Perso - ICAO |
+| `company_warehouse` | 🏢 | Stock Company - ICAO |
+| `factory_storage` | 🏭 | [Nom usine] |
+| `aircraft` | ✈️ | [Immatriculation] |
 
 ### Barre Cargo (Avions)
 
@@ -579,9 +626,9 @@ Déplace des items entre deux emplacements de la même company.
 
 ## Système de Marché
 
-### Mettre en vente: `POST /inventory/set-for-sale`
+### Mettre en vente: `POST /inventory/set-for-sale` (V0.8)
 
-**Prérequis:** Item dans un **warehouse** (pas vault)
+**Prérequis:** Item dans un **warehouse** (player_warehouse ou company_warehouse)
 
 **Body (mise en vente):**
 ```json
@@ -594,7 +641,12 @@ Déplace des items entre deux emplacements de la même company.
 }
 ```
 
-**Body (retrait de la vente):**
+**Actions V0.8:**
+1. Déduit `sale_qty` du stock normal (`qty -= sale_qty`)
+2. Crée l'annonce avec `for_sale=true`, `sale_price`, `sale_qty`
+3. L'item apparaît dans le filtre "En Vente" et sur le marché
+
+**Body (annulation - V0.8):**
 ```json
 {
     "location_id": "uuid",
@@ -602,6 +654,10 @@ Déplace des items entre deux emplacements de la même company.
     "for_sale": false
 }
 ```
+
+**Actions annulation V0.8:**
+1. Retourne `sale_qty` au stock normal (`qty += sale_qty`)
+2. Retire l'annonce (`for_sale=false`, `sale_qty=0`, `sale_price=null`)
 
 **Validations:**
 - `sale_price` > 0 (obligatoire si `for_sale` = true)
@@ -630,27 +686,35 @@ Liste tous les items en vente à un aéroport (endpoint **public**).
 ]
 ```
 
-### Acheter: `POST /inventory/market/buy`
+### Acheter: `POST /inventory/market/buy` (V0.8)
 
 **Body:**
 ```json
 {
     "seller_location_id": "uuid",
     "item_code": "Steel Ingot",
-    "qty": 10
+    "qty": 10,
+    "buyer_type": "company"
 }
 ```
+
+| Champ | Type | Description |
+|-------|------|-------------|
+| `seller_location_id` | UUID | Location du vendeur |
+| `item_code` | string | Nom de l'item |
+| `qty` | int | Quantité à acheter |
+| `buyer_type` | string | `"player"` (wallet perso) ou `"company"` (wallet company, défaut) |
 
 **Validations:**
 1. Acheteur n'est pas le vendeur
 2. Stock en vente suffisant (`sale_qty` ≥ qty demandé)
-3. Balance suffisante (acheteur)
+3. Balance suffisante (wallet perso ou company selon `buyer_type`)
 
 **Actions automatiques:**
-1. Retrait du vendeur (`qty` et `sale_qty` diminués)
-2. Création warehouse acheteur si inexistant (même aéroport)
-3. Ajout à l'acheteur
-4. Transfert d'argent (balance)
+1. Retrait du vendeur (`sale_qty` diminué)
+2. Création warehouse acheteur si inexistant (même aéroport, type selon `buyer_type`)
+3. Ajout à l'inventaire acheteur (player_warehouse ou company_warehouse)
+4. Transfert d'argent (user.wallet ou company.balance selon `buyer_type`)
 5. Audits côté vendeur (market_sell) et acheteur (market_buy)
 
 **Si `sale_qty` tombe à 0:**
@@ -780,6 +844,11 @@ POST /inventory/market/buy
 - [x] ~~Inventaire simplifié (3 tables dédiées)~~ **V0.7 Simplifié Complété**
 - [x] ~~Production directe dans company_inventory~~ **V0.7 Simplifié Complété**
 - [x] ~~UI groupée par aéroport avec recherche/filtres~~ **V0.7.1 Complété**
+- [x] ~~Déduction items lors de la mise en vente~~ **V0.8 Complété**
+- [x] ~~Filtre "En Vente" dans l'inventaire~~ **V0.8 Complété**
+- [x] ~~Annulation de vente (retour au stock)~~ **V0.8 Complété**
+- [x] ~~Sélection wallet (perso/company) à l'achat~~ **V0.8 Complété**
+- [x] ~~Affichage wallets dans header Inventaire~~ **V0.8 Complété**
 - [ ] Migration HV vers nouvelles tables
 - [ ] Capacités de stockage par location
 - [ ] Frais de stockage (warehouse rent)

@@ -49,6 +49,13 @@ let state = {
         page: 0,
         pageSize: 50,
         selectedListing: null
+    },
+    // Wallets state
+    wallets: {
+        personal: 0,
+        company: 0,
+        companyId: null,
+        companyName: null
     }
 };
 
@@ -269,6 +276,31 @@ function handleLogout() {
     localStorage.removeItem('user');
     showLogin();
     showToast('Déconnecté', 'success');
+}
+
+// Authenticated fetch helper - handles 401 errors automatically
+async function authFetch(url, options = {}) {
+    if (!state.token || state.token === 'demo-token') {
+        throw new Error('Non authentifié');
+    }
+
+    const response = await fetch(url, {
+        ...options,
+        headers: {
+            ...options.headers,
+            'Authorization': `Bearer ${state.token}`
+        }
+    });
+
+    // Handle expired/invalid token
+    if (response.status === 401) {
+        console.warn('[AUTH] Token expired or invalid, logging out...');
+        handleLogout();
+        showToast('Session expirée, veuillez vous reconnecter', 'warning');
+        throw new Error('Session expirée');
+    }
+
+    return response;
 }
 
 // ============================================
@@ -2612,6 +2644,7 @@ async function loadProfileTransactions() {
 
 let inventoryData = {
     overview: null,           // Full overview from API
+    flatItems: [],            // Flattened items list for DataTable
     expandedAirports: {},     // Track which airports are expanded
     currentFilter: 'all',     // Type filter
     searchQuery: '',          // Search query
@@ -2620,6 +2653,9 @@ let inventoryData = {
     currentDetailContainer: null  // For detail modal
 };
 
+// Instance globale du DataTable Inventaire
+let inventoryDataTable = null;
+
 // Load inventory view
 async function loadInventoryView() {
     console.log('[INVENTORY] Loading inventory view...');
@@ -2627,22 +2663,20 @@ async function loadInventoryView() {
     // Check if logged in
     if (!state.token || state.token === 'demo-token') {
         showToast('Connectez-vous pour voir votre inventaire', 'warning');
-        document.getElementById('inventory-empty-state').style.display = 'block';
-        document.getElementById('inventory-airports').style.display = 'none';
+        document.getElementById('inventory-datatable').innerHTML = `
+            <div class="dt-empty">
+                <span class="dt-empty-icon">🔒</span>
+                <p class="dt-empty-text">Connectez-vous pour voir votre inventaire</p>
+            </div>
+        `;
         return;
     }
 
-    // Setup search listener
-    const searchInput = document.getElementById('inv-search');
-    if (searchInput && !searchInput._hasListener) {
-        searchInput._hasListener = true;
-        searchInput.addEventListener('input', debounce(() => {
-            inventoryData.searchQuery = searchInput.value.trim().toLowerCase();
-            renderInventoryAirportGroups();
-        }, 300));
-    }
-
-    await refreshInventory();
+    // Load wallets and inventory in parallel
+    await Promise.all([
+        loadWallets(),
+        refreshInventory()
+    ]);
 }
 
 // Debounce helper
@@ -2660,14 +2694,58 @@ function debounce(func, wait) {
 
 // Refresh inventory data
 async function refreshInventory() {
+    const container = document.getElementById('inventory-datatable');
+
+    // Check authentication
+    if (!state.token || state.token === 'demo-token') {
+        container.innerHTML = `
+            <div class="dt-empty">
+                <span class="dt-empty-icon">🔒</span>
+                <p class="dt-empty-text">Connectez-vous pour voir votre inventaire</p>
+            </div>
+        `;
+        return;
+    }
+
+    // Show loading
+    if (!inventoryDataTable) {
+        container.innerHTML = `
+            <div class="market-loading">
+                <div class="loading-spinner"></div>
+                <p>Chargement de l'inventaire...</p>
+            </div>
+        `;
+    }
+
     try {
-        const response = await fetch(`${API_BASE}/inventory/overview`, {
-            headers: { 'Authorization': `Bearer ${state.token}` }
-        });
+        // Load inventory and my listings in parallel
+        const [invResponse, listingsResponse] = await Promise.all([
+            authFetch(`${API_BASE}/inventory/overview`),
+            authFetch(`${API_BASE}/inventory/my-listings`)
+        ]);
+
+        // Handle my-listings response
+        let myListings = [];
+        if (listingsResponse.ok) {
+            myListings = await listingsResponse.json();
+        }
+
+        const response = invResponse;
 
         if (!response.ok) {
             if (response.status === 404) {
-                showEmptyInventoryState();
+                inventoryData.overview = null;
+                inventoryData.flatItems = [];
+                if (inventoryDataTable) {
+                    inventoryDataTable.setData([]);
+                } else {
+                    container.innerHTML = `
+                        <div class="dt-empty">
+                            <span class="dt-empty-icon">📦</span>
+                            <p class="dt-empty-text">Aucun inventaire. Créez un entrepôt pour commencer.</p>
+                        </div>
+                    `;
+                }
                 return;
             }
             throw new Error('Failed to load inventory');
@@ -2675,34 +2753,368 @@ async function refreshInventory() {
 
         const data = await response.json();
         console.log('[INVENTORY] Loaded:', data);
+        console.log('[INVENTORY] My listings:', myListings);
 
         inventoryData.overview = data;
+        inventoryData.myListings = myListings;
 
-        // Expand first airport by default
-        if (data.locations && data.locations.length > 0) {
-            inventoryData.expandedAirports[data.locations[0].airport_ident] = true;
+        // Flatten inventory items (not for sale)
+        const inventoryItems = flattenInventoryData(data);
+
+        // Convert my listings to flat items format
+        const listingItems = myListings.map(listing => ({
+            item_id: listing.item_id,
+            item_name: listing.item_name,
+            tier: listing.item_tier,
+            qty: listing.sale_qty,
+            weight_kg: 0, // Not tracked for listings
+            value: parseFloat(listing.sale_price) * listing.sale_qty,
+            airport_ident: listing.airport_ident,
+            airport_name: listing.airport_ident,
+            container_id: listing.location_id,
+            container_name: `En Vente - ${listing.airport_ident}`,
+            container_type: 'for_sale',
+            container_owner: listing.company_name,
+            for_sale: true,
+            sale_price: parseFloat(listing.sale_price)
+        }));
+
+        inventoryData.flatItems = [...inventoryItems, ...listingItems];
+
+        updateInventorySubtitle(data, myListings);
+
+        // Initialize or update DataTable
+        if (!inventoryDataTable) {
+            inventoryDataTable = createInventoryDataTable(inventoryData.flatItems);
+        } else {
+            inventoryDataTable.setData(inventoryData.flatItems);
         }
-
-        updateInventorySubtitle(data);
-        renderInventoryAirportGroups();
 
     } catch (error) {
         console.error('[INVENTORY] Error:', error);
-        showEmptyInventoryState();
+        container.innerHTML = `
+            <div class="dt-empty">
+                <span class="dt-empty-icon">⚠️</span>
+                <p class="dt-empty-text">Erreur de chargement de l'inventaire</p>
+            </div>
+        `;
     }
 }
 
 // Update inventory subtitle stats
-function updateInventorySubtitle(data) {
+function updateInventorySubtitle(data, listings = []) {
     const totalItems = data.total_items || 0;
     const totalValue = parseFloat(data.total_value) || 0;
     const airportCount = data.locations?.length || 0;
+    const listingsCount = listings.length;
 
-    const subtitle = `${totalItems} items | ${formatMoney(totalValue)} | ${airportCount} aéroport${airportCount > 1 ? 's' : ''}`;
+    let subtitle = `${totalItems} items | ${formatMoney(totalValue)} | ${airportCount} aéroport${airportCount > 1 ? 's' : ''}`;
+    if (listingsCount > 0) {
+        subtitle += ` | ${listingsCount} en vente`;
+    }
     document.getElementById('inv-subtitle').textContent = subtitle;
 }
 
-// Filter inventory type
+// Flatten inventory data for DataTable
+function flattenInventoryData(data) {
+    const items = [];
+
+    if (!data || !data.locations) return items;
+
+    data.locations.forEach(airport => {
+        const containers = airport.containers || [];
+
+        containers.forEach(container => {
+            const containerItems = container.items || [];
+
+            // Generate clean container name based on type
+            let containerName;
+            switch (container.type) {
+                case 'player_warehouse':
+                    containerName = `Stock Perso - ${airport.airport_ident}`;
+                    break;
+                case 'company_warehouse':
+                    containerName = `Stock Company - ${airport.airport_ident}`;
+                    break;
+                case 'aircraft':
+                    containerName = container.name || `Avion - ${airport.airport_ident}`;
+                    break;
+                case 'factory_storage':
+                    containerName = container.name || `Usine - ${airport.airport_ident}`;
+                    break;
+                default:
+                    containerName = container.name || container.type;
+            }
+
+            containerItems.forEach(item => {
+                items.push({
+                    // Item info
+                    item_id: item.item_id,
+                    item_name: item.item_name,
+                    tier: item.tier,
+                    qty: item.qty,
+                    weight_kg: parseFloat(item.total_weight_kg) || 0,
+                    value: parseFloat(item.total_value) || 0,
+
+                    // Location info
+                    airport_ident: airport.airport_ident,
+                    airport_name: airport.airport_name,
+
+                    // Container info
+                    container_id: container.id,
+                    container_name: containerName,
+                    container_type: container.type,
+                    container_owner: container.owner_name
+                });
+            });
+        });
+    });
+
+    return items;
+}
+
+// Create Inventory DataTable
+function createInventoryDataTable(data) {
+    return createDataTable({
+        containerId: 'inventory-datatable',
+        data: data,
+        columns: [
+            {
+                key: 'item_name',
+                label: 'Item',
+                sortable: true,
+                render: (value, row) => {
+                    const icon = getItemEmoji(value);
+                    return `<span class="dt-item-name"><span class="dt-item-icon">${icon}</span> ${value}</span>`;
+                }
+            },
+            {
+                key: 'tier',
+                label: 'Tier',
+                sortable: true,
+                width: '60px',
+                render: (value) => `<span class="dt-tier tier-t${value}">T${value}</span>`
+            },
+            {
+                key: 'qty',
+                label: 'Qté',
+                sortable: true,
+                width: '60px'
+            },
+            {
+                key: 'airport_ident',
+                label: 'Lieu',
+                sortable: true,
+                width: '80px',
+                render: (value) => `<span>📍 ${value}</span>`
+            },
+            {
+                key: 'container_name',
+                label: 'Conteneur',
+                sortable: true,
+                render: (value, row) => {
+                    const icon = getContainerIcon(row.container_type);
+                    return `<span>${icon} ${value}</span>`;
+                }
+            },
+            {
+                key: 'weight_kg',
+                label: 'Poids',
+                sortable: true,
+                width: '80px',
+                render: (value) => `${value.toFixed(0)} kg`
+            },
+            {
+                key: 'value',
+                label: 'Valeur',
+                sortable: true,
+                width: '90px',
+                render: (value) => `<span class="dt-price">${formatMoney(value)}</span>`
+            }
+        ],
+        actions: [
+            {
+                label: 'Transférer',
+                icon: '↗️',
+                show: (row) => !row.for_sale,
+                onClick: (row) => openTransferModalForItem(row.container_id, row.item_id, row.qty, row.item_name, row.airport_ident)
+            },
+            {
+                label: 'Vendre',
+                icon: '💰',
+                className: 'btn-primary',
+                show: (row) => !row.for_sale,
+                onClick: (row) => openSellModal(row)
+            },
+            {
+                label: 'Annuler',
+                icon: '❌',
+                className: 'btn-danger',
+                show: (row) => row.for_sale,
+                onClick: (row) => cancelSale(row)
+            }
+        ],
+        filters: {
+            search: true,
+            searchKeys: ['item_name', 'container_name'],
+            icao: true,
+            icaoKey: 'airport_ident',
+            chips: [
+                {
+                    key: 'tier',
+                    label: 'Tier',
+                    values: [
+                        { value: 0, label: 'T0' },
+                        { value: 1, label: 'T1' },
+                        { value: 2, label: 'T2' },
+                        { value: 3, label: 'T3' },
+                        { value: 4, label: 'T4' },
+                        { value: 5, label: 'T5' }
+                    ]
+                },
+                {
+                    key: 'container_type',
+                    label: 'Type',
+                    values: [
+                        { value: 'player_warehouse', label: '👤 Perso' },
+                        { value: 'company_warehouse', label: '🏢 Company' },
+                        { value: 'aircraft', label: '✈️ Avion' },
+                        { value: 'factory_storage', label: '🏭 Usine' },
+                        { value: 'for_sale', label: '🏷️ En Vente' }
+                    ]
+                }
+            ]
+        },
+        pagination: true,
+        pageSize: 25,
+        emptyMessage: 'Aucun item en inventaire',
+        emptyIcon: '📦'
+    });
+}
+
+// ========================================
+// SELL MODAL
+// ========================================
+
+// Current item being sold
+let pendingSellItem = null;
+
+function openSellModal(item) {
+    if (!state.token || state.token === 'demo-token') {
+        showToast('Connectez-vous pour vendre', 'warning');
+        return;
+    }
+
+    pendingSellItem = item;
+
+    // Update modal content
+    const icon = getItemEmoji(item.item_name);
+    document.getElementById('sell-item-icon').textContent = icon;
+    document.getElementById('sell-item-name').textContent = item.item_name;
+    document.getElementById('sell-item-tier').textContent = `T${item.tier}`;
+
+    document.getElementById('sell-available-qty').textContent = item.qty;
+    document.getElementById('sell-location').textContent = item.airport_ident;
+    document.getElementById('sell-container').textContent = `${getContainerIcon(item.container_type)} ${item.container_name}`;
+
+    document.getElementById('sell-qty').value = 1;
+    document.getElementById('sell-qty').max = item.qty;
+    document.getElementById('sell-price').value = 10;
+
+    updateSellTotal();
+
+    document.getElementById('market-sell-error').classList.remove('visible');
+    document.getElementById('modal-market-sell').classList.add('active');
+}
+
+function closeSellModal() {
+    document.getElementById('modal-market-sell').classList.remove('active');
+    pendingSellItem = null;
+}
+
+function setSellMax() {
+    if (pendingSellItem) {
+        document.getElementById('sell-qty').value = pendingSellItem.qty;
+        updateSellTotal();
+    }
+}
+
+function updateSellTotal() {
+    const qty = parseInt(document.getElementById('sell-qty').value) || 0;
+    const price = parseFloat(document.getElementById('sell-price').value) || 0;
+    const total = qty * price;
+
+    document.getElementById('sell-total').textContent = formatMoney(total);
+}
+
+async function confirmMarketSell() {
+    if (!pendingSellItem) return;
+
+    const qty = parseInt(document.getElementById('sell-qty').value);
+    const price = parseFloat(document.getElementById('sell-price').value);
+    const errorEl = document.getElementById('market-sell-error');
+    const btn = document.getElementById('btn-confirm-sell');
+
+    if (!qty || qty < 1) {
+        errorEl.textContent = 'Quantité invalide';
+        errorEl.classList.add('visible');
+        return;
+    }
+
+    if (qty > pendingSellItem.qty) {
+        errorEl.textContent = `Quantité max: ${pendingSellItem.qty}`;
+        errorEl.classList.add('visible');
+        return;
+    }
+
+    if (!price || price < 1) {
+        errorEl.textContent = 'Prix invalide (min: 1$)';
+        errorEl.classList.add('visible');
+        return;
+    }
+
+    btn.classList.add('loading');
+    btn.textContent = 'MISE EN VENTE...';
+    errorEl.classList.remove('visible');
+
+    try {
+        const response = await fetch(`${API_BASE}/inventory/set-for-sale`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${state.token}`
+            },
+            body: JSON.stringify({
+                location_id: pendingSellItem.container_id,
+                item_code: pendingSellItem.item_name,
+                for_sale: true,
+                sale_price: price,
+                sale_qty: qty
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Erreur lors de la mise en vente');
+        }
+
+        showToast(`${qty}× ${pendingSellItem.item_name} mis en vente à ${formatMoney(price)}/unité`, 'success');
+        closeSellModal();
+
+        // Refresh inventory
+        await refreshInventory();
+
+    } catch (error) {
+        console.error('[SELL] Error:', error);
+        errorEl.textContent = error.message;
+        errorEl.classList.add('visible');
+    } finally {
+        btn.classList.remove('loading');
+        btn.textContent = 'METTRE EN VENTE';
+    }
+}
+
+// Filter inventory type (legacy - kept for compatibility)
 function filterInventory() {
     inventoryData.currentFilter = document.getElementById('inv-type-filter').value;
     renderInventoryAirportGroups();
@@ -2891,12 +3303,533 @@ function getContainerClass(type) {
 // Get container icon based on type
 function getContainerIcon(type) {
     const icons = {
-        'player_warehouse': '🏢',
-        'company_warehouse': '🏭',
-        'factory_storage': '⚙️',
-        'aircraft': '✈️'
+        'player_warehouse': '👤',
+        'company_warehouse': '🏢',
+        'factory_storage': '🏭',
+        'aircraft': '✈️',
+        'for_sale': '🏷️'
     };
     return icons[type] || '📦';
+}
+
+// Cancel a sale and return items to inventory
+async function cancelSale(item) {
+    if (!state.token || state.token === 'demo-token') {
+        showToast('Connectez-vous pour annuler la vente', 'warning');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/inventory/set-for-sale`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${state.token}`
+            },
+            body: JSON.stringify({
+                location_id: item.container_id,
+                item_code: item.item_name,
+                for_sale: false,
+                sale_price: 0,
+                sale_qty: 0
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Erreur lors de l\'annulation');
+        }
+
+        showToast(`Vente annulée: ${item.qty}× ${item.item_name} retournés en inventaire`, 'success');
+
+        // Refresh inventory
+        await refreshInventory();
+
+    } catch (error) {
+        console.error('[CANCEL SALE] Error:', error);
+        showToast(error.message, 'error');
+    }
+}
+
+// ========================================
+// DATATABLE - COMPOSANT GÉNÉRIQUE
+// ========================================
+
+/**
+ * DataTable - Composant tableau générique réutilisable
+ *
+ * @param {Object} config - Configuration du tableau
+ * @param {string} config.containerId - ID du conteneur HTML
+ * @param {Array} config.columns - Définition des colonnes
+ *   - key: string - Clé de la propriété dans data
+ *   - label: string - Label affiché dans le header
+ *   - sortable: boolean - Si triable (défaut: true)
+ *   - render: function(value, row) - Rendu personnalisé (optionnel)
+ *   - width: string - Largeur CSS (optionnel)
+ * @param {Array} config.data - Données à afficher
+ * @param {Array} config.actions - Actions par ligne (optionnel)
+ *   - label: string - Texte du bouton
+ *   - icon: string - Emoji/icône
+ *   - onClick: function(row) - Handler du clic
+ *   - className: string - Classes CSS additionnelles
+ * @param {Object} config.filters - Configuration des filtres (optionnel)
+ *   - search: boolean - Activer la recherche
+ *   - searchKeys: Array<string> - Clés à chercher
+ *   - icao: boolean - Activer le filtre ICAO
+ *   - icaoKey: string - Clé du champ ICAO (ex: 'airport_ident')
+ *   - chips: Array - Filtres par chips {key, label, values: [{value, label}]}
+ * @param {boolean} config.pagination - Activer la pagination (défaut: false)
+ * @param {number} config.pageSize - Nombre d'items par page (défaut: 50)
+ * @param {string} config.emptyMessage - Message si pas de données
+ * @param {string} config.emptyIcon - Icône si pas de données
+ */
+class DataTable {
+    constructor(config) {
+        this.containerId = config.containerId;
+        this.columns = config.columns || [];
+        this.data = config.data || [];
+        this.actions = config.actions || [];
+        this.filters = config.filters || {};
+        this.pagination = config.pagination || false;
+        this.pageSize = config.pageSize || 50;
+        this.emptyMessage = config.emptyMessage || 'Aucune donnée';
+        this.emptyIcon = config.emptyIcon || '📭';
+        this.onRowClick = config.onRowClick || null;
+
+        // État interne
+        this.sortKey = null;
+        this.sortDirection = 'asc';
+        this.searchValue = '';
+        this.icaoValue = '';
+        this.activeFilters = {};
+        this.currentPage = 0;
+        this.filteredData = [...this.data];
+
+        // Initialisation
+        this._init();
+    }
+
+    _init() {
+        this.render();
+    }
+
+    // Mise à jour des données
+    setData(data) {
+        this.data = data || [];
+        this.currentPage = 0;
+        this._applyFiltersAndSort();
+        this.render();
+    }
+
+    // Tri
+    sort(key) {
+        if (this.sortKey === key) {
+            this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            this.sortKey = key;
+            this.sortDirection = 'asc';
+        }
+        this._applyFiltersAndSort();
+        this._updateTableContent();
+    }
+
+    // Recherche (mise à jour partielle pour garder le focus)
+    search(value) {
+        this.searchValue = value.toLowerCase();
+        this.currentPage = 0;
+        this._applyFiltersAndSort();
+        this._updateTableContent();
+    }
+
+    // Filtre ICAO (mise à jour partielle pour garder le focus)
+    filterIcao(value) {
+        this.icaoValue = value.toUpperCase();
+        this.currentPage = 0;
+        this._applyFiltersAndSort();
+        this._updateTableContent();
+    }
+
+    // Filtre par chips
+    setFilter(key, value) {
+        if (value === '' || value === 'all') {
+            delete this.activeFilters[key];
+        } else {
+            this.activeFilters[key] = value;
+        }
+        this.currentPage = 0;
+        this._applyFiltersAndSort();
+        this._updateTableContent();
+    }
+
+    // Pagination
+    nextPage() {
+        const maxPage = Math.ceil(this.filteredData.length / this.pageSize) - 1;
+        if (this.currentPage < maxPage) {
+            this.currentPage++;
+            this._updateTableContent();
+        }
+    }
+
+    prevPage() {
+        if (this.currentPage > 0) {
+            this.currentPage--;
+            this._updateTableContent();
+        }
+    }
+
+    // Appliquer filtres et tri
+    _applyFiltersAndSort() {
+        let result = [...this.data];
+
+        // Recherche
+        if (this.searchValue && this.filters.searchKeys) {
+            result = result.filter(row => {
+                return this.filters.searchKeys.some(key => {
+                    const value = this._getNestedValue(row, key);
+                    return value && String(value).toLowerCase().includes(this.searchValue);
+                });
+            });
+        }
+
+        // Filtre ICAO
+        if (this.icaoValue && this.filters.icaoKey) {
+            result = result.filter(row => {
+                const value = this._getNestedValue(row, this.filters.icaoKey);
+                return value && String(value).toUpperCase().includes(this.icaoValue);
+            });
+        }
+
+        // Filtres chips
+        for (const [key, value] of Object.entries(this.activeFilters)) {
+            result = result.filter(row => {
+                const rowValue = this._getNestedValue(row, key);
+                return String(rowValue) === String(value);
+            });
+        }
+
+        // Tri
+        if (this.sortKey) {
+            result.sort((a, b) => {
+                const aVal = this._getNestedValue(a, this.sortKey);
+                const bVal = this._getNestedValue(b, this.sortKey);
+
+                // Tri numérique si possible
+                const aNum = parseFloat(aVal);
+                const bNum = parseFloat(bVal);
+
+                let comparison = 0;
+                if (!isNaN(aNum) && !isNaN(bNum)) {
+                    comparison = aNum - bNum;
+                } else {
+                    comparison = String(aVal).localeCompare(String(bVal));
+                }
+
+                return this.sortDirection === 'asc' ? comparison : -comparison;
+            });
+        }
+
+        this.filteredData = result;
+    }
+
+    // Récupérer valeur imbriquée (ex: "item.name")
+    _getNestedValue(obj, key) {
+        return key.split('.').reduce((o, k) => (o || {})[k], obj);
+    }
+
+    // Rendu HTML complet (initial)
+    render() {
+        const container = document.getElementById(this.containerId);
+        if (!container) return;
+
+        const paginatedData = this._getPaginatedData();
+
+        container.innerHTML = `
+            ${this._renderToolbar()}
+            <div class="dt-content">
+                ${paginatedData.length > 0
+                    ? this._renderTable(paginatedData)
+                    : this._renderEmpty()}
+            </div>
+            ${this.pagination ? `<div class="dt-pagination-wrapper">${this._renderPagination()}</div>` : ''}
+        `;
+
+        this._attachEvents();
+    }
+
+    // Mise à jour partielle (garde le focus sur la recherche)
+    _updateTableContent() {
+        const container = document.getElementById(this.containerId);
+        if (!container) return;
+
+        const paginatedData = this._getPaginatedData();
+
+        // Mettre à jour le contenu du tableau (tbody ou empty state)
+        const contentEl = container.querySelector('.dt-content');
+        if (contentEl) {
+            contentEl.innerHTML = paginatedData.length > 0
+                ? this._renderTable(paginatedData)
+                : this._renderEmpty();
+        }
+
+        // Mettre à jour la pagination
+        const paginationWrapper = container.querySelector('.dt-pagination-wrapper');
+        if (paginationWrapper && this.pagination) {
+            paginationWrapper.innerHTML = this._renderPagination();
+        }
+
+        // Mettre à jour les états actifs des chips
+        container.querySelectorAll('[data-dt-filter]').forEach(btn => {
+            const key = btn.dataset.dtFilter;
+            const value = btn.dataset.dtValue;
+            const isActive = value === ''
+                ? !this.activeFilters[key]
+                : this.activeFilters[key] === value;
+            btn.classList.toggle('active', isActive);
+        });
+
+        // Mettre à jour les indicateurs de tri
+        container.querySelectorAll('[data-dt-sort]').forEach(th => {
+            const key = th.dataset.dtSort;
+            th.classList.toggle('dt-sorted', this.sortKey === key);
+            const icon = th.querySelector('.dt-sort-icon');
+            if (icon) {
+                icon.textContent = this.sortKey === key
+                    ? (this.sortDirection === 'asc' ? '▲' : '▼')
+                    : '';
+            }
+        });
+
+        // Réattacher les événements dynamiques (pas la recherche)
+        this._attachDynamicEvents();
+    }
+
+    // Barre d'outils (recherche + filtres)
+    _renderToolbar() {
+        if (!this.filters.search && !this.filters.icao && !this.filters.chips?.length) return '';
+
+        return `
+            <div class="dt-toolbar">
+                ${this.filters.search ? `
+                    <div class="dt-search">
+                        <span class="dt-search-icon">🔍</span>
+                        <input type="text"
+                               class="dt-search-input"
+                               placeholder="Rechercher..."
+                               value="${this.searchValue}"
+                               data-dt-search>
+                    </div>
+                ` : ''}
+                ${this.filters.icao ? `
+                    <div class="dt-search dt-icao">
+                        <span class="dt-search-icon">📍</span>
+                        <input type="text"
+                               class="dt-search-input"
+                               placeholder="ICAO..."
+                               value="${this.icaoValue}"
+                               maxlength="4"
+                               style="text-transform: uppercase; width: 80px;"
+                               data-dt-icao>
+                    </div>
+                ` : ''}
+                ${this.filters.chips?.length ? `
+                    <div class="dt-filters">
+                        ${this.filters.chips.map(chip => `
+                            <div class="dt-filter-group">
+                                <span class="dt-filter-label">${chip.label}:</span>
+                                <div class="dt-filter-chips">
+                                    <button class="dt-chip ${!this.activeFilters[chip.key] ? 'active' : ''}"
+                                            data-dt-filter="${chip.key}" data-dt-value="">
+                                        Tous
+                                    </button>
+                                    ${chip.values.map(v => `
+                                        <button class="dt-chip ${this.activeFilters[chip.key] === String(v.value) ? 'active' : ''}"
+                                                data-dt-filter="${chip.key}" data-dt-value="${v.value}">
+                                            ${v.label}
+                                        </button>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }
+
+    // Tableau
+    _renderTable(data) {
+        return `
+            <div class="dt-table-wrapper">
+                <table class="dt-table">
+                    <thead>
+                        <tr>
+                            ${this.columns.map(col => `
+                                <th class="${col.sortable !== false ? 'dt-sortable' : ''} ${this.sortKey === col.key ? 'dt-sorted' : ''}"
+                                    style="${col.width ? `width: ${col.width}` : ''}"
+                                    ${col.sortable !== false ? `data-dt-sort="${col.key}"` : ''}>
+                                    ${col.label}
+                                    ${col.sortable !== false ? `
+                                        <span class="dt-sort-icon">
+                                            ${this.sortKey === col.key
+                                                ? (this.sortDirection === 'asc' ? '▲' : '▼')
+                                                : ''}
+                                        </span>
+                                    ` : ''}
+                                </th>
+                            `).join('')}
+                            ${this.actions.length > 0 ? '<th class="dt-actions-header">Actions</th>' : ''}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${data.map((row, idx) => `
+                            <tr class="dt-row ${this.onRowClick ? 'dt-clickable' : ''}"
+                                data-dt-row-idx="${idx}">
+                                ${this.columns.map(col => `
+                                    <td>
+                                        ${col.render
+                                            ? col.render(this._getNestedValue(row, col.key), row)
+                                            : this._getNestedValue(row, col.key) ?? '-'}
+                                    </td>
+                                `).join('')}
+                                ${this.actions.length > 0 ? `
+                                    <td class="dt-actions">
+                                        ${this.actions.map((action, actionIdx) => {
+                                            // Check if action should be shown
+                                            if (action.show && !action.show(row)) {
+                                                return '';
+                                            }
+                                            return `
+                                            <button class="dt-action-btn ${action.className || ''}"
+                                                    data-dt-action="${actionIdx}"
+                                                    data-dt-row-idx="${idx}"
+                                                    title="${action.label}">
+                                                ${action.icon || action.label}
+                                            </button>
+                                        `;
+                                        }).join('')}
+                                    </td>
+                                ` : ''}
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    // État vide
+    _renderEmpty() {
+        return `
+            <div class="dt-empty">
+                <span class="dt-empty-icon">${this.emptyIcon}</span>
+                <p class="dt-empty-text">${this.emptyMessage}</p>
+            </div>
+        `;
+    }
+
+    // Pagination
+    _renderPagination() {
+        const totalPages = Math.ceil(this.filteredData.length / this.pageSize);
+        const start = this.currentPage * this.pageSize + 1;
+        const end = Math.min((this.currentPage + 1) * this.pageSize, this.filteredData.length);
+
+        return `
+            <div class="dt-pagination">
+                <button class="dt-page-btn" data-dt-page="prev" ${this.currentPage === 0 ? 'disabled' : ''}>
+                    ◀ Préc
+                </button>
+                <span class="dt-page-info">
+                    ${this.filteredData.length > 0 ? `${start}-${end} sur ${this.filteredData.length}` : '0 résultat'}
+                </span>
+                <button class="dt-page-btn" data-dt-page="next" ${this.currentPage >= totalPages - 1 ? 'disabled' : ''}>
+                    Suiv ▶
+                </button>
+            </div>
+        `;
+    }
+
+    // Attachement de tous les événements (initial)
+    _attachEvents() {
+        const container = document.getElementById(this.containerId);
+        if (!container) return;
+
+        // Recherche (attaché une seule fois, ne change pas)
+        const searchInput = container.querySelector('[data-dt-search]');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => this.search(e.target.value));
+        }
+
+        // ICAO (attaché une seule fois, ne change pas)
+        const icaoInput = container.querySelector('[data-dt-icao]');
+        if (icaoInput) {
+            icaoInput.addEventListener('input', (e) => this.filterIcao(e.target.value));
+        }
+
+        // Événements dynamiques
+        this._attachDynamicEvents();
+    }
+
+    // Événements dynamiques (réattachés après mise à jour du contenu)
+    _attachDynamicEvents() {
+        const container = document.getElementById(this.containerId);
+        if (!container) return;
+
+        // Tri
+        container.querySelectorAll('[data-dt-sort]').forEach(th => {
+            th.onclick = () => this.sort(th.dataset.dtSort);
+        });
+
+        // Filtres chips
+        container.querySelectorAll('[data-dt-filter]').forEach(btn => {
+            btn.onclick = () => this.setFilter(btn.dataset.dtFilter, btn.dataset.dtValue);
+        });
+
+        // Actions
+        container.querySelectorAll('[data-dt-action]').forEach(btn => {
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                const actionIdx = parseInt(btn.dataset.dtAction);
+                const rowIdx = parseInt(btn.dataset.dtRowIdx);
+                const row = this._getPaginatedData()[rowIdx];
+                if (this.actions[actionIdx]?.onClick) {
+                    this.actions[actionIdx].onClick(row);
+                }
+            };
+        });
+
+        // Clic ligne
+        if (this.onRowClick) {
+            container.querySelectorAll('.dt-row').forEach(tr => {
+                tr.onclick = () => {
+                    const rowIdx = parseInt(tr.dataset.dtRowIdx);
+                    const row = this._getPaginatedData()[rowIdx];
+                    this.onRowClick(row);
+                };
+            });
+        }
+
+        // Pagination
+        container.querySelectorAll('[data-dt-page]').forEach(btn => {
+            btn.onclick = () => {
+                if (btn.dataset.dtPage === 'prev') this.prevPage();
+                if (btn.dataset.dtPage === 'next') this.nextPage();
+            };
+        });
+    }
+
+    _getPaginatedData() {
+        return this.pagination
+            ? this.filteredData.slice(
+                this.currentPage * this.pageSize,
+                (this.currentPage + 1) * this.pageSize
+              )
+            : this.filteredData;
+    }
+}
+
+// Factory function pour créer un DataTable
+function createDataTable(config) {
+    return new DataTable(config);
 }
 
 // Show empty inventory state
@@ -3327,43 +4260,81 @@ async function submitCreateWarehouse() {
 // MARKET VIEW (HV - Hôtel des Ventes)
 // ========================================
 
+// Instance globale du DataTable Market
+let marketDataTable = null;
+
 async function loadMarketView() {
     console.log('[MARKET] Loading market view...');
 
-    // Reset state
-    state.market.page = 0;
-
-    // Load stats and listings in parallel
+    // Load wallets and listings in parallel
     await Promise.all([
-        loadMarketStats(),
+        loadWallets(),
         loadMarketListings()
     ]);
 }
 
-async function loadMarketStats() {
-    try {
-        const response = await fetch(`${API_BASE}/inventory/market/stats`, {
-            headers: state.token ? { 'Authorization': `Bearer ${state.token}` } : {}
-        });
+// Load user and company wallets
+async function loadWallets() {
+    // Reset wallets display (Market + Inventory)
+    updateWalletDisplays('0$', '-', 'Pas de company');
 
-        if (!response.ok) {
-            throw new Error('Failed to load market stats');
-        }
-
-        const stats = await response.json();
-        state.market.stats = stats;
-
-        // Update header stats
-        document.getElementById('market-total-listings').textContent = stats.total_listings;
-        document.getElementById('market-total-airports').textContent = stats.total_airports;
-        document.getElementById('market-total-value').textContent = formatMoney(stats.total_value);
-
-        // Update tier distribution chips
-        renderTierChips(stats.tier_distribution);
-
-    } catch (error) {
-        console.error('[MARKET] Error loading stats:', error);
+    if (!state.token || state.token === 'demo-token') {
+        return;
     }
+
+    try {
+        // Load user wallet
+        const userResponse = await authFetch(`${API_BASE}/users/me`);
+
+        if (userResponse.ok) {
+            const userData = await userResponse.json();
+            state.wallets.personal = parseFloat(userData.wallet) || 0;
+
+            // If user has a company, load company balance
+            if (userData.company_id) {
+                state.wallets.companyId = userData.company_id;
+
+                const companyResponse = await authFetch(`${API_BASE}/company/${userData.company_id}`);
+
+                if (companyResponse.ok) {
+                    const companyData = await companyResponse.json();
+                    state.wallets.company = parseFloat(companyData.balance) || 0;
+                    state.wallets.companyName = companyData.name;
+                }
+            }
+
+            // Update all wallet displays
+            updateWalletDisplays(
+                formatMoney(state.wallets.personal),
+                state.wallets.companyName ? formatMoney(state.wallets.company) : '-',
+                state.wallets.companyName || 'Pas de company'
+            );
+        }
+    } catch (error) {
+        // Don't log error for session expiration (already handled by authFetch)
+        if (!error.message.includes('Session expirée')) {
+            console.error('[WALLETS] Error loading wallets:', error);
+        }
+    }
+}
+
+// Update wallet displays in both Market and Inventory views
+function updateWalletDisplays(personalValue, companyValue, companyName) {
+    // Market view
+    const marketPersonal = document.getElementById('wallet-personal');
+    const marketCompany = document.getElementById('wallet-company');
+    const marketCompanyName = document.getElementById('wallet-company-name');
+    if (marketPersonal) marketPersonal.textContent = personalValue;
+    if (marketCompany) marketCompany.textContent = companyValue;
+    if (marketCompanyName) marketCompanyName.textContent = companyName;
+
+    // Inventory view
+    const invPersonal = document.getElementById('inv-wallet-personal');
+    const invCompany = document.getElementById('inv-wallet-company');
+    const invCompanyName = document.getElementById('inv-wallet-company-name');
+    if (invPersonal) invPersonal.textContent = personalValue;
+    if (invCompany) invCompany.textContent = companyValue;
+    if (invCompanyName) invCompanyName.textContent = companyName;
 }
 
 function renderTierChips(tierDist) {
@@ -3384,35 +4355,22 @@ function renderTierChips(tierDist) {
 }
 
 async function loadMarketListings() {
-    const container = document.getElementById('market-listings');
+    const container = document.getElementById('market-datatable');
 
-    // Show loading
-    container.innerHTML = `
-        <div class="market-loading">
-            <div class="loading-spinner"></div>
-            <p>Chargement du marché...</p>
-        </div>
-    `;
+    // Show loading initially
+    if (!marketDataTable) {
+        container.innerHTML = `
+            <div class="market-loading">
+                <div class="loading-spinner"></div>
+                <p>Chargement du marché...</p>
+            </div>
+        `;
+    }
 
     try {
-        // Build query params
+        // Fetch all listings (without pagination - DataTable handles it)
         const params = new URLSearchParams();
-
-        if (state.market.filters.search) {
-            params.append('item_name', state.market.filters.search);
-        }
-        if (state.market.filters.airport) {
-            params.append('airport', state.market.filters.airport.toUpperCase());
-        }
-        if (state.market.filters.tier !== '') {
-            params.append('tier', state.market.filters.tier);
-        }
-        if (state.market.filters.maxPrice) {
-            params.append('max_price', state.market.filters.maxPrice);
-        }
-
-        params.append('limit', state.market.pageSize);
-        params.append('offset', state.market.page * state.market.pageSize);
+        params.append('limit', 1000); // Get all listings
 
         const url = `${API_BASE}/inventory/market?${params.toString()}`;
 
@@ -3427,8 +4385,12 @@ async function loadMarketListings() {
         const listings = await response.json();
         state.market.listings = listings;
 
-        renderMarketListings(listings);
-        updateMarketPagination(listings.length);
+        // Initialize or update DataTable
+        if (!marketDataTable) {
+            marketDataTable = createMarketDataTable(listings);
+        } else {
+            marketDataTable.setData(listings);
+        }
 
     } catch (error) {
         console.error('[MARKET] Error loading listings:', error);
@@ -3441,102 +4403,102 @@ async function loadMarketListings() {
     }
 }
 
-function renderMarketListings(listings) {
-    const container = document.getElementById('market-listings');
-
-    if (listings.length === 0) {
-        container.innerHTML = `
-            <div class="market-empty">
-                <span class="market-empty-icon">🏪</span>
-                <h3>Aucune annonce trouvée</h3>
-                <p>Essayez de modifier vos filtres</p>
-            </div>
-        `;
-        return;
-    }
-
-    container.innerHTML = `
-        <div class="market-listings-grid">
-            ${listings.map(listing => renderMarketListing(listing)).join('')}
-        </div>
-    `;
+function createMarketDataTable(data) {
+    return createDataTable({
+        containerId: 'market-datatable',
+        data: data,
+        columns: [
+            {
+                key: 'item_name',
+                label: 'Item',
+                sortable: true,
+                render: (value, row) => {
+                    const icon = row.item_icon || getItemEmoji(value);
+                    return `<span class="dt-item-name"><span class="dt-item-icon">${icon}</span> ${value}</span>`;
+                }
+            },
+            {
+                key: 'item_tier',
+                label: 'Tier',
+                sortable: true,
+                width: '60px',
+                render: (value) => `<span class="dt-tier tier-t${value}">T${value}</span>`
+            },
+            {
+                key: 'company_name',
+                label: 'Vendeur',
+                sortable: true
+            },
+            {
+                key: 'airport_ident',
+                label: 'Lieu',
+                sortable: true,
+                width: '80px',
+                render: (value) => `<span>📍 ${value}</span>`
+            },
+            {
+                key: 'sale_price',
+                label: 'Prix',
+                sortable: true,
+                width: '90px',
+                render: (value) => `<span class="dt-price">${formatMoney(value)}</span>`
+            },
+            {
+                key: 'sale_qty',
+                label: 'Qté',
+                sortable: true,
+                width: '60px',
+                render: (value) => `×${value}`
+            }
+        ],
+        actions: [
+            {
+                label: 'Acheter',
+                icon: '🛒',
+                className: 'btn-primary',
+                onClick: (row) => openMarketBuyModal(row.location_id, row.item_id)
+            }
+        ],
+        filters: {
+            search: true,
+            searchKeys: ['item_name', 'company_name'],
+            icao: true,
+            icaoKey: 'airport_ident',
+            chips: [
+                {
+                    key: 'item_tier',
+                    label: 'Tier',
+                    values: [
+                        { value: 0, label: 'T0' },
+                        { value: 1, label: 'T1' },
+                        { value: 2, label: 'T2' },
+                        { value: 3, label: 'T3' },
+                        { value: 4, label: 'T4' },
+                        { value: 5, label: 'T5' }
+                    ]
+                }
+            ]
+        },
+        pagination: true,
+        pageSize: 25,
+        emptyMessage: 'Aucune annonce trouvée',
+        emptyIcon: '🏪',
+        onRowClick: (row) => openMarketBuyModal(row.location_id, row.item_id)
+    });
 }
 
-function renderMarketListing(listing) {
-    const icon = listing.item_icon || getProductEmoji(listing.item_code);
-    const tierClass = `tier-t${listing.item_tier}`;
-
-    return `
-        <div class="market-listing-card" onclick="openMarketBuyModal('${listing.location_id}', '${listing.item_id}')">
-            <div class="listing-header">
-                <span class="listing-icon">${icon}</span>
-                <span class="listing-tier ${tierClass}">T${listing.item_tier}</span>
-            </div>
-            <div class="listing-body">
-                <div class="listing-item-name">${listing.item_name}</div>
-                <div class="listing-seller">${listing.company_name}</div>
-                <div class="listing-location">
-                    <span>📍</span> ${listing.airport_ident}
-                </div>
-            </div>
-            <div class="listing-footer">
-                <div class="listing-price">${formatMoney(listing.sale_price)}</div>
-                <div class="listing-qty">× ${listing.sale_qty}</div>
-            </div>
-        </div>
-    `;
-}
-
-function updateMarketPagination(count) {
-    const prevBtn = document.getElementById('market-prev-btn');
-    const nextBtn = document.getElementById('market-next-btn');
-    const info = document.getElementById('market-pagination-info');
-
-    prevBtn.disabled = state.market.page === 0;
-    nextBtn.disabled = count < state.market.pageSize;
-
-    const start = state.market.page * state.market.pageSize + 1;
-    const end = start + count - 1;
-    info.textContent = `${start}-${end}`;
-}
-
-function marketPrevPage() {
-    if (state.market.page > 0) {
-        state.market.page--;
-        loadMarketListings();
-    }
-}
-
-function marketNextPage() {
-    state.market.page++;
-    loadMarketListings();
-}
-
+// Legacy functions (kept for compatibility)
 function applyMarketFilters() {
-    state.market.filters.search = document.getElementById('market-search').value.trim();
-    state.market.filters.airport = document.getElementById('market-airport-filter').value.trim();
-    state.market.filters.tier = document.getElementById('market-tier-filter').value;
-    state.market.filters.maxPrice = document.getElementById('market-max-price').value;
-
-    state.market.page = 0;
     loadMarketListings();
 }
 
 function resetMarketFilters() {
-    state.market.filters = {
-        search: '',
-        airport: '',
-        tier: '',
-        maxPrice: ''
-    };
-    state.market.page = 0;
-
-    document.getElementById('market-search').value = '';
-    document.getElementById('market-airport-filter').value = '';
-    document.getElementById('market-tier-filter').value = '';
-    document.getElementById('market-max-price').value = '';
-
-    loadMarketListings();
+    if (marketDataTable) {
+        marketDataTable.searchValue = '';
+        marketDataTable.activeFilters = {};
+        marketDataTable._applyFiltersAndSort();
+        marketDataTable.render();
+    }
 }
 
 // ========================================
@@ -3557,7 +4519,7 @@ function openMarketBuyModal(locationId, itemId) {
     state.market.selectedListing = listing;
 
     // Update modal content
-    const icon = listing.item_icon || getProductEmoji(listing.item_code);
+    const icon = listing.item_icon || getItemEmoji(listing.item_name);
     document.getElementById('buy-item-icon').textContent = icon;
     document.getElementById('buy-item-name').textContent = listing.item_name;
     document.getElementById('buy-item-tier').textContent = `T${listing.item_tier}`;
@@ -3567,12 +4529,29 @@ function openMarketBuyModal(locationId, itemId) {
     document.getElementById('buy-unit-price').textContent = formatMoney(listing.sale_price);
     document.getElementById('buy-available-qty').textContent = listing.sale_qty;
 
+    // Update wallet balances in modal
+    document.getElementById('buy-wallet-personal').textContent = formatMoney(state.wallets.personal);
+    document.getElementById('buy-wallet-company').textContent = formatMoney(state.wallets.company);
+
+    // Update company name and visibility
+    const companyOption = document.getElementById('buy-wallet-company-option');
+    if (state.wallets.companyId) {
+        document.getElementById('buy-wallet-company-name').textContent = state.wallets.companyName || 'Company';
+        companyOption.style.display = 'block';
+    } else {
+        companyOption.style.display = 'none';
+    }
+
+    // Reset to personal wallet
+    document.querySelector('input[name="buy-wallet"][value="player"]').checked = true;
+
     document.getElementById('buy-qty').value = 1;
     document.getElementById('buy-qty').max = listing.sale_qty;
 
     updateBuyTotal();
 
     document.getElementById('market-buy-error').classList.remove('visible');
+    document.getElementById('buy-wallet-warning').style.display = 'none';
     document.getElementById('modal-market-buy').classList.add('active');
 }
 
@@ -3588,6 +4567,10 @@ function setBuyMax() {
     }
 }
 
+function updateBuyWalletSelection() {
+    updateBuyTotal();
+}
+
 function updateBuyTotal() {
     if (!state.market.selectedListing) return;
 
@@ -3596,12 +4579,28 @@ function updateBuyTotal() {
     const total = qty * unitPrice;
 
     document.getElementById('buy-total').textContent = formatMoney(total);
+
+    // Check if selected wallet has enough balance
+    const selectedWallet = document.querySelector('input[name="buy-wallet"]:checked').value;
+    const balance = selectedWallet === 'player' ? state.wallets.personal : state.wallets.company;
+    const warningEl = document.getElementById('buy-wallet-warning');
+    const buyBtn = document.getElementById('btn-confirm-buy');
+
+    if (total > balance) {
+        warningEl.style.display = 'block';
+        buyBtn.disabled = true;
+    } else {
+        warningEl.style.display = 'none';
+        buyBtn.disabled = false;
+    }
 }
 
 async function confirmMarketBuy() {
     if (!state.market.selectedListing) return;
 
     const qty = parseInt(document.getElementById('buy-qty').value);
+    const selectedWallet = document.querySelector('input[name="buy-wallet"]:checked').value;
+    const buyerType = selectedWallet === 'player' ? 'player' : 'company';
     const errorEl = document.getElementById('market-buy-error');
     const btn = document.getElementById('btn-confirm-buy');
 
@@ -3623,12 +4622,23 @@ async function confirmMarketBuy() {
         return;
     }
 
+    // Check balance
+    const unitPrice = parseFloat(state.market.selectedListing.sale_price);
+    const total = qty * unitPrice;
+    const balance = buyerType === 'player' ? state.wallets.personal : state.wallets.company;
+
+    if (total > balance) {
+        errorEl.textContent = 'Solde insuffisant';
+        errorEl.classList.add('visible');
+        return;
+    }
+
     btn.classList.add('loading');
     btn.textContent = 'ACHAT...';
     errorEl.classList.remove('visible');
 
     try {
-        const response = await fetch(`${API_BASE}/inventory/market/${state.market.selectedListing.airport_ident}/buy`, {
+        const response = await fetch(`${API_BASE}/inventory/market/buy`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -3636,8 +4646,9 @@ async function confirmMarketBuy() {
             },
             body: JSON.stringify({
                 seller_location_id: state.market.selectedListing.location_id,
-                item_id: state.market.selectedListing.item_id,
-                qty: qty
+                item_code: state.market.selectedListing.item_code,
+                qty: qty,
+                buyer_type: buyerType
             })
         });
 
@@ -3648,12 +4659,15 @@ async function confirmMarketBuy() {
 
         const result = await response.json();
 
-        showToast(`Achat réussi! ${qty}× ${state.market.selectedListing.item_name} pour ${formatMoney(result.total_cost)}`, 'success');
+        const walletLabel = buyerType === 'player' ? 'personnel' : 'company';
+        showToast(`Achat ${walletLabel} réussi! ${qty}× ${state.market.selectedListing.item_name}`, 'success');
         closeMarketBuyModal();
 
-        // Refresh market listings
-        await loadMarketListings();
-        await loadMarketStats();
+        // Refresh market and wallets
+        await Promise.all([
+            loadMarketListings(),
+            loadWallets()
+        ]);
 
     } catch (error) {
         console.error('[MARKET] Buy error:', error);

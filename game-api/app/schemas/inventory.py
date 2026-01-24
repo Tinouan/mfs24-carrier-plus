@@ -191,6 +191,7 @@ class BuyFromMarketIn(BaseModel):
     seller_location_id: UUID
     item_code: str = Field(..., min_length=1, max_length=64)
     qty: int = Field(..., ge=1)
+    buyer_type: str = Field(default="company", pattern="^(player|company)$")
 
 
 # ═══════════════════════════════════════════════════════════

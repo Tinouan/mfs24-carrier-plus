@@ -107,8 +107,10 @@ def company_me(
         id=c.id,
         name=c.name,
         home_airport_ident=c.home_airport_ident,
+        balance=float(c.balance) if c.balance else 0,
         created_at=c.created_at,
     )
+
 
 @router.get("/members", response_model=list[MemberOut])
 def list_members(
@@ -367,4 +369,37 @@ def update_member_permissions(
         can_manage_members=target_perms.can_manage_members,
         can_manage_factories=target_perms.can_manage_factories,
         is_founder=target_perms.is_founder,
+    )
+
+
+# ═══════════════════════════════════════════════════════════
+# COMPANY BY ID (must be last to avoid route conflicts)
+# ═══════════════════════════════════════════════════════════
+
+@router.get("/{company_id}", response_model=CompanyOut)
+def get_company_by_id(
+    company_id: UUID,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user),
+):
+    """Get company by ID (for wallet display etc.)"""
+    # Verify user is a member of this company
+    membership = db.query(CompanyMember).filter(
+        CompanyMember.company_id == company_id,
+        CompanyMember.user_id == user.id
+    ).first()
+
+    if not membership:
+        raise HTTPException(status_code=403, detail="Not a member of this company")
+
+    c = db.query(Company).filter(Company.id == company_id).first()
+    if not c:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    return CompanyOut(
+        id=c.id,
+        name=c.name,
+        home_airport_ident=c.home_airport_ident,
+        balance=float(c.balance) if c.balance else 0,
+        created_at=c.created_at,
     )

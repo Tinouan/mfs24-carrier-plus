@@ -105,7 +105,7 @@ Retourne uniquement les annonces d'un aéroport spécifique.
 ### Acheter sur le marché
 
 ```http
-POST /api/inventory/market/{airport_ident}/buy
+POST /api/inventory/market/buy
 ```
 
 **Body:**
@@ -113,12 +113,62 @@ POST /api/inventory/market/{airport_ident}/buy
 ```json
 {
     "seller_location_id": "uuid",
-    "item_id": "uuid",
-    "qty": 100
+    "item_code": "Steel Ingot",
+    "qty": 100,
+    "buyer_type": "company"
 }
 ```
 
+| Champ | Type | Description |
+|-------|------|-------------|
+| `seller_location_id` | UUID | Location du vendeur |
+| `item_code` | string | Nom de l'item (ex: "Steel Ingot") |
+| `qty` | int | Quantité à acheter |
+| `buyer_type` | string | `"player"` (wallet perso) ou `"company"` (wallet company, défaut) |
+
+**Validations:**
+- Stock en vente suffisant (`sale_qty` ≥ qty demandé)
+- Balance suffisante (wallet perso ou company selon `buyer_type`)
+- Acheteur n'est pas le vendeur
+
+**Actions automatiques:**
+1. Déduction du stock vendeur (`sale_qty` diminué)
+2. Création warehouse acheteur si inexistant (même aéroport)
+3. Ajout à l'inventaire acheteur (company_warehouse ou player_warehouse selon `buyer_type`)
+4. Transfert d'argent (wallet perso ou company)
+5. Audits côté vendeur (market_sell) et acheteur (market_buy)
+
 **Réponse:** L'inventaire mis à jour du buyer.
+
+### Mes annonces en vente
+
+```http
+GET /api/inventory/my-listings
+```
+
+Retourne les items que je vends actuellement (pour affichage dans l'inventaire).
+
+**Réponse:** Liste de `MarketListingOut`
+
+### Annuler une vente (V0.8)
+
+```http
+POST /api/inventory/cancel-sale
+```
+
+**Body:**
+
+```json
+{
+    "location_id": "uuid",
+    "item_code": "Steel Ingot"
+}
+```
+
+**Actions:**
+1. Retourne les items au stock de l'inventaire
+2. Retire l'annonce du marché
+3. Audit (remove_from_sale)
 
 ---
 
@@ -162,20 +212,48 @@ class MarketStatsOut(BaseModel):
 Accessible via le menu latéral "Marché".
 
 **Composants:**
-- **Header** - Stats globales (annonces, aéroports, valeur totale)
+- **Header** - Stats globales (annonces, aéroports, valeur totale) + **Wallets (V0.8)**
 - **Filtres** - Recherche, aéroport, tier, prix max
 - **Tier Chips** - Distribution visuelle par tier
 - **Grille** - Cards des annonces avec icon, tier, prix, quantité
 - **Pagination** - Navigation par pages de 50 items
 
-### Modal d'achat
+### Affichage Wallets (V0.8)
+
+Le header affiche les deux wallets disponibles:
+- 👤 **Wallet Perso** - Solde personnel du joueur
+- 🏢 **Wallet Company** - Solde de la company
+
+Ces wallets sont également affichés dans la vue Inventaire.
+
+### Modal d'achat (V0.8)
 
 Affiche:
 - Item (icon, nom, tier)
 - Vendeur et aéroport
 - Prix unitaire et quantité disponible
 - Input quantité avec bouton MAX
+- **Sélecteur wallet** (Perso/Company) - permet de choisir quel wallet utilise pour l'achat
 - Total calculé dynamiquement
+- Solde disponible du wallet sélectionné
+
+---
+
+## Flux de vente (V0.8)
+
+```
+1. Seller sélectionne un item dans son inventaire
+2. Modal de vente s'ouvre
+3. Seller définit prix et quantité
+4. POST /inventory/set-for-sale
+5. Backend:
+   a. Déduit qty de l'inventaire normal (qty -= sale_qty)
+   b. Crée l'annonce (for_sale=true, sale_qty, sale_price)
+   c. Audit (set_for_sale)
+6. Item apparaît dans le filtre "En Vente" et sur le marché
+```
+
+**Note V0.8:** Les items mis en vente sont **déduits** de l'inventaire normal et stockés séparément. Lors de l'annulation, ils sont retournés à l'inventaire.
 
 ---
 
@@ -184,14 +262,14 @@ Affiche:
 ```
 1. Buyer sélectionne une annonce
 2. Modal d'achat s'ouvre
-3. Buyer choisit la quantité
-4. POST /market/{airport}/buy
+3. Buyer choisit la quantité et le wallet (perso/company)
+4. POST /inventory/market/buy
 5. Backend:
-   a. Vérifie stock disponible
-   b. Vérifie solde buyer
-   c. Déduit qty du seller (inventory_items)
-   d. Ajoute qty au buyer (selon destination)
-   e. Transfert d'argent seller → buyer
+   a. Vérifie stock disponible (sale_qty)
+   b. Vérifie solde buyer (wallet perso ou company)
+   c. Déduit sale_qty du seller
+   d. Ajoute qty au buyer (warehouse au même aéroport)
+   e. Transfert d'argent buyer → seller
 6. Frontend refresh
 ```
 

@@ -102,8 +102,17 @@ Table de liaison users ↔ companies.
 |---------|----------|-------------|
 | POST | `/company` | Créer une company |
 | GET | `/company/me` | Ma company |
+| GET | `/company/{id}` | Company par ID (V0.8 - pour wallet display) |
 | GET | `/company/members` | Liste des membres |
 | POST | `/company/members/add` | Ajouter un membre |
+
+### Permissions (V0.7)
+
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| GET | `/company/permissions` | Liste permissions membres |
+| GET | `/company/permissions/{user_id}` | Permissions d'un membre |
+| PATCH | `/company/permissions/{user_id}` | Modifier permissions |
 
 ### Company Profile
 
@@ -111,6 +120,29 @@ Table de liaison users ↔ companies.
 |---------|----------|-------------|
 | GET | `/company-profile/me` | Profil complet |
 | PATCH | `/company-profile/me` | Modifier profil |
+
+---
+
+## Company par ID (V0.8)
+
+### Endpoint: `GET /company/{id}`
+
+Récupère les informations d'une company par son ID. Utilisé pour afficher le wallet company dans les vues Market/Inventory.
+
+**Prérequis:** Être membre de la company
+
+**Réponse:**
+```json
+{
+    "id": "uuid",
+    "name": "Air France Cargo",
+    "home_airport_ident": "LFPG",
+    "balance": 25000.00,
+    "created_at": "2026-01-22T..."
+}
+```
+
+**Note:** Le champ `balance` est inclus pour permettre l'affichage du wallet company dans le frontend.
 
 ---
 
@@ -201,6 +233,50 @@ Table de liaison users ↔ companies.
     }
 ]
 ```
+
+---
+
+## Permissions System (V0.7)
+
+### Table: `game.company_permissions`
+
+| Permission | Description |
+|------------|-------------|
+| `can_withdraw_warehouse` | Retirer du warehouse company |
+| `can_deposit_warehouse` | Déposer au warehouse company |
+| `can_withdraw_factory` | Retirer du factory storage |
+| `can_deposit_factory` | Déposer au factory storage |
+| `can_manage_aircraft` | Gérer les avions (acheter, vendre) |
+| `can_use_aircraft` | Utiliser les avions (load/unload cargo) |
+| `can_sell_market` | Mettre en vente sur le marché |
+| `can_buy_market` | Acheter sur le marché |
+| `can_manage_workers` | Gérer les workers |
+| `can_manage_members` | Gérer les permissions membres |
+| `can_manage_factories` | Gérer les usines |
+| `is_founder` | Tous les droits (non modifiable) |
+
+### Permissions par défaut selon le rôle
+
+| Rôle | Permissions |
+|------|-------------|
+| **Founder/Owner** | Toutes (is_founder=true) |
+| **Admin** | withdraw_*, manage_aircraft, sell_market, manage_workers, manage_factories |
+| **Member** | deposit_*, use_aircraft, buy_market |
+
+### Modifier les permissions: `PATCH /company/permissions/{user_id}`
+
+**Prérequis:** Être founder ou avoir `can_manage_members`
+
+**Body (champs optionnels):**
+```json
+{
+    "can_buy_market": true,
+    "can_sell_market": false,
+    "can_manage_aircraft": true
+}
+```
+
+**Note:** Les permissions du founder ne peuvent être modifiées que par lui-même.
 
 ---
 

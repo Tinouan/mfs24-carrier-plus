@@ -408,8 +408,9 @@ def set_for_sale(
     try:
         loc = _get_location_or_404(db, c.id, payload.location_id)
 
-        # Seuls les warehouses peuvent vendre
-        if loc.kind != "warehouse":
+        # Seuls les warehouses peuvent vendre (company ou player)
+        allowed_kinds = ("warehouse", "company_warehouse", "player_warehouse")
+        if loc.kind not in allowed_kinds:
             raise HTTPException(status_code=400, detail="Can only sell from warehouses")
 
         it = _get_item_by_name(db, payload.item_code)
@@ -430,24 +431,40 @@ def set_for_sale(
             if sale_qty > row.qty:
                 raise HTTPException(status_code=400, detail="sale_qty cannot exceed available qty")
 
+            # Déduire la quantité mise en vente de l'inventaire disponible
+            row.qty -= sale_qty
             row.for_sale = True
             row.sale_price = payload.sale_price
             row.sale_qty = sale_qty
+
+            db.add(
+                InventoryAudit(
+                    location_id=loc.id,
+                    item_id=it.id,
+                    quantity_delta=-sale_qty,
+                    action="set_for_sale",
+                    user_id=user.id,
+                    notes=f"Price: {row.sale_price}, Qty: {sale_qty}",
+                )
+            )
         else:
+            # Annuler la vente: retourner les items dans l'inventaire
+            returned_qty = row.sale_qty
+            row.qty += returned_qty
             row.for_sale = False
             row.sale_price = None
             row.sale_qty = 0
 
-        db.add(
-            InventoryAudit(
-                location_id=loc.id,
-                item_id=it.id,
-                quantity_delta=0,  # Pas de changement de quantité, juste statut vente
-                action="set_for_sale" if payload.for_sale else "remove_from_sale",
-                user_id=user.id,
-                notes=f"Price: {row.sale_price}, Qty: {row.sale_qty}" if payload.for_sale else None,
+            db.add(
+                InventoryAudit(
+                    location_id=loc.id,
+                    item_id=it.id,
+                    quantity_delta=returned_qty,
+                    action="cancel_sale",
+                    user_id=user.id,
+                    notes=f"Returned {returned_qty} items from sale",
+                )
             )
-        )
 
         db.commit()
 
@@ -459,6 +476,58 @@ def set_for_sale(
         raise
 
     return get_inventory(loc.id, db, user)
+
+
+@router.get("/my-listings", response_model=list[MarketListingOut])
+def get_my_listings(
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Récupérer mes propres items en vente"""
+    c, _cm = _get_my_company(db, user.id)
+    if not c:
+        return []
+
+    rows = (
+        db.query(InventoryItem, InventoryLocation, Item)
+        .join(InventoryLocation, InventoryLocation.id == InventoryItem.location_id)
+        .join(Item, Item.id == InventoryItem.item_id)
+        .filter(
+            InventoryLocation.company_id == c.id,
+            InventoryItem.for_sale == True,
+            InventoryItem.sale_qty > 0,
+        )
+        .all()
+    )
+
+    return [
+        MarketListingOut(
+            location_id=loc.id,
+            airport_ident=loc.airport_ident,
+            company_id=c.id,
+            company_name=c.name,
+            item_id=it.id,
+            item_code=it.name,
+            item_name=it.name,
+            item_tier=it.tier,
+            item_icon=it.icon,
+            sale_price=ii.sale_price,
+            sale_qty=ii.sale_qty,
+        )
+        for (ii, loc, it) in rows
+    ]
+
+
+@router.post("/cancel-sale")
+def cancel_sale(
+    payload: SetForSaleIn,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Annuler une vente et retourner les items dans l'inventaire"""
+    # Réutiliser set_for_sale avec for_sale=False
+    payload.for_sale = False
+    return set_for_sale(payload, db, user)
 
 
 @router.get("/market", response_model=list[MarketListingOut])
@@ -614,14 +683,18 @@ def buy_from_market(
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    """Acheter des items sur le marché"""
-    buyer_company, _cm = _get_my_company(db, user.id)
-    if not buyer_company:
-        raise HTTPException(status_code=404, detail="No company")
-
+    """Acheter des items sur le marché (wallet personnel ou company)"""
     qty = int(payload.qty)
     if qty <= 0:
         raise HTTPException(status_code=400, detail="qty must be > 0")
+
+    buyer_type = payload.buyer_type  # "player" or "company"
+
+    # Get buyer company (needed for company purchases and to check "can't buy from self")
+    buyer_company, _cm = _get_my_company(db, user.id)
+
+    if buyer_type == "company" and not buyer_company:
+        raise HTTPException(status_code=404, detail="No company")
 
     try:
         # Trouver la location du vendeur
@@ -635,8 +708,8 @@ def buy_from_market(
         if not seller_company:
             raise HTTPException(status_code=404, detail="Seller company not found")
 
-        # Vérifier que ce n'est pas sa propre company
-        if seller_company.id == buyer_company.id:
+        # Vérifier que ce n'est pas sa propre company (si achat company)
+        if buyer_type == "company" and buyer_company and seller_company.id == buyer_company.id:
             raise HTTPException(status_code=400, detail="Cannot buy from yourself")
 
         it = _get_item_by_name(db, payload.item_code)
@@ -654,26 +727,55 @@ def buy_from_market(
         # Calculer le coût total
         total_cost = seller_item.sale_price * qty
 
-        # Vérifier le solde de l'acheteur
-        if buyer_company.balance < total_cost:
-            raise HTTPException(status_code=400, detail="Insufficient balance")
+        # Vérifier le solde selon le type d'acheteur
+        if buyer_type == "player":
+            if user.wallet < total_cost:
+                raise HTTPException(status_code=400, detail="Insufficient personal balance")
+        else:
+            if buyer_company.balance < total_cost:
+                raise HTTPException(status_code=400, detail="Insufficient company balance")
 
-        # Créer ou récupérer le warehouse de l'acheteur au même aéroport
-        buyer_loc = db.query(InventoryLocation).filter(
-            InventoryLocation.company_id == buyer_company.id,
-            InventoryLocation.kind == "warehouse",
-            InventoryLocation.airport_ident == seller_loc.airport_ident,
-        ).first()
+        # Créer ou récupérer la location de l'acheteur au même aéroport
+        if buyer_type == "player":
+            # Achat personnel -> stockage personnel
+            buyer_loc = db.query(InventoryLocation).filter(
+                InventoryLocation.owner_type == "player",
+                InventoryLocation.owner_id == user.id,
+                InventoryLocation.airport_ident == seller_loc.airport_ident,
+            ).first()
 
-        if not buyer_loc:
-            buyer_loc = InventoryLocation(
-                company_id=buyer_company.id,
-                kind="warehouse",
-                airport_ident=seller_loc.airport_ident,
-                name=f"Warehouse {seller_loc.airport_ident}",
-            )
-            db.add(buyer_loc)
-            db.flush()
+            if not buyer_loc:
+                buyer_loc = InventoryLocation(
+                    company_id=buyer_company.id if buyer_company else None,
+                    kind="player_warehouse",
+                    airport_ident=seller_loc.airport_ident,
+                    name=f"Personal Storage {seller_loc.airport_ident}",
+                    owner_type="player",
+                    owner_id=user.id,
+                )
+                db.add(buyer_loc)
+                db.flush()
+            buyer_name = user.username
+        else:
+            # Achat company -> warehouse company
+            buyer_loc = db.query(InventoryLocation).filter(
+                InventoryLocation.company_id == buyer_company.id,
+                InventoryLocation.kind == "warehouse",
+                InventoryLocation.airport_ident == seller_loc.airport_ident,
+            ).first()
+
+            if not buyer_loc:
+                buyer_loc = InventoryLocation(
+                    company_id=buyer_company.id,
+                    kind="warehouse",
+                    airport_ident=seller_loc.airport_ident,
+                    name=f"Warehouse {seller_loc.airport_ident}",
+                    owner_type="company",
+                    owner_id=buyer_company.id,
+                )
+                db.add(buyer_loc)
+                db.flush()
+            buyer_name = buyer_company.name
 
         # Effectuer la transaction
         # 1. Retirer du vendeur
@@ -698,7 +800,10 @@ def buy_from_market(
         buyer_item.qty += qty
 
         # 3. Transférer l'argent
-        buyer_company.balance -= total_cost
+        if buyer_type == "player":
+            user.wallet -= total_cost
+        else:
+            buyer_company.balance -= total_cost
         seller_company.balance += total_cost
 
         # 4. Audit - côté vendeur (retrait)
@@ -709,7 +814,7 @@ def buy_from_market(
                 quantity_delta=-qty,
                 action="market_sell",
                 user_id=user.id,
-                notes=f"Sold to {buyer_company.name} for {total_cost}",
+                notes=f"Sold to {buyer_name} for {total_cost}",
             )
         )
 

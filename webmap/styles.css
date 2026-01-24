@@ -4037,3 +4037,484 @@ body::before {
     text-align: center;
     color: var(--text-secondary);
 }
+
+/* ============================================
+   DATATABLE - COMPOSANT GÉNÉRIQUE
+   ============================================ */
+
+/* Barre d'outils */
+.dt-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: var(--bg-secondary, #1a1a1a);
+    border-radius: 6px;
+    border: 1px solid var(--border, #333);
+}
+
+.dt-search {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+    min-width: 200px;
+    max-width: 300px;
+    background: var(--bg-primary, #0d0d0d);
+    border: 1px solid var(--border, #333);
+    border-radius: 4px;
+    padding: 0 0.75rem;
+}
+
+.dt-search-icon {
+    color: var(--text-dim, #888);
+    font-size: 0.9rem;
+}
+
+.dt-search-input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: var(--text-primary, #e5e5e5);
+    padding: 0.5rem 0;
+    font-size: 0.85rem;
+    font-family: inherit;
+}
+
+.dt-search-input:focus {
+    outline: none;
+}
+
+.dt-search-input::placeholder {
+    color: var(--text-dim, #888);
+}
+
+/* Input ICAO */
+.dt-icao {
+    min-width: 100px;
+    max-width: 120px;
+    flex: 0;
+}
+
+.dt-icao .dt-search-input {
+    font-family: 'Share Tech Mono', monospace;
+    letter-spacing: 1px;
+}
+
+/* Filtres chips */
+.dt-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: center;
+}
+
+.dt-filter-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.dt-filter-label {
+    font-size: 0.75rem;
+    color: var(--text-dim, #888);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.dt-filter-chips {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.dt-chip {
+    padding: 0.25rem 0.6rem;
+    font-size: 0.75rem;
+    background: var(--bg-primary, #0d0d0d);
+    border: 1px solid var(--border, #333);
+    border-radius: 3px;
+    color: var(--text-dim, #888);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.dt-chip:hover {
+    border-color: var(--accent, #ff6600);
+    color: var(--text-primary, #e5e5e5);
+}
+
+.dt-chip.active {
+    background: var(--accent, #ff6600);
+    border-color: var(--accent, #ff6600);
+    color: #000;
+    font-weight: 600;
+}
+
+/* Wrapper table avec scroll */
+.dt-table-wrapper {
+    overflow-x: auto;
+    border: 1px solid var(--border, #333);
+    border-radius: 6px;
+}
+
+/* Table */
+.dt-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.dt-table thead {
+    background: var(--bg-secondary, #1a1a1a);
+    position: sticky;
+    top: 0;
+}
+
+.dt-table th {
+    padding: 0.6rem 0.75rem;
+    text-align: left;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-dim, #888);
+    border-bottom: 1px solid var(--border, #333);
+    white-space: nowrap;
+    user-select: none;
+}
+
+.dt-table th.dt-sortable {
+    cursor: pointer;
+    transition: color 0.15s ease;
+}
+
+.dt-table th.dt-sortable:hover {
+    color: var(--accent, #ff6600);
+}
+
+.dt-table th.dt-sorted {
+    color: var(--accent, #ff6600);
+}
+
+.dt-sort-icon {
+    margin-left: 0.3rem;
+    font-size: 0.65rem;
+}
+
+.dt-table td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    color: var(--text-primary, #e5e5e5);
+}
+
+.dt-table tbody tr {
+    transition: background 0.1s ease;
+}
+
+.dt-table tbody tr:hover {
+    background: rgba(255, 102, 0, 0.05);
+}
+
+.dt-table tbody tr.dt-clickable {
+    cursor: pointer;
+}
+
+.dt-table tbody tr.dt-clickable:hover {
+    background: rgba(255, 102, 0, 0.1);
+}
+
+/* Colonne actions */
+.dt-actions-header {
+    text-align: center;
+    width: 100px;
+}
+
+.dt-actions {
+    display: flex;
+    gap: 0.25rem;
+    justify-content: center;
+}
+
+.dt-action-btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+    background: var(--bg-secondary, #1a1a1a);
+    border: 1px solid var(--border, #333);
+    border-radius: 3px;
+    color: var(--text-primary, #e5e5e5);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.dt-action-btn:hover {
+    border-color: var(--accent, #ff6600);
+    background: rgba(255, 102, 0, 0.1);
+}
+
+.dt-action-btn.btn-primary {
+    background: var(--accent, #ff6600);
+    border-color: var(--accent, #ff6600);
+    color: #000;
+}
+
+.dt-action-btn.btn-primary:hover {
+    background: var(--accent-light, #ff8533);
+}
+
+.dt-action-btn.btn-danger {
+    border-color: var(--danger, #ff4444);
+    color: var(--danger, #ff4444);
+}
+
+.dt-action-btn.btn-danger:hover {
+    background: rgba(255, 68, 68, 0.1);
+}
+
+/* État vide */
+.dt-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 1rem;
+    text-align: center;
+    background: var(--bg-secondary, #1a1a1a);
+    border: 1px solid var(--border, #333);
+    border-radius: 6px;
+}
+
+.dt-empty-icon {
+    font-size: 2.5rem;
+    margin-bottom: 0.75rem;
+    opacity: 0.6;
+}
+
+.dt-empty-text {
+    color: var(--text-dim, #888);
+    font-size: 0.9rem;
+    margin: 0;
+}
+
+/* Pagination */
+.dt-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin-top: 1rem;
+    padding: 0.75rem;
+}
+
+.dt-page-btn {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.8rem;
+    background: var(--bg-secondary, #1a1a1a);
+    border: 1px solid var(--border, #333);
+    border-radius: 4px;
+    color: var(--text-primary, #e5e5e5);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.dt-page-btn:hover:not(:disabled) {
+    border-color: var(--accent, #ff6600);
+    color: var(--accent, #ff6600);
+}
+
+.dt-page-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.dt-page-info {
+    font-size: 0.8rem;
+    color: var(--text-dim, #888);
+    font-family: 'Share Tech Mono', monospace;
+}
+
+/* Cellules spéciales - Tier badges */
+.dt-tier {
+    display: inline-block;
+    padding: 0.15rem 0.4rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    border-radius: 3px;
+    font-family: 'Share Tech Mono', monospace;
+}
+
+.dt-tier.tier-t0 { background: rgba(0, 170, 255, 0.2); color: #00aaff; }
+.dt-tier.tier-t1 { background: rgba(0, 255, 0, 0.2); color: #00ff00; }
+.dt-tier.tier-t2 { background: rgba(255, 200, 0, 0.2); color: #ffc800; }
+.dt-tier.tier-t3 { background: rgba(255, 102, 0, 0.2); color: #ff6600; }
+.dt-tier.tier-t4 { background: rgba(204, 0, 255, 0.2); color: #cc00ff; }
+.dt-tier.tier-t5 { background: rgba(255, 215, 0, 0.2); color: #ffd700; }
+
+/* Cellules spéciales - Prix */
+.dt-price {
+    font-family: 'Share Tech Mono', monospace;
+    color: #ffd700;
+    font-weight: 600;
+}
+
+/* Cellules spéciales - Item avec emoji */
+.dt-item-name {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.dt-item-icon {
+    font-size: 1rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .dt-toolbar {
+        flex-direction: column;
+    }
+
+    .dt-search {
+        max-width: 100%;
+    }
+
+    .dt-filters {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .dt-table {
+        font-size: 0.8rem;
+    }
+
+    .dt-table th,
+    .dt-table td {
+        padding: 0.4rem 0.5rem;
+    }
+
+    .dt-pagination {
+        flex-wrap: wrap;
+    }
+}
+
+/* ============================================
+   WALLET DISPLAY & SELECTION
+   ============================================ */
+
+/* Market Header Wallets */
+.market-wallets {
+    display: flex;
+    gap: 1.5rem;
+}
+
+.market-wallet {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    border: 1px solid var(--border, #333);
+}
+
+.market-wallet .wallet-icon {
+    font-size: 1.2rem;
+}
+
+.market-wallet .wallet-value {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #ffd700;
+}
+
+.market-wallet .wallet-label {
+    font-size: 0.75rem;
+    color: var(--text-dim, #888);
+    text-transform: uppercase;
+}
+
+/* Wallet Selection in Modal */
+.wallet-selection {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.wallet-option {
+    display: block;
+    cursor: pointer;
+}
+
+.wallet-option input[type="radio"] {
+    display: none;
+}
+
+.wallet-option-content {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: var(--bg-secondary, #1a1a1a);
+    border: 2px solid var(--border, #333);
+    border-radius: 8px;
+    transition: all 0.15s ease;
+}
+
+.wallet-option input[type="radio"]:checked + .wallet-option-content {
+    border-color: var(--accent, #ff6600);
+    background: rgba(255, 102, 0, 0.1);
+}
+
+.wallet-option:hover .wallet-option-content {
+    border-color: var(--accent, #ff6600);
+}
+
+.wallet-option-icon {
+    font-size: 1.5rem;
+}
+
+.wallet-option-label {
+    flex: 1;
+    font-weight: 500;
+    color: var(--text-primary, #e5e5e5);
+}
+
+.wallet-option-balance {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #ffd700;
+}
+
+.wallet-option.disabled .wallet-option-content {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.wallet-option.disabled:hover .wallet-option-content {
+    border-color: var(--border, #333);
+}
+
+/* Wallet Warning */
+.wallet-warning {
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: rgba(255, 68, 68, 0.1);
+    border: 1px solid var(--danger, #ff4444);
+    border-radius: 4px;
+    color: var(--danger, #ff4444);
+    font-size: 0.85rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .market-wallets {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .market-wallet {
+        padding: 0.5rem 0.75rem;
+    }
+}

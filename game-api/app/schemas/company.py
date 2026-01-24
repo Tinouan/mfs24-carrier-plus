@@ -17,6 +17,7 @@ class CompanyOut(BaseModel):
     id: UUID
     name: str
     home_airport_ident: str
+    balance: float = 0
     created_at: datetime
 
 

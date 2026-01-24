@@ -397,49 +397,32 @@
 
             <!-- INVENTORY VIEW -->
             <div class="view-container" id="view-inventory" style="display:none;">
-                <div class="view-content">
+                <div class="view-content" style="max-width: 1400px;">
                     <!-- Inventory Header -->
                     <div class="inventory-header-card">
                         <div class="inventory-header-info">
                             <h1>📦 Inventaire</h1>
                             <p class="inventory-subtitle" id="inv-subtitle">0 items | 0$ | 0 aéroports</p>
                         </div>
-                        <button class="btn" onclick="createPlayerWarehouse()">
-                            + Warehouse
-                        </button>
-                    </div>
-
-                    <!-- Search & Filters -->
-                    <div class="inventory-filters">
-                        <div class="inv-search-group">
-                            <input type="text" class="form-input inv-search" id="inv-search" placeholder="🔍 Rechercher un item...">
-                        </div>
-                        <div class="inv-filter-group">
-                            <select class="form-select" id="inv-type-filter" onchange="filterInventory()">
-                                <option value="all">Tous types</option>
-                                <option value="player_warehouse">👤 Entrepôts perso</option>
-                                <option value="company_warehouse">🏢 Entrepôts company</option>
-                                <option value="aircraft">✈️ Avions</option>
-                                <option value="factory_storage">🏭 Usines</option>
-                            </select>
+                        <div class="market-wallets">
+                            <div class="market-wallet">
+                                <span class="wallet-icon">👤</span>
+                                <span class="wallet-value" id="inv-wallet-personal">0$</span>
+                                <span class="wallet-label">Perso</span>
+                            </div>
+                            <div class="market-wallet">
+                                <span class="wallet-icon">🏢</span>
+                                <span class="wallet-value" id="inv-wallet-company">0$</span>
+                                <span class="wallet-label" id="inv-wallet-company-name">Company</span>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Inventory Content - Grouped by Airport -->
-                    <div class="inventory-content" id="inventory-content">
-                        <!-- Empty State -->
-                        <div class="inventory-empty-state" id="inventory-empty-state" style="display:none;">
-                            <div class="empty-icon">📦</div>
-                            <h3>Aucun inventaire</h3>
-                            <p>Vous n'avez pas encore de locations d'inventaire. Créez un entrepôt personnel ou rejoignez une company.</p>
-                            <button class="btn" onclick="createPlayerWarehouse()">
-                                + Créer un entrepôt
-                            </button>
-                        </div>
-
-                        <!-- Airport Groups (dynamically populated) -->
-                        <div class="inventory-airports" id="inventory-airports">
-                            <!-- Each airport group will be rendered here -->
+                    <!-- Inventory DataTable -->
+                    <div id="inventory-datatable">
+                        <div class="market-loading">
+                            <div class="loading-spinner"></div>
+                            <p>Chargement de l'inventaire...</p>
                         </div>
                     </div>
                 </div>
@@ -454,51 +437,17 @@
                             <h1>💰 Marché Global</h1>
                             <p class="market-subtitle">Hôtel des Ventes - Achetez des ressources de vendeurs du monde entier</p>
                         </div>
-                        <div class="market-stats">
-                            <div class="market-stat">
-                                <span class="market-stat-value" id="market-total-listings">0</span>
-                                <span class="market-stat-label">Annonces</span>
+                        <div class="market-wallets">
+                            <div class="market-wallet">
+                                <span class="wallet-icon">👤</span>
+                                <span class="wallet-value" id="wallet-personal">0$</span>
+                                <span class="wallet-label">Perso</span>
                             </div>
-                            <div class="market-stat">
-                                <span class="market-stat-value" id="market-total-airports">0</span>
-                                <span class="market-stat-label">Aéroports</span>
+                            <div class="market-wallet">
+                                <span class="wallet-icon">🏢</span>
+                                <span class="wallet-value" id="wallet-company">0$</span>
+                                <span class="wallet-label" id="wallet-company-name">Company</span>
                             </div>
-                            <div class="market-stat">
-                                <span class="market-stat-value" id="market-total-value">0$</span>
-                                <span class="market-stat-label">Valeur totale</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Market Filters -->
-                    <div class="market-filters">
-                        <div class="market-filter-group">
-                            <label class="filter-label">Recherche</label>
-                            <input type="text" class="form-input" id="market-search" placeholder="Nom de l'item...">
-                        </div>
-                        <div class="market-filter-group">
-                            <label class="filter-label">Aéroport</label>
-                            <input type="text" class="form-input" id="market-airport-filter" placeholder="LFPG, EGLL..." maxlength="4" style="text-transform: uppercase;">
-                        </div>
-                        <div class="market-filter-group">
-                            <label class="filter-label">Tier</label>
-                            <select class="form-select" id="market-tier-filter">
-                                <option value="">Tous</option>
-                                <option value="0">T0 - Matières premières</option>
-                                <option value="1">T1</option>
-                                <option value="2">T2</option>
-                                <option value="3">T3</option>
-                                <option value="4">T4</option>
-                                <option value="5">T5</option>
-                            </select>
-                        </div>
-                        <div class="market-filter-group">
-                            <label class="filter-label">Prix max</label>
-                            <input type="number" class="form-input" id="market-max-price" placeholder="10000">
-                        </div>
-                        <div class="market-filter-group">
-                            <button class="btn" onclick="applyMarketFilters()">FILTRER</button>
-                            <button class="btn btn-secondary" onclick="resetMarketFilters()">RESET</button>
                         </div>
                     </div>
 
@@ -507,19 +456,12 @@
                         <!-- Dynamically populated -->
                     </div>
 
-                    <!-- Market Listings -->
-                    <div class="market-listings" id="market-listings">
+                    <!-- Market DataTable -->
+                    <div id="market-datatable">
                         <div class="market-loading">
                             <div class="loading-spinner"></div>
                             <p>Chargement du marché...</p>
                         </div>
-                    </div>
-
-                    <!-- Pagination -->
-                    <div class="market-pagination" id="market-pagination">
-                        <button class="btn btn-secondary" id="market-prev-btn" onclick="marketPrevPage()" disabled>← Précédent</button>
-                        <span class="pagination-info" id="market-pagination-info">Page 1</span>
-                        <button class="btn btn-secondary" id="market-next-btn" onclick="marketNextPage()">Suivant →</button>
                     </div>
                 </div>
             </div>
@@ -904,7 +846,7 @@
     <div class="modal-overlay" id="modal-market-buy">
         <div class="modal" style="max-width: 480px;">
             <div class="modal-header">
-                <div class="modal-title">ACHETER</div>
+                <div class="modal-title">🛒 ACHETER</div>
                 <button class="modal-close" onclick="closeMarketBuyModal()">&times;</button>
             </div>
             <div class="modal-body">
@@ -934,16 +876,42 @@
                         <span class="modal-info-value" id="buy-unit-price">0 $</span>
                     </div>
                     <div class="modal-info-row">
-                        <span class="modal-info-label">Quantité disponible</span>
+                        <span class="modal-info-label">Disponible</span>
                         <span class="modal-info-value" id="buy-available-qty">0</span>
+                    </div>
+                </div>
+
+                <!-- Wallet Selection -->
+                <div class="form-group">
+                    <label class="form-label">Acheter pour</label>
+                    <div class="wallet-selection">
+                        <label class="wallet-option">
+                            <input type="radio" name="buy-wallet" value="player" checked onchange="updateBuyWalletSelection()">
+                            <span class="wallet-option-content">
+                                <span class="wallet-option-icon">👤</span>
+                                <span class="wallet-option-label">Personnel</span>
+                                <span class="wallet-option-balance" id="buy-wallet-personal">0$</span>
+                            </span>
+                        </label>
+                        <label class="wallet-option" id="buy-wallet-company-option">
+                            <input type="radio" name="buy-wallet" value="company" onchange="updateBuyWalletSelection()">
+                            <span class="wallet-option-content">
+                                <span class="wallet-option-icon">🏢</span>
+                                <span class="wallet-option-label" id="buy-wallet-company-name">Company</span>
+                                <span class="wallet-option-balance" id="buy-wallet-company">0$</span>
+                            </span>
+                        </label>
+                    </div>
+                    <div class="wallet-warning" id="buy-wallet-warning" style="display: none;">
+                        ⚠️ Solde insuffisant
                     </div>
                 </div>
 
                 <!-- Quantity Input -->
                 <div class="form-group">
-                    <label class="form-label">Quantité à acheter</label>
+                    <label class="form-label">Quantité</label>
                     <div class="transfer-qty-input">
-                        <input type="number" id="buy-qty" min="1" value="1" onchange="updateBuyTotal()">
+                        <input type="number" id="buy-qty" min="1" value="1" oninput="updateBuyTotal()">
                         <button class="qty-max-btn" onclick="setBuyMax()">MAX</button>
                     </div>
                 </div>
@@ -958,6 +926,71 @@
                 <button class="btn btn-secondary" onclick="closeMarketBuyModal()">ANNULER</button>
                 <button class="btn" id="btn-confirm-buy" onclick="confirmMarketBuy()">
                     ACHETER
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SELL MODAL -->
+    <div class="modal-overlay" id="modal-market-sell">
+        <div class="modal" style="max-width: 480px;">
+            <div class="modal-header">
+                <div class="modal-title">💰 METTRE EN VENTE</div>
+                <button class="modal-close" onclick="closeSellModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-error" id="market-sell-error"></div>
+
+                <!-- Item Info -->
+                <div class="market-buy-item">
+                    <div class="buy-item-icon" id="sell-item-icon">📦</div>
+                    <div class="buy-item-details">
+                        <div class="buy-item-name" id="sell-item-name">Item</div>
+                        <div class="buy-item-tier" id="sell-item-tier">T0</div>
+                    </div>
+                </div>
+
+                <!-- Location Info -->
+                <div class="modal-info-box">
+                    <div class="modal-info-row">
+                        <span class="modal-info-label">Stock disponible</span>
+                        <span class="modal-info-value" id="sell-available-qty">0</span>
+                    </div>
+                    <div class="modal-info-row">
+                        <span class="modal-info-label">Localisation</span>
+                        <span class="modal-info-value" id="sell-location">LFPG</span>
+                    </div>
+                    <div class="modal-info-row">
+                        <span class="modal-info-label">Conteneur</span>
+                        <span class="modal-info-value" id="sell-container">Entrepôt</span>
+                    </div>
+                </div>
+
+                <!-- Quantity Input -->
+                <div class="form-group">
+                    <label class="form-label">Quantité à vendre</label>
+                    <div class="transfer-qty-input">
+                        <input type="number" id="sell-qty" min="1" value="1" oninput="updateSellTotal()">
+                        <button class="qty-max-btn" onclick="setSellMax()">MAX</button>
+                    </div>
+                </div>
+
+                <!-- Price Input -->
+                <div class="form-group">
+                    <label class="form-label">Prix unitaire ($)</label>
+                    <input type="number" class="form-input" id="sell-price" min="1" value="10" oninput="updateSellTotal()">
+                </div>
+
+                <!-- Total -->
+                <div class="buy-total-box">
+                    <span class="buy-total-label">REVENUS ESTIMÉS</span>
+                    <span class="buy-total-value" id="sell-total">0 $</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeSellModal()">ANNULER</button>
+                <button class="btn" id="btn-confirm-sell" onclick="confirmMarketSell()">
+                    METTRE EN VENTE
                 </button>
             </div>
         </div>
