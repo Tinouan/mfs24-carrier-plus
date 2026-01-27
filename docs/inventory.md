@@ -1,8 +1,11 @@
 # Inventory System - Documentation Technique
 
+> **Version**: V0.8.1
+
 ## Vue d'ensemble
 
 Le système d'inventaire gère le stockage et le transport des items:
+- **V0.8.1 Production** - Items produits visibles dans container "Production" @ aéroport
 - **V0.8 Vente** - Items déduits de l'inventaire lors de la mise en vente, filtre "En Vente", annulation
 - **V0.7.1 UI** - Interface groupée par aéroport avec recherche et filtres
 - **V0.7 Simplifié** - 3 tables dédiées (player_inventory, company_inventory, aircraft_inventory)
@@ -90,7 +93,7 @@ L'interface inventaire offre:
 └─────────────────────────────────────────────────────┘
 ```
 
-### Icônes Conteneurs (V0.8)
+### Icônes Conteneurs (V0.8.1)
 
 | Type | Icône | Nom affiché |
 |------|-------|-------------|
@@ -98,6 +101,9 @@ L'interface inventaire offre:
 | `company_warehouse` | 🏢 | Stock Company - ICAO |
 | `factory_storage` | 🏭 | [Nom usine] |
 | `aircraft` | ✈️ | [Immatriculation] |
+| `production` | 🏭 | [Company] Production |
+
+> **V0.8.1**: Le type `production` affiche les items de `company_inventory` (production des factories T1+)
 
 ### Barre Cargo (Avions)
 
@@ -758,19 +764,20 @@ Pour transférer depuis `factory_storage` vers warehouse (legacy):
 
 ## Flux Typiques
 
-### V0.7 Simplifié: Production et Transport
+### V0.8.1: Production et Transport
 
 ```bash
-# 1. Produire dans une factory T1+
-POST /factories/{id}/production/start
-{"recipe_id": "uuid"}
+# 1. Produire dans une factory T1+ (V0.8.1 - multi-batch)
+POST /factories/{id}/production
+{"recipe_id": "uuid", "quantity": 10}
+# → Consomme ingrédients × 10 depuis company_inventory
 
-# 2. Batch terminé automatiquement
+# 2. Batch terminé automatiquement (scheduler 1min)
 # → Items dans company_inventory @ factory.airport_ident
 
-# 3. Voir l'inventaire company
-GET /inventory/company
-# → Liste tous les items par aéroport
+# 3. Voir l'inventaire (V0.8.1 - inclut production)
+GET /inventory/overview
+# → Container "Production" avec items de company_inventory
 
 # 4. Charger dans un avion
 POST /inventory/load
@@ -849,6 +856,7 @@ POST /inventory/market/buy
 - [x] ~~Annulation de vente (retour au stock)~~ **V0.8 Complété**
 - [x] ~~Sélection wallet (perso/company) à l'achat~~ **V0.8 Complété**
 - [x] ~~Affichage wallets dans header Inventaire~~ **V0.8 Complété**
+- [x] ~~Production visible dans /inventory/overview~~ **V0.8.1 Complété**
 - [ ] Migration HV vers nouvelles tables
 - [ ] Capacités de stockage par location
 - [ ] Frais de stockage (warehouse rent)

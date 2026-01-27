@@ -11,8 +11,7 @@ from .recipe import Recipe, RecipeIngredient
 
 # V0.5 Factory System Models - Phase 2 (ENABLED)
 from .factory import Factory
-from .worker import Worker, WorkerInstance, CountryWorkerStats
-from .engineer import Engineer
+from .worker import WorkerInstance, WorkerXpThreshold
 from .factory_storage import FactoryStorage
 from .production_batch import ProductionBatch
 from .factory_transaction import FactoryTransaction
@@ -25,3 +24,6 @@ from .company_aircraft import CompanyAircraft
 from .player_inventory import PlayerInventory
 from .company_inventory import CompanyInventory
 from .aircraft_inventory import AircraftInventory
+
+# V0.8 Mission System
+from .mission import Mission

@@ -4,7 +4,7 @@ Factories router - Player-owned factory management.
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
@@ -15,7 +15,7 @@ from app.models.company import Company
 from app.models.factory import Factory
 from app.models.item import Item
 from app.models.recipe import Recipe, RecipeIngredient
-from app.models.worker import Worker
+from app.models.worker import WorkerInstance
 from app.models.factory_storage import FactoryStorage
 from app.models.production_batch import ProductionBatch
 from app.models.factory_transaction import FactoryTransaction
@@ -40,10 +40,10 @@ from app.schemas.factories import (
     FoodStatusOut,
 )
 from app.schemas.workers import (
-    WorkerOut,
-    WorkerListOut,
-    FactoryWorkersOut,
+    WorkerInstanceListOut,
+    FactoryWorkersV2Out,
 )
+from app.services.production_service import calculate_production_time
 
 router = APIRouter(prefix="/factories", tags=["factories"])
 
@@ -72,24 +72,86 @@ def _get_factory_or_404(db: Session, company_id: uuid.UUID, factory_id: uuid.UUI
     return factory
 
 
+def _build_factory_out(db: Session, factory: Factory) -> FactoryOut:
+    """Build FactoryOut with food item info (V0.8.1)."""
+    food_item_name = None
+    food_item_icon = None
+
+    if factory.food_item_id:
+        food_item = db.query(Item).filter(Item.id == factory.food_item_id).first()
+        if food_item:
+            food_item_name = food_item.name
+            food_item_icon = food_item.icon
+
+    return FactoryOut(
+        id=factory.id,
+        company_id=factory.company_id,
+        airport_ident=factory.airport_ident,
+        name=factory.name,
+        tier=factory.tier,
+        factory_type=factory.factory_type,
+        status=factory.status,
+        current_recipe_id=factory.current_recipe_id,
+        is_active=factory.is_active,
+        max_workers=factory.max_workers,
+        max_engineers=factory.max_engineers,
+        food_item_id=factory.food_item_id,
+        food_item_name=food_item_name,
+        food_item_icon=food_item_icon,
+        food_tier=factory.food_tier,
+        food_stock=factory.food_stock,
+        food_capacity=factory.food_capacity,
+        food_consumption_per_hour=float(factory.food_consumption_per_hour),
+        created_at=factory.created_at,
+        updated_at=factory.updated_at,
+    )
+
+
+# V0.8.1: Food tier bonus mapping
+FOOD_TIER_BONUS = {
+    0: 0,   # T0: +0%
+    1: 15,  # T1: +15%
+    2: 30,  # T2: +30%
+    3: 45,  # T3: +45%
+    4: 60,  # T4: +60%
+    5: 75,  # T5: +75%
+}
+
+
 # =====================================================
 # FACTORIES CRUD
 # =====================================================
 
 @router.get("", response_model=list[FactoryListOut])
 def list_my_factories(
+    airport_ident: str | None = Query(None, description="Filter by airport ICAO code"),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """List all factories owned by current company."""
+    """List all factories owned by current company. Optionally filter by airport."""
     c, _cm = _get_my_company(db, user.id)
     if not c:
         raise HTTPException(status_code=404, detail="No company")
 
-    factories = db.query(Factory).filter(
+    query = db.query(Factory).filter(
         Factory.company_id == c.id,
         Factory.is_active == True
-    ).all()
+    )
+
+    # Debug: show all factories before filter
+    all_factories = query.all()
+    print(f"[DEBUG] All my factories: {[(f.name, f.airport_ident) for f in all_factories]}")
+
+    if airport_ident:
+        print(f"[DEBUG] Filtering by airport_ident: '{airport_ident}'")
+        query = db.query(Factory).filter(
+            Factory.company_id == c.id,
+            Factory.is_active == True,
+            Factory.airport_ident == airport_ident
+        )
+
+    factories = query.all()
+    print(f"[DEBUG] After filter: {len(factories)} factories")
 
     return [
         FactoryListOut(
@@ -157,24 +219,7 @@ def create_factory(
     db.commit()
     db.refresh(factory)
 
-    return FactoryOut(
-        id=factory.id,
-        company_id=factory.company_id,
-        airport_ident=factory.airport_ident,
-        name=factory.name,
-        tier=factory.tier,
-        factory_type=factory.factory_type,
-        status=factory.status,
-        current_recipe_id=factory.current_recipe_id,
-        is_active=factory.is_active,
-        max_workers=factory.max_workers,
-        max_engineers=factory.max_engineers,
-        food_stock=factory.food_stock,
-        food_capacity=factory.food_capacity,
-        food_consumption_per_hour=float(factory.food_consumption_per_hour),
-        created_at=factory.created_at,
-        updated_at=factory.updated_at,
-    )
+    return _build_factory_out(db, factory)
 
 
 @router.get("/{factory_id}", response_model=FactoryOut)
@@ -190,24 +235,7 @@ def get_factory_details(
 
     factory = _get_factory_or_404(db, c.id, factory_id)
 
-    return FactoryOut(
-        id=factory.id,
-        company_id=factory.company_id,
-        airport_ident=factory.airport_ident,
-        name=factory.name,
-        tier=factory.tier,
-        factory_type=factory.factory_type,
-        status=factory.status,
-        current_recipe_id=factory.current_recipe_id,
-        is_active=factory.is_active,
-        max_workers=factory.max_workers,
-        max_engineers=factory.max_engineers,
-        food_stock=factory.food_stock,
-        food_capacity=factory.food_capacity,
-        food_consumption_per_hour=float(factory.food_consumption_per_hour),
-        created_at=factory.created_at,
-        updated_at=factory.updated_at,
-    )
+    return _build_factory_out(db, factory)
 
 
 @router.patch("/{factory_id}", response_model=FactoryOut)
@@ -247,24 +275,7 @@ def update_factory(
     db.commit()
     db.refresh(factory)
 
-    return FactoryOut(
-        id=factory.id,
-        company_id=factory.company_id,
-        airport_ident=factory.airport_ident,
-        name=factory.name,
-        tier=factory.tier,
-        factory_type=factory.factory_type,
-        status=factory.status,
-        current_recipe_id=factory.current_recipe_id,
-        is_active=factory.is_active,
-        max_workers=factory.max_workers,
-        max_engineers=factory.max_engineers,
-        food_stock=factory.food_stock,
-        food_capacity=factory.food_capacity,
-        food_consumption_per_hour=float(factory.food_consumption_per_hour),
-        created_at=factory.created_at,
-        updated_at=factory.updated_at,
-    )
+    return _build_factory_out(db, factory)
 
 
 @router.delete("/{factory_id}", status_code=204)
@@ -307,11 +318,10 @@ def delete_factory(
             detail="Cannot delete factory with items in storage. Withdraw all items first."
         )
 
-    # Release workers (soft delete)
-    db.query(Worker).filter(
-        Worker.factory_id == factory.id,
-        Worker.is_active == True
-    ).update({"is_active": False})
+    # Release workers (V2 - unassign from factory)
+    db.query(WorkerInstance).filter(
+        WorkerInstance.factory_id == factory.id
+    ).update({"factory_id": None, "status": "available"})
 
     # Refund partial cost - TODO: Define when construction cost system is implemented
     # Should refund a percentage based on factory age/condition
@@ -356,6 +366,9 @@ def start_production(
         RecipeIngredient.recipe_id == recipe.id
     ).all()
 
+    # V2.1: Calculate total ingredients needed for requested batches
+    batches_requested = data.quantity or 1
+
     for ingredient in recipe_ingredients:
         inv_item = db.query(CompanyInventory).filter(
             CompanyInventory.company_id == c.id,
@@ -364,20 +377,22 @@ def start_production(
         ).first()
 
         available_qty = inv_item.qty if inv_item else 0
-        if available_qty < ingredient.quantity:
+        total_required = ingredient.quantity * batches_requested
+        if available_qty < total_required:
             # Get item name for error message
             item = db.query(Item).filter(Item.id == ingredient.item_id).first()
             item_name = item.name if item else str(ingredient.item_id)
             raise HTTPException(
                 status_code=400,
-                detail=f"Insufficient {item_name} in inventory at {factory.airport_ident}. Required: {ingredient.quantity}, Available: {available_qty}"
+                detail=f"Insufficient {item_name} in inventory at {factory.airport_ident}. Required: {total_required}, Available: {available_qty}"
             )
 
-    # Count workers assigned to this factory
-    workers_count = db.query(func.count(Worker.id)).filter(
-        Worker.factory_id == factory.id,
-        Worker.is_active == True
-    ).scalar()
+    # Get workers assigned to this factory (V2)
+    workers = db.query(WorkerInstance).filter(
+        WorkerInstance.factory_id == factory.id,
+        WorkerInstance.status == "working"
+    ).all()
+    workers_count = len(workers)
 
     if workers_count == 0:
         raise HTTPException(
@@ -385,23 +400,24 @@ def start_production(
             detail="No workers assigned to this factory"
         )
 
-    # Check for engineer bonus (1 engineer per factory)
-    try:
-        from app.models.engineer import Engineer
-        engineer = db.query(Engineer).filter(
-            Engineer.factory_id == factory.id,
-            Engineer.is_active == True
-        ).first()
-        engineer_bonus = engineer is not None
-    except:
-        engineer_bonus = False
+    # V2: No separate engineer model - could add bonus based on worker tier later
+    engineer_bonus = False
 
-    # Calculate estimated completion
-    production_time = float(recipe.production_time_hours)
+    # V0.8.1: Check food status for production time calculation
+    has_food = factory.food_stock > 0
+
+    # Calculate estimated completion using worker speed and food modifier
+    # Formula: base_time × (200 / sum(workers.speed)), sans food = 30% efficacité
+    production_time_per_batch = calculate_production_time(
+        base_hours=float(recipe.production_time_hours),
+        workers=workers,
+        has_food=has_food
+    )
+    total_production_time = production_time_per_batch * batches_requested
     from datetime import timedelta
-    estimated_completion = datetime.utcnow() + timedelta(hours=production_time)
+    estimated_completion = datetime.utcnow() + timedelta(hours=total_production_time)
 
-    # V2: Consume ingredients from company_inventory
+    # V2.1: Consume ingredients from company_inventory (multiply by batches)
     for ingredient in recipe_ingredients:
         inv_item = db.query(CompanyInventory).filter(
             CompanyInventory.company_id == c.id,
@@ -409,27 +425,29 @@ def start_production(
             CompanyInventory.airport_ident == factory.airport_ident
         ).first()
 
-        inv_item.qty -= ingredient.quantity
-        if inv_item.qty == 0:
+        total_consumed = ingredient.quantity * batches_requested
+        inv_item.qty -= total_consumed
+        if inv_item.qty <= 0:
             db.delete(inv_item)
 
-        # Log consumption transaction
+        # Log consumption transaction (input with negative = consumed)
         transaction = FactoryTransaction(
             factory_id=factory.id,
             item_id=ingredient.item_id,
-            transaction_type="consumed",
-            quantity=-ingredient.quantity,
-            notes=f"Production batch started: {recipe.name}"
+            transaction_type="input",
+            quantity=-total_consumed,
+            notes=f"Production: {batches_requested}x {recipe.name}"
         )
         db.add(transaction)
 
-    # Create production batch
+    # Create production batch (V2.1: result = batches * output_per_batch)
+    total_output = recipe.result_quantity * batches_requested
     batch = ProductionBatch(
         factory_id=factory.id,
         recipe_id=data.recipe_id,
         status="pending",
         workers_assigned=workers_count,
-        result_quantity=recipe.result_quantity,
+        result_quantity=total_output,
         engineer_bonus_applied=engineer_bonus,
         started_at=datetime.utcnow(),
         estimated_completion=estimated_completion,
@@ -528,15 +546,15 @@ def stop_production(
 # WORKERS (V0.6 - Use /workers endpoints for full management)
 # =====================================================
 
-@router.get("/{factory_id}/workers", response_model=FactoryWorkersOut)
+@router.get("/{factory_id}/workers", response_model=FactoryWorkersV2Out)
 def list_factory_workers(
     factory_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """List all workers assigned to this factory (V0.6).
+    """List all workers assigned to this factory (V2).
 
-    For full worker management (hire, assign, fire), use /workers endpoints.
+    For full worker management, use /workers/v2 endpoints.
     """
     c, _cm = _get_my_company(db, user.id)
     if not c:
@@ -544,27 +562,36 @@ def list_factory_workers(
 
     factory = _get_factory_or_404(db, c.id, factory_id)
 
-    # Get workers (worker_type='worker')
-    workers = db.query(Worker).filter(
-        Worker.factory_id == factory.id,
-        Worker.worker_type == "worker"
+    # Get workers assigned to this factory (V2)
+    from app.models.item import Item
+    workers_query = db.query(WorkerInstance, Item.name.label("item_name")).join(
+        Item, WorkerInstance.item_id == Item.id
+    ).filter(
+        WorkerInstance.factory_id == factory.id
     ).all()
 
-    # Get engineers (worker_type='engineer')
-    engineers = db.query(Worker).filter(
-        Worker.factory_id == factory.id,
-        Worker.worker_type == "engineer"
-    ).all()
+    workers = [
+        WorkerInstanceListOut(
+            id=w.id,
+            item_name=item_name,
+            country_code=w.country_code,
+            speed=w.speed,
+            resistance=w.resistance,
+            tier=w.tier,
+            hourly_salary=float(w.hourly_salary),
+            status=w.status,
+            airport_ident=w.airport_ident,
+            factory_id=w.factory_id
+        )
+        for w, item_name in workers_query
+    ]
 
-    return FactoryWorkersOut(
+    return FactoryWorkersV2Out(
         factory_id=factory.id,
         factory_name=factory.name,
         max_workers=factory.max_workers,
-        max_engineers=factory.max_engineers,
         current_workers=len(workers),
-        current_engineers=len(engineers),
-        workers=[WorkerListOut.model_validate(w) for w in workers],
-        engineers=[WorkerListOut.model_validate(e) for e in engineers]
+        workers=workers
     )
 
 
@@ -800,21 +827,19 @@ def get_factory_stats(
         Factory.is_active == True
     ).count()
 
-    # Count workers and engineers
+    # Count workers (V2 - WorkerInstance)
     factory_ids = [f.id for f in db.query(Factory.id).filter(
         Factory.company_id == c.id,
         Factory.is_active == True
     ).all()]
 
-    total_workers = db.query(Worker).filter(
-        Worker.factory_id.in_(factory_ids),
-        Worker.is_active == True
+    total_workers = db.query(WorkerInstance).filter(
+        WorkerInstance.factory_id.in_(factory_ids),
+        WorkerInstance.status == "working"
     ).count()
 
-    total_engineers = db.query(Engineer).filter(
-        Engineer.company_id == c.id,
-        Engineer.is_active == True
-    ).count()
+    # Engineers are now just workers - count all company workers
+    total_engineers = 0  # V2: No separate engineer model
 
     # Calculate total production hours from batches
     total_hours = db.query(func.count(ProductionBatch.id)).filter(
@@ -831,4 +856,185 @@ def get_factory_stats(
         total_workers=total_workers,
         total_engineers=total_engineers,
         total_production_hours=total_hours,
+    )
+
+
+# =====================================================
+# FOOD SYSTEM (V0.8.1)
+# =====================================================
+
+@router.get("/{factory_id}/food", response_model=FoodStatusOut)
+def get_food_status(
+    factory_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Get factory food status (V0.8.1)."""
+    c, _cm = _get_my_company(db, user.id)
+    if not c:
+        raise HTTPException(status_code=404, detail="No company")
+
+    factory = _get_factory_or_404(db, c.id, factory_id)
+
+    # Get food item info if set
+    food_item_name = None
+    food_item_icon = None
+    if factory.food_item_id:
+        food_item = db.query(Item).filter(Item.id == factory.food_item_id).first()
+        if food_item:
+            food_item_name = food_item.name
+            food_item_icon = food_item.icon
+
+    # Count workers
+    workers_count = db.query(func.count(WorkerInstance.id)).filter(
+        WorkerInstance.factory_id == factory.id,
+        WorkerInstance.status == "working"
+    ).scalar() or 0
+
+    # Calculate hours until empty
+    consumption = float(factory.food_consumption_per_hour)
+    hours_until_empty = None
+    if consumption > 0 and factory.food_stock > 0:
+        hours_until_empty = factory.food_stock / consumption
+
+    # Get food tier bonus
+    food_bonus = FOOD_TIER_BONUS.get(factory.food_tier, 0)
+
+    return FoodStatusOut(
+        factory_id=factory.id,
+        food_item_id=factory.food_item_id,
+        food_item_name=food_item_name,
+        food_item_icon=food_item_icon,
+        food_tier=factory.food_tier,
+        food_bonus_percent=food_bonus,
+        food_stock=factory.food_stock,
+        food_capacity=factory.food_capacity,
+        food_consumption_per_hour=consumption,
+        hours_until_empty=hours_until_empty,
+        workers_count=workers_count,
+    )
+
+
+@router.post("/{factory_id}/food", response_model=FoodStatusOut)
+def deposit_food(
+    factory_id: uuid.UUID,
+    data: FoodDepositIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """
+    Deposit food into factory (V0.8.1).
+
+    Rules:
+    - Only items with 'food' or 'consumable' tag allowed
+    - Only one food type at a time per factory
+    - To change food type, factory must be empty (food_stock=0)
+    - Consumption: 1 unit/worker/hour
+    - Bonus: T0=0%, T1=15%, T2=30%, T3=45%, T4=60%, T5=75%
+    """
+    c, _cm = _get_my_company(db, user.id)
+    if not c:
+        raise HTTPException(status_code=404, detail="No company")
+
+    factory = _get_factory_or_404(db, c.id, factory_id)
+
+    # Get the food item
+    food_item = db.query(Item).filter(Item.id == data.item_id).first()
+    if not food_item:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    # Validate item has food or consumable tag
+    item_tags = food_item.tags or []
+    if 'food' not in item_tags and 'consumable' not in item_tags:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Item '{food_item.name}' is not a food item (missing 'food' or 'consumable' tag)"
+        )
+
+    # V0.8.1: If factory has different food type, swap automatically (return old food to inventory)
+    if factory.food_item_id and factory.food_item_id != data.item_id and factory.food_stock > 0:
+        # Return old food to company_inventory
+        old_inv = db.query(CompanyInventory).filter(
+            CompanyInventory.company_id == c.id,
+            CompanyInventory.item_id == factory.food_item_id,
+            CompanyInventory.airport_ident == factory.airport_ident
+        ).first()
+
+        if old_inv:
+            old_inv.qty += factory.food_stock
+        else:
+            old_inv = CompanyInventory(
+                company_id=c.id,
+                item_id=factory.food_item_id,
+                airport_ident=factory.airport_ident,
+                qty=factory.food_stock
+            )
+            db.add(old_inv)
+
+        # Reset factory food stock before loading new type
+        factory.food_stock = 0
+
+    # Check company inventory at factory's airport
+    inv_item = db.query(CompanyInventory).filter(
+        CompanyInventory.company_id == c.id,
+        CompanyInventory.item_id == data.item_id,
+        CompanyInventory.airport_ident == factory.airport_ident
+    ).first()
+
+    if not inv_item or inv_item.qty < data.quantity:
+        available = inv_item.qty if inv_item else 0
+        raise HTTPException(
+            status_code=400,
+            detail=f"Insufficient {food_item.name} in inventory at {factory.airport_ident}. Available: {available}, Requested: {data.quantity}"
+        )
+
+    # Check capacity (factory.food_stock is now 0 if we swapped)
+    new_stock = factory.food_stock + data.quantity
+    if new_stock > factory.food_capacity:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Would exceed food capacity. Current: {factory.food_stock}, Adding: {data.quantity}, Capacity: {factory.food_capacity}"
+        )
+
+    # Deduct from company inventory
+    inv_item.qty -= data.quantity
+    if inv_item.qty <= 0:
+        db.delete(inv_item)
+
+    # Update factory food
+    factory.food_item_id = data.item_id
+    factory.food_tier = food_item.tier
+    factory.food_stock = new_stock
+
+    # Calculate consumption (1 per worker per hour)
+    workers_count = db.query(func.count(WorkerInstance.id)).filter(
+        WorkerInstance.factory_id == factory.id,
+        WorkerInstance.status == "working"
+    ).scalar() or 0
+    factory.food_consumption_per_hour = workers_count
+
+    db.commit()
+    db.refresh(factory)
+
+    # Calculate hours until empty
+    consumption = float(factory.food_consumption_per_hour)
+    hours_until_empty = None
+    if consumption > 0 and factory.food_stock > 0:
+        hours_until_empty = factory.food_stock / consumption
+
+    # Get food tier bonus
+    food_bonus = FOOD_TIER_BONUS.get(factory.food_tier, 0)
+
+    return FoodStatusOut(
+        factory_id=factory.id,
+        food_item_id=factory.food_item_id,
+        food_item_name=food_item.name,
+        food_item_icon=food_item.icon,
+        food_tier=factory.food_tier,
+        food_bonus_percent=food_bonus,
+        food_stock=factory.food_stock,
+        food_capacity=factory.food_capacity,
+        food_consumption_per_hour=consumption,
+        hours_until_empty=hours_until_empty,
+        workers_count=workers_count,
     )

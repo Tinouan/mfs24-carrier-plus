@@ -118,6 +118,12 @@ class Factory(Base):
         nullable=False,
         comment="Food consumed per hour (based on workers)"
     )
+    food_tier: Mapped[int] = mapped_column(
+        Integer,
+        server_default="0",
+        nullable=False,
+        comment="Tier of loaded food for bonus calculation (0-5)"
+    )
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(

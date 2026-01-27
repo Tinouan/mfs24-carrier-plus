@@ -960,6 +960,26 @@ def get_inventory_overview(
             airports_data[airport] = []
         airports_data[airport].append(loc)
 
+    # V0.7: Also get CompanyInventory items (production output)
+    company_inv_by_airport: dict[str, list] = {}
+    for company_id in db.query(CompanyMember.company_id).filter(CompanyMember.user_id == user.id).all():
+        company_id = company_id[0]
+        company_items = (
+            db.query(CompanyInventory, Item, Company.name)
+            .join(Item, Item.id == CompanyInventory.item_id)
+            .join(Company, Company.id == CompanyInventory.company_id)
+            .filter(CompanyInventory.company_id == company_id, CompanyInventory.qty > 0)
+            .all()
+        )
+        for ci, item, company_name in company_items:
+            airport = ci.airport_ident or "GLOBAL"
+            if airport not in company_inv_by_airport:
+                company_inv_by_airport[airport] = []
+            company_inv_by_airport[airport].append((ci, item, company_name))
+            # Ensure airport exists in airports_data
+            if airport not in airports_data:
+                airports_data[airport] = []
+
     # Build response
     total_items = 0
     total_value = Decimal("0")
@@ -996,6 +1016,7 @@ def get_inventory_overview(
                     total_weight_kg=item_total_weight,
                     base_value=item.base_value,
                     total_value=item_total_value,
+                    tags=item.tags or [],
                 ))
 
             total_items += container_items
@@ -1018,6 +1039,51 @@ def get_inventory_overview(
                 total_items=container_items,
                 total_value=container_total,
             ))
+
+        # V0.7: Add CompanyInventory items as "Production" container
+        if airport_ident in company_inv_by_airport:
+            # Group by company
+            by_company: dict[str, list] = {}
+            for ci, item, company_name in company_inv_by_airport[airport_ident]:
+                if company_name not in by_company:
+                    by_company[company_name] = []
+                by_company[company_name].append((ci, item))
+
+            for company_name, items_list in by_company.items():
+                prod_items = []
+                prod_total = Decimal("0")
+                prod_count = 0
+
+                for ci, item in items_list:
+                    item_total_value = item.base_value * ci.qty
+                    item_total_weight = item.weight_kg * ci.qty
+                    prod_total += item_total_value
+                    prod_count += ci.qty
+
+                    prod_items.append(InventoryItemOut(
+                        item_id=item.id,
+                        item_name=item.name,
+                        tier=item.tier,
+                        qty=ci.qty,
+                        weight_kg=item.weight_kg,
+                        total_weight_kg=item_total_weight,
+                        base_value=item.base_value,
+                        total_value=item_total_value,
+                        tags=item.tags or [],
+                    ))
+
+                total_items += prod_count
+                total_value += prod_total
+
+                containers.append(ContainerOut(
+                    id=None,  # No location ID for company inventory
+                    type="production",
+                    name=f"{company_name} Production",
+                    owner_name=company_name,
+                    items=prod_items,
+                    total_items=prod_count,
+                    total_value=prod_total,
+                ))
 
         # Get airport name (simple lookup)
         airport_name = airport_ident if airport_ident != "GLOBAL" else "Global Storage"
@@ -1314,6 +1380,7 @@ def get_inventory_at_airport(
                 total_weight_kg=item_total_weight,
                 base_value=item.base_value,
                 total_value=item_total_value,
+                tags=item.tags or [],
             ))
 
         owner_name = None
@@ -1411,6 +1478,7 @@ def get_player_inventory(
             total_weight_kg=item_total_weight,
             base_value=item.base_value,
             total_value=item_total_value,
+            tags=item.tags or [],
         ))
 
     return PlayerInventoryOut(
@@ -1471,6 +1539,7 @@ def get_company_inventory(
             total_weight_kg=item_total_weight,
             base_value=item.base_value,
             total_value=item_total_value,
+            tags=item.tags or [],
         ))
 
     return CompanyInventoryOut(

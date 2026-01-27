@@ -23,6 +23,7 @@ from app.routers.factories import router as factories_router
 from app.routers.world import router as world_router
 from app.routers.workers import router as workers_router
 from app.routers.sql_executor import router as sql_executor_router
+from app.routers.missions import router as missions_router
 
 
 ROOT_PATH = os.getenv("ROOT_PATH", "")
@@ -87,6 +88,8 @@ app.include_router(factories_router)
 app.include_router(world_router)
 # V0.6 Workers System
 app.include_router(workers_router)
+# V0.8 Mission System
+app.include_router(missions_router)
 # SQL Executor (DEV ONLY)
 app.include_router(sql_executor_router)
 

@@ -272,10 +272,54 @@ def list_airports(
     # Exclude closed airports
     query = query.filter(Airport.type != 'closed')
 
-    # Order by type (large first) then name
-    airports = query.order_by(Airport.type, Airport.name).limit(limit).all()
+    # Order by importance (large airports first, then medium, small, heliport, etc.)
+    # Use CASE to define custom ordering
+    from sqlalchemy import case
+    type_order = case(
+        (Airport.type == 'large_airport', 1),
+        (Airport.type == 'medium_airport', 2),
+        (Airport.type == 'small_airport', 3),
+        (Airport.type == 'seaplane_base', 4),
+        (Airport.type == 'heliport', 5),
+        (Airport.type == 'balloonport', 6),
+        else_=7
+    )
+    airports = query.order_by(type_order, Airport.name).limit(limit).all()
 
     return airports
+
+
+@router.get("/airports/closest", response_model=AirportOut)
+def get_closest_airport(
+    lat: float = Query(..., description="Current latitude"),
+    lon: float = Query(..., description="Current longitude"),
+    db: Session = Depends(get_db),
+):
+    """
+    Find the closest airport to given coordinates.
+    Uses simple Euclidean distance approximation (good enough for nearby airports).
+    Used by EFB to detect player's current airport for mission system.
+    """
+    # Simple distance calculation using Euclidean approximation
+    # For nearby airports this is accurate enough
+    from sqlalchemy import func as sqlfunc
+
+    # Calculate distance: sqrt((lat2-lat1)^2 + (lon2-lon1)^2)
+    # We use squared distance to avoid sqrt (faster, same ordering)
+    distance_sq = (
+        sqlfunc.power(Airport.latitude_deg - lat, 2) +
+        sqlfunc.power(Airport.longitude_deg - lon, 2)
+    )
+
+    # Find closest airport (excluding closed)
+    airport = db.query(Airport).filter(
+        Airport.type != 'closed'
+    ).order_by(distance_sq).first()
+
+    if not airport:
+        raise HTTPException(status_code=404, detail="No airports found")
+
+    return airport
 
 
 @router.get("/airports/slots", response_model=list[AirportSlotOut])
@@ -326,26 +370,43 @@ def get_airport_available_slots(
     db: Session = Depends(get_db),
 ):
     """
-    Get available slot indices for a specific airport.
-    Returns list of free slot numbers.
+    Get available factory slots for a specific airport.
+    Max slots based on airport type: large=12, medium=6, small=3, heliport=1
     """
-    # Get all occupied slots
-    occupied_slots = db.query(Factory.slot_index).filter(
-        Factory.airport_ident == airport_ident
-    ).all()
-    occupied_indices = {slot[0] for slot in occupied_slots}
+    # Get airport to determine type
+    airport = db.query(Airport).filter(Airport.ident == airport_ident).first()
 
-    # TODO: Get max_slots from airports table
-    max_slots = 12  # Default for now
+    # Determine max slots based on airport type
+    if airport and airport.max_factories_slots:
+        max_slots = airport.max_factories_slots
+    elif airport:
+        # Default based on airport type
+        airport_type = airport.type or ""
+        if "large" in airport_type:
+            max_slots = 12
+        elif "medium" in airport_type:
+            max_slots = 6
+        elif "small" in airport_type:
+            max_slots = 3
+        elif "heli" in airport_type:
+            max_slots = 1
+        else:
+            max_slots = 3  # Default for unknown types
+    else:
+        max_slots = 3  # Default if airport not found
 
-    available_indices = [i for i in range(max_slots) if i not in occupied_indices]
+    # Count occupied slots (number of factories at this airport)
+    occupied_count = db.query(Factory).filter(
+        Factory.airport_ident == airport_ident,
+        Factory.is_active == True
+    ).count()
 
     return {
         "airport_ident": airport_ident,
+        "airport_type": airport.type if airport else None,
         "max_slots": max_slots,
-        "occupied_slots": len(occupied_indices),
-        "available_slots": len(available_indices),
-        "available_slot_indices": available_indices,
+        "occupied_slots": occupied_count,
+        "available_slots": max(0, max_slots - occupied_count),
     }
 
 
@@ -353,84 +414,88 @@ def get_airport_available_slots(
 # FACTORIES (Public map view)
 # =====================================================
 
-# T0 factory name to product/type mapping for map icons
+# T0 factory name to product/type mapping for map icons (product, type, name, icon)
 T0_FACTORY_PRODUCTS = {
     # Food - Cereals
-    "Exploitation Céréalière Beauce": ("wheat", "food", "Blé"),
-    "Coopérative Agricole Île-de-France": ("wheat", "food", "Blé"),
-    "Ferme Céréalière du Nord": ("wheat", "food", "Blé"),
+    "Exploitation Céréalière Beauce": ("wheat", "food", "Blé", "🌾"),
+    "Coopérative Agricole Île-de-France": ("wheat", "food", "Blé", "🌾"),
+    "Ferme Céréalière du Nord": ("wheat", "food", "Blé", "🌾"),
     # Food - Meat
-    "Élevage Breton": ("meat", "food", "Viande"),
-    "Boucherie Lyonnaise": ("meat", "food", "Viande"),
-    "Ferme Normande": ("meat", "food", "Viande"),
+    "Élevage Breton": ("meat", "food", "Viande", "🥩"),
+    "Boucherie Lyonnaise": ("meat", "food", "Viande", "🥩"),
+    "Ferme Normande": ("meat", "food", "Viande", "🥩"),
     # Food - Dairy
-    "Laiterie Normande": ("milk", "food", "Lait"),
-    "Fromagerie Alpine": ("milk", "food", "Lait"),
+    "Laiterie Normande": ("milk", "food", "Lait", "🥛"),
+    "Fromagerie Alpine": ("milk", "food", "Fromage", "🧀"),
     # Food - Fruits/Vegetables
-    "Vergers de Provence": ("fruits", "food", "Fruits"),
-    "Fruits du Sud-Ouest": ("fruits", "food", "Fruits"),
-    "Potager de Provence": ("vegetables", "food", "Légumes"),
-    "Maraîchage Loire": ("vegetables", "food", "Légumes"),
+    "Vergers de Provence": ("fruits", "food", "Fruits", "🍎"),
+    "Fruits du Sud-Ouest": ("fruits", "food", "Fruits", "🍎"),
+    "Potager de Provence": ("vegetables", "food", "Légumes", "🥬"),
+    "Maraîchage Loire": ("vegetables", "food", "Légumes", "🥬"),
     # Food - Fish
-    "Criée de Bretagne": ("fish", "food", "Poisson"),
-    "Pêcherie Méditerranée": ("fish", "food", "Poisson"),
+    "Criée de Bretagne": ("fish", "food", "Poisson", "🐟"),
+    "Pêcherie Méditerranée": ("fish", "food", "Poisson", "🐟"),
     # Food - Water
-    "Source Volvic": ("water", "food", "Eau"),
-    "Eaux des Alpes": ("water", "food", "Eau"),
+    "Source Volvic": ("water", "food", "Eau", "💧"),
+    "Eaux des Alpes": ("water", "food", "Eau", "💧"),
     # Food - Salt
-    "Salines de Guérande": ("salt", "food", "Sel"),
-    "Salines de Camargue": ("salt", "food", "Sel"),
+    "Salines de Guérande": ("salt", "food", "Sel", "🧂"),
+    "Salines de Camargue": ("salt", "food", "Sel", "🧂"),
     # Fuel
-    "Raffinerie de Fos": ("crude_oil", "fuel", "Pétrole Brut"),
-    "Raffinerie de Donges": ("crude_oil", "fuel", "Pétrole Brut"),
-    "Gisement de Lacq": ("natural_gas", "fuel", "Gaz Naturel"),
-    "Biocarburants Occitanie": ("crude_oil", "fuel", "Biocarburant"),
+    "Raffinerie de Fos": ("crude_oil", "fuel", "Pétrole Brut", "🛢️"),
+    "Raffinerie de Donges": ("crude_oil", "fuel", "Pétrole Brut", "🛢️"),
+    "Gisement de Lacq": ("natural_gas", "fuel", "Gaz Naturel", "💨"),
+    "Biocarburants Occitanie": ("biomass", "fuel", "Biocarburant", "🌱"),
     # Minerals
-    "Mine de Lorraine": ("iron_ore", "mineral", "Minerai de Fer"),
-    "Bassin Minier du Nord": ("coal", "mineral", "Charbon"),
-    "Carrières d'Alsace": ("iron_ore", "mineral", "Minerai"),
-    "Carrières du Rhône": ("iron_ore", "mineral", "Minerai"),
+    "Mine de Lorraine": ("iron_ore", "mineral", "Minerai de Fer", "⛏️"),
+    "Bassin Minier du Nord": ("coal", "mineral", "Charbon", "⚫"),
+    "Carrières d'Alsace": ("iron_ore", "mineral", "Minerai", "⛏️"),
+    "Carrières du Rhône": ("stone", "mineral", "Pierre", "🪨"),
     # Construction
-    "Forêt des Landes": ("wood", "construction", "Bois"),
-    "Bois du Massif Central": ("wood", "construction", "Bois"),
-    "Scierie des Vosges": ("wood", "construction", "Bois"),
+    "Forêt des Landes": ("wood", "construction", "Bois", "🪵"),
+    "Bois du Massif Central": ("wood", "construction", "Bois", "🪵"),
+    "Scierie des Vosges": ("wood", "construction", "Bois", "🪵"),
 }
 
 
-def _get_t0_product_info(factory_name: str) -> tuple[str, str, str]:
-    """Get product info for T0 factory based on name."""
+def _get_t0_product_info(factory_name: str) -> tuple[str, str, str, str]:
+    """Get product info for T0 factory based on name. Returns (product, type, name, icon)."""
     if factory_name in T0_FACTORY_PRODUCTS:
         return T0_FACTORY_PRODUCTS[factory_name]
     # Fallback based on keywords in name
     name_lower = factory_name.lower()
     if any(w in name_lower for w in ["céréal", "blé", "ferme", "agricole", "coopérative"]):
-        return ("wheat", "food", "Blé")
+        return ("wheat", "food", "Blé", "🌾")
     if any(w in name_lower for w in ["élevage", "boucherie", "viande"]):
-        return ("meat", "food", "Viande")
+        return ("meat", "food", "Viande", "🥩")
     if any(w in name_lower for w in ["lait", "fromage"]):
-        return ("milk", "food", "Lait")
+        return ("milk", "food", "Lait", "🥛")
     if any(w in name_lower for w in ["verger", "fruit"]):
-        return ("fruits", "food", "Fruits")
+        return ("fruits", "food", "Fruits", "🍎")
     if any(w in name_lower for w in ["potager", "maraîch", "légume"]):
-        return ("vegetables", "food", "Légumes")
+        return ("vegetables", "food", "Légumes", "🥬")
     if any(w in name_lower for w in ["criée", "pêche", "poisson"]):
-        return ("fish", "food", "Poisson")
+        return ("fish", "food", "Poisson", "🐟")
     if any(w in name_lower for w in ["source", "eau"]):
-        return ("water", "food", "Eau")
+        return ("water", "food", "Eau", "💧")
     if any(w in name_lower for w in ["saline", "sel"]):
-        return ("salt", "food", "Sel")
-    if any(w in name_lower for w in ["raffinerie", "pétrole", "biocarburant"]):
-        return ("crude_oil", "fuel", "Pétrole")
+        return ("salt", "food", "Sel", "🧂")
+    if any(w in name_lower for w in ["raffinerie", "pétrole"]):
+        return ("crude_oil", "fuel", "Pétrole", "🛢️")
+    if any(w in name_lower for w in ["biocarburant", "biomasse"]):
+        return ("biomass", "fuel", "Biocarburant", "🌱")
     if any(w in name_lower for w in ["gisement", "gaz"]):
-        return ("natural_gas", "fuel", "Gaz")
-    if any(w in name_lower for w in ["mine", "minier", "charbon"]):
-        return ("coal", "mineral", "Charbon")
-    if any(w in name_lower for w in ["carrière", "minerai"]):
-        return ("iron_ore", "mineral", "Minerai")
+        return ("natural_gas", "fuel", "Gaz", "💨")
+    if any(w in name_lower for w in ["mine", "minier"]):
+        return ("iron_ore", "mineral", "Minerai", "⛏️")
+    if any(w in name_lower for w in ["charbon"]):
+        return ("coal", "mineral", "Charbon", "⚫")
+    if any(w in name_lower for w in ["carrière", "pierre"]):
+        return ("stone", "mineral", "Pierre", "🪨")
     if any(w in name_lower for w in ["forêt", "bois", "scierie"]):
-        return ("wood", "construction", "Bois")
+        return ("wood", "construction", "Bois", "🪵")
     # Default
-    return ("wheat", "food", "Ressource")
+    return ("resource", "raw", "Ressource", "📦")
 
 
 @router.get("/factories")
@@ -481,14 +546,24 @@ def list_factories_for_map(
         company = db.query(Company).filter(Company.id == factory.company_id).first()
         company_name = company.name if company else "Unknown"
 
-        # Get product info for T0 factories
+        # Get product info for T0 factories (with icon)
         if factory.tier == 0:
-            product, prod_type, product_name = _get_t0_product_info(factory.name)
+            product, prod_type, product_name, icon = _get_t0_product_info(factory.name)
         else:
-            # For player factories, use factory_type or default
+            # For player factories, look up recipe's output item icon
+            icon = "🏭"  # Default factory icon
             product = None
             prod_type = factory.factory_type or "production"
             product_name = None
+
+            # If factory has a current recipe, get output item icon
+            if factory.current_recipe_id:
+                recipe = db.query(Recipe).filter(Recipe.id == factory.current_recipe_id).first()
+                if recipe and recipe.result_item_id:
+                    output_item = db.query(Item).filter(Item.id == recipe.result_item_id).first()
+                    if output_item:
+                        icon = output_item.icon or "🏭"
+                        product_name = output_item.name
 
         factories_out.append({
             "id": str(factory.id),
@@ -499,6 +574,7 @@ def list_factories_for_map(
             "type": prod_type,  # For frontend compatibility
             "product": product,
             "product_name": product_name,
+            "icon": icon,  # Emoji icon for map display
             "factory_type": factory.factory_type,
             "status": factory.status,
             "company_id": str(factory.company_id),

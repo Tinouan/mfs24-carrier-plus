@@ -17,6 +17,85 @@ T0_PRODUCTION_INTERVAL_MINUTES = 5  # Production T0 toutes les 5 min
 BATCH_CHECK_INTERVAL_MINUTES = 1    # Vérification batches toutes les minutes
 HOURLY_JOBS_INTERVAL_MINUTES = 60   # Jobs horaires (salaires, injuries)
 POOL_RESET_INTERVAL_HOURS = 6       # Reset pools toutes les 6 heures
+MISSION_TIMEOUT_CHECK_MINUTES = 15  # V0.8 Check mission timeouts every 15 min
+MISSION_TIMEOUT_HOURS = 24  # Missions expire after 24 hours
+
+
+def check_mission_timeouts():
+    """
+    V0.8 - Check for missions that have timed out (in_progress > 24 hours).
+    Returns cargo to origin, marks mission as failed.
+    """
+    from datetime import datetime, timedelta
+    from sqlalchemy.orm import Session
+    from app.core.db import SessionLocal
+    from app.models.mission import Mission
+    from app.models.company_aircraft import CompanyAircraft
+    from app.models.company_inventory import CompanyInventory
+    import uuid
+
+    db: Session = SessionLocal()
+    try:
+        cutoff = datetime.utcnow() - timedelta(hours=MISSION_TIMEOUT_HOURS)
+
+        # Find expired missions
+        expired_missions = db.query(Mission).filter(
+            Mission.status == "in_progress",
+            Mission.started_at < cutoff,
+        ).all()
+
+        for mission in expired_missions:
+            logger.info(f"[Scheduler] Mission {mission.id} timed out after 24h")
+
+            # Return cargo to origin
+            if mission.cargo_snapshot and mission.cargo_snapshot.get("items"):
+                for cargo in mission.cargo_snapshot["items"]:
+                    try:
+                        item_id = uuid.UUID(cargo["item_id"])
+                        # Find or create inventory at origin
+                        origin_inv = db.query(CompanyInventory).filter(
+                            CompanyInventory.company_id == mission.company_id,
+                            CompanyInventory.item_id == item_id,
+                            CompanyInventory.airport_ident == mission.origin_icao,
+                        ).first()
+
+                        if origin_inv:
+                            origin_inv.quantity += cargo["quantity"]
+                        else:
+                            origin_inv = CompanyInventory(
+                                company_id=mission.company_id,
+                                item_id=item_id,
+                                airport_ident=mission.origin_icao,
+                                quantity=cargo["quantity"],
+                            )
+                            db.add(origin_inv)
+                    except Exception as e:
+                        logger.error(f"[Scheduler] Error returning cargo: {e}")
+
+            # Reset aircraft to parked at origin
+            if mission.aircraft_id:
+                aircraft = db.query(CompanyAircraft).filter(
+                    CompanyAircraft.id == mission.aircraft_id
+                ).first()
+                if aircraft:
+                    aircraft.status = "parked"
+                    # Keep at origin (don't change location)
+
+            # Mark mission as failed
+            mission.status = "failed"
+            mission.failure_reason = "timeout"
+            mission.completed_at = datetime.utcnow()
+            mission.xp_earned = 0
+
+        if expired_missions:
+            db.commit()
+            logger.info(f"[Scheduler] Processed {len(expired_missions)} timed out missions")
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"[Scheduler] Error in check_mission_timeouts: {e}")
+    finally:
+        db.close()
 
 
 def setup_jobs():
@@ -29,7 +108,6 @@ def setup_jobs():
     )
     from app.services.worker_service import (
         process_food_and_injuries,
-        reset_airport_pools,
         cleanup_dead_workers,
     )
 
@@ -78,21 +156,21 @@ def setup_jobs():
         replace_existing=True,
     )
 
-    # Job 6: V0.6 - Reset airport worker pools (toutes les 6 heures)
-    scheduler.add_job(
-        reset_airport_pools,
-        trigger=IntervalTrigger(hours=POOL_RESET_INTERVAL_HOURS),
-        id="pool_reset",
-        name="V0.6 Reset pools workers aéroports",
-        replace_existing=True,
-    )
-
-    # Job 7: V0.6 - Cleanup dead workers (tous les jours)
+    # Job 6: V2 - Cleanup dead workers (tous les jours)
     scheduler.add_job(
         cleanup_dead_workers,
         trigger=IntervalTrigger(hours=24),
         id="dead_workers_cleanup",
-        name="V0.6 Nettoyage workers morts",
+        name="V2 Nettoyage workers morts",
+        replace_existing=True,
+    )
+
+    # Job 7: V0.8 - Mission timeout check (toutes les 15 min)
+    scheduler.add_job(
+        check_mission_timeouts,
+        trigger=IntervalTrigger(minutes=MISSION_TIMEOUT_CHECK_MINUTES),
+        id="mission_timeout_check",
+        name="V0.8 Mission timeout check",
         replace_existing=True,
     )
 

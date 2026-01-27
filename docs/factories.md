@@ -1,5 +1,7 @@
 # Factory System - Documentation Technique
 
+> **Version**: V0.8.1 (Workers V2 + Ingredients Simplification)
+
 ## Vue d'ensemble
 
 Le système de factories permet aux joueurs de transformer des matières premières (T0) en produits finis (T1-T5) via des usines industrielles.
@@ -67,10 +69,12 @@ Historique des mouvements.
 | `id` | UUID | Clé primaire |
 | `factory_id` | UUID | FK → factories |
 | `item_id` | UUID | FK → items |
-| `transaction_type` | VARCHAR(20) | input, output, produced, waste |
-| `quantity` | INT | Quantité |
+| `transaction_type` | VARCHAR(20) | `input`, `output`, `waste`, `transfer_in`, `transfer_out` |
+| `quantity` | INT | Quantité (négatif = consommation) |
 | `batch_id` | UUID | FK → production_batches (optionnel) |
 | `notes` | TEXT | Notes |
+
+> **Note V0.8.1**: `input` avec quantité négative = consommation d'ingrédients, `output` = production terminée
 
 ---
 
@@ -117,41 +121,56 @@ Les usines T0 sont gérées automatiquement par le système et produisent des ma
 
 ## Mécanique de Production
 
-### 1. Démarrage d'un batch
+### 1. Démarrage d'un batch (V0.8.1)
 
 ```http
-POST /api/factories/{factory_id}/production/start
+POST /api/factories/{factory_id}/production
 {
     "recipe_id": "uuid",
-    "workers_assigned": 5
+    "quantity": 10
 }
 ```
+
+| Paramètre | Type | Description |
+|-----------|------|-------------|
+| `recipe_id` | UUID | Recette à produire |
+| `quantity` | INT | Nombre de batches (1-1000) |
 
 **Validations:**
 1. L'usine appartient à la company du joueur
 2. L'usine est en status "idle"
-3. Assez de workers disponibles (status="working")
-4. Ingrédients disponibles en storage
-5. Tier recette <= Tier workers moyens
+3. Au moins 1 worker assigné (status="working")
+4. Ingrédients disponibles dans `company_inventory` @ même aéroport
+5. Tier recette <= Tier usine
+
+> **V0.8.1**: Food = 0 ne bloque PAS la production, seulement réduit l'efficacité (30%)
 
 ### 2. Calcul temps de production
 
 ```
-temps_production = base_time * (200 / sum(worker.speed))
+temps_total = temps_par_batch × nombre_de_batches
 ```
 
 **Exemple:**
-- Recette: 4h de base
-- 5 workers avec speed [55, 60, 50, 45, 58] → total = 268
-- Temps = 4 * (200 / 268) = 2.98h
+- Recette Salted Meat: 3h par batch
+- Quantity: 10 batches
+- Temps total = 3 × 10 = 30 heures
 
-**Modificateurs:**
-- Sans nourriture: -50% vitesse (temps x2)
-- Avec engineers: pas d'effet sur le temps, mais +bonus output
+**Modificateurs (V2):**
+- Bonus tier workers: +5% par tier au-dessus de T1 (max +25%)
 
-### 3. Consommation des ingrédients
+### 3. Consommation des ingrédients (V0.8.1)
 
-Les ingrédients sont déduits du `factory_storage` au démarrage du batch.
+Les ingrédients sont déduits directement de `company_inventory` au même aéroport:
+
+```
+quantité_consommée = ingrédient.quantity × nombre_batches
+```
+
+**Exemple:**
+- Recette: 2× Raw Meat + 1× Raw Salt par batch
+- Quantity: 10 batches
+- Consommé: 20× Raw Meat + 10× Raw Salt
 
 ### 4. Completion automatique
 
@@ -159,25 +178,36 @@ Le scheduler (`batch_completion` job) vérifie toutes les minutes:
 - Si `NOW() >= estimated_completion`
 - Si oui: status → completed
 
-**Destination des items produits (V0.7 Simplifié):**
-- **T1-T5**: Items ajoutés directement à `company_inventory` @ `factory.airport_ident`
-- **T0 (NPC)**: Items ajoutés à `inventory_items` via legacy system
+**Destination des items produits (V0.8.1):**
+- Items ajoutés directement à `company_inventory` @ `factory.airport_ident`
+- Quantité = `recipe.result_quantity × nombre_batches`
 
-### 5. Bonus Engineer
+**Transaction log:**
+- Type `input` (négatif): consommation ingrédients au démarrage
+- Type `output` (positif): production terminée à la completion
 
-Chaque engineer assigné donne +10% output (max +50%):
-- 1 engineer: +10%
-- 2 engineers: +20%
-- 5 engineers: +50% (cap)
+### 5. Bonus Tier Workers (V2)
 
-### 6. Gain XP Workers
+> **V0.8.1**: Plus de système "engineer" séparé. Le bonus est basé sur le tier moyen des workers.
+
+```
+tier_bonus = 1.0 + ((avg_tier - 1) × 0.05)
+result_qty = base_qty × min(tier_bonus, 1.25)
+```
+
+**Exemple:**
+- 4 workers tier 3 → avg = 3
+- Bonus = 1.0 + (2 × 0.05) = 1.10 (+10%)
+- Max bonus: +25%
+
+### 6. Gain XP Workers (V2)
 
 À chaque batch complété:
 ```
-xp_gain = recipe.tier * 10
+xp_gain = recipe.tier × 10
 ```
 
-Les workers gagnent de l'XP, les engineers gagnent le double.
+Tous les workers assignés à la factory gagnent cet XP.
 
 ---
 
@@ -188,11 +218,14 @@ Les workers gagnent de l'XP, les engineers gagnent le double.
 - 1 unité de food / worker / heure
 - Calculé et déduit toutes les heures par le scheduler
 
-### Effets sans nourriture
+### Effets sans nourriture (V0.8.1)
 
-1. **Vitesse réduite**: -50% production speed
+> **Important**: Food = 0 ne bloque PAS la production !
+
+1. **Efficacité réduite à 30%**: Production plus lente
 2. **Risque blessure x2**: Chance de blessure doublée
 3. **Salaire toujours payé**: Les workers sont quand même payés
+4. **Production possible**: Le bouton START reste actif
 
 ### Endpoints Food
 
@@ -261,14 +294,13 @@ GET /api/world/airports/{ident}/slots
 | POST | `/api/factories/{id}/storage/deposit` | Déposer items |
 | POST | `/api/factories/{id}/storage/withdraw` | Retirer items |
 
-### Production
+### Production (V0.8.1)
 
 | Méthode | Endpoint | Description |
 |---------|----------|-------------|
-| POST | `/api/factories/{id}/production/start` | Lancer batch |
-| GET | `/api/factories/{id}/batches` | Liste batches |
-| GET | `/api/batches/{id}` | Détails batch |
-| POST | `/api/batches/{id}/cancel` | Annuler batch |
+| POST | `/api/factories/{id}/production` | Lancer production (recipe_id + quantity) |
+| GET | `/api/factories/{id}/production` | Liste batches |
+| DELETE | `/api/factories/{id}/production` | Annuler production en cours |
 
 ### Workers
 
@@ -292,7 +324,7 @@ Voir [workers.md](workers.md) pour la gestion complète des workers.
 
 ## Exemples de Flux
 
-### Créer une usine et lancer une production (V0.7 Simplifié)
+### Créer une usine et lancer une production (V0.8.1)
 
 ```bash
 # 1. Vérifier les slots disponibles
@@ -305,45 +337,51 @@ POST /api/factories
     "name": "Boulangerie Paris"
 }
 
-# 3. Embaucher des workers (voir workers.md)
-POST /api/workers/hire/{company_id}
-{"worker_id": "..."}
+# 3. Acheter des workers (items dans inventory)
+# → Workers sont des items comme les autres
 
-# 4. Assigner les workers à l'usine
-POST /api/workers/{worker_id}/assign
+# 4. Assigner les workers à l'usine (V2)
+POST /api/workers/v2/{worker_id}/assign
 {"factory_id": "..."}
 
-# 5. Déposer des ingrédients
-POST /api/factories/{id}/storage/deposit
-{"item_id": "...", "quantity": 100}
+# 5. Avoir les ingrédients en inventory
+# → Les ingrédients doivent être dans company_inventory @ LFPG
 
-# 6. Déposer de la nourriture
+# 6. (Optionnel) Déposer de la nourriture
 POST /api/factories/{id}/food
 {"quantity": 50}
 
-# 7. Lancer la production
-POST /api/factories/{id}/production/start
-{"recipe_id": "...", "workers_assigned": 5}
+# 7. Lancer la production (V0.8.1)
+POST /api/factories/{id}/production
+{
+    "recipe_id": "...",
+    "quantity": 10
+}
+# → Consomme ingrédients × 10 batches
+# → Crée batch avec estimated_completion
 
 # 8. Vérifier le status
-GET /api/factories/{id}/batches
+GET /api/factories/{id}/production
 
-# 9. [V0.7] Voir les produits finis dans company_inventory
-GET /inventory/company?airport=LFPG
-# → Items produits apparaissent directement ici après completion
+# 9. Voir les produits finis (après completion)
+GET /api/inventory/overview
+# → Items produits dans container "Production" @ LFPG
 ```
 
-### Flux Production V0.7 Simplifié
+### Flux Production V0.8.1
 
 ```
-[Ingrédients]                    [Produits]
-company_inventory    →  Factory  →  company_inventory
-     @ LFPG             T1+            @ LFPG
-                          ↓
-                   complete_batch()
+[Ingrédients]                         [Produits]
+company_inventory  ───────►  Factory  ───────►  company_inventory
+     @ LFPG           │        T1+          │       @ LFPG
+                      │                     │
+                 start_production()    complete_batch()
+                 (consume × qty)       (output × qty)
 ```
 
-**Points clés:**
-- Plus besoin de `factory_storage` intermédiaire
-- Les produits arrivent directement dans `company_inventory`
-- La localisation = aéroport de la factory
+**Points clés V0.8.1:**
+- Ingrédients consommés depuis `company_inventory` (pas factory_storage)
+- Multi-batch: `quantity` × ingrédients consommés
+- Produits arrivent dans `company_inventory` après completion
+- Visible dans `/inventory/overview` comme container "Production"
+- Food = 0 réduit efficacité mais ne bloque pas

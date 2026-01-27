@@ -16,7 +16,7 @@ from app.models.factory_storage import FactoryStorage
 from app.models.factory_transaction import FactoryTransaction
 from app.models.company_inventory import CompanyInventory
 from app.models.recipe import Recipe
-from app.models.worker import Worker
+from app.models.worker import WorkerInstance
 from app.models.inventory_location import InventoryLocation
 from app.models.inventory_item import InventoryItem
 
@@ -110,24 +110,19 @@ def complete_batch(db: Session, batch: ProductionBatch):
         db.commit()
         return
 
-    # Récupérer les workers actifs
-    workers = db.query(Worker).filter(
-        Worker.factory_id == batch.factory_id,
-        Worker.worker_type == "worker",
-        Worker.status == "working"
+    # Récupérer les workers actifs (V2)
+    workers = db.query(WorkerInstance).filter(
+        WorkerInstance.factory_id == batch.factory_id,
+        WorkerInstance.status == "working"
     ).all()
 
-    engineers = db.query(Worker).filter(
-        Worker.factory_id == batch.factory_id,
-        Worker.worker_type == "engineer",
-        Worker.status == "working"
-    ).all()
-
-    # Calculer la quantité finale (avec bonus engineer si applicable)
+    # V2: No separate engineers - bonus based on worker tier instead
     result_qty = batch.result_quantity
-    if engineers and batch.engineer_bonus_applied:
-        engineer_bonus = 1.0 + (len(engineers) * 0.1)  # +10% par engineer
-        result_qty = int(result_qty * min(engineer_bonus, 1.5))  # Max 50% bonus
+    # Bonus based on average tier of workers
+    if workers:
+        avg_tier = sum(w.tier for w in workers) / len(workers)
+        tier_bonus = 1.0 + ((avg_tier - 1) * 0.05)  # +5% per tier above 1
+        result_qty = int(result_qty * min(tier_bonus, 1.25))  # Max 25% bonus
 
     # V0.7: Ajouter directement à company_inventory (au lieu de factory_storage)
     company_inv = db.query(CompanyInventory).filter(
@@ -148,24 +143,21 @@ def complete_batch(db: Session, batch: ProductionBatch):
 
     company_inv.qty += result_qty
 
-    # Log la transaction
+    # Log la transaction (output = production completed)
     transaction = FactoryTransaction(
         factory_id=batch.factory_id,
         item_id=recipe.result_item_id,
-        transaction_type="produced",
+        transaction_type="output",
         quantity=result_qty,
         batch_id=batch.id,
         notes=f"Production completed: {recipe.name}"
     )
     db.add(transaction)
 
-    # V0.6: Donner de l'XP aux workers avec tier-based bonus
+    # V2: Donner de l'XP aux workers
     xp_per_worker = recipe.tier * 10  # 10 XP par tier
     for worker in workers:
         worker.xp += xp_per_worker
-
-    for engineer in engineers:
-        engineer.xp += xp_per_worker * 2  # Engineers get double XP
 
     # Mettre à jour le batch
     batch.status = "completed"
@@ -194,7 +186,7 @@ def calculate_worker_tier(xp: int) -> int:
 # V0.6 FOOD & INJURY SYSTEM
 # =====================================================
 
-def calculate_production_time(base_hours: float, workers: list[Worker], has_food: bool) -> float:
+def calculate_production_time(base_hours: float, workers: list[WorkerInstance], has_food: bool) -> float:
     """
     Calcule le temps de production basé sur la vitesse des workers.
     Formula: base_time * (200 / sum(worker.speed))
@@ -205,9 +197,9 @@ def calculate_production_time(base_hours: float, workers: list[Worker], has_food
 
     total_speed = sum(w.speed for w in workers)
 
-    # Sans food: 50% speed penalty
+    # Sans food: 30% efficacité (70% penalty)
     if not has_food:
-        total_speed = total_speed * 0.5
+        total_speed = total_speed * 0.3
 
     # Minimum 10 total speed to avoid division issues
     total_speed = max(total_speed, 10)
@@ -221,9 +213,9 @@ def process_food_consumption(db: Session, factory: Factory, hours_elapsed: float
     Consomme la nourriture de la factory.
     Retourne True si les workers sont nourris, False sinon.
     """
-    workers = db.query(Worker).filter(
-        Worker.factory_id == factory.id,
-        Worker.status == "working"
+    workers = db.query(WorkerInstance).filter(
+        WorkerInstance.factory_id == factory.id,
+        WorkerInstance.status == "working"
     ).all()
 
     if not workers:
@@ -249,9 +241,9 @@ def check_worker_injuries(db: Session, factory: Factory, has_food: bool):
     import random
     from datetime import timedelta
 
-    workers = db.query(Worker).filter(
-        Worker.factory_id == factory.id,
-        Worker.status == "working"
+    workers = db.query(WorkerInstance).filter(
+        WorkerInstance.factory_id == factory.id,
+        WorkerInstance.status == "working"
     ).all()
 
     base_injury_chance = 0.005  # 0.5% base chance per hour
@@ -283,9 +275,9 @@ def process_injured_workers():
         max_injury_days = 10
         logger.info(f"[V0.6] {now.isoformat()} - Processing injured workers...")
 
-        injured_workers = db.query(Worker).filter(
-            Worker.status == "injured",
-            Worker.injured_at.isnot(None)
+        injured_workers = db.query(WorkerInstance).filter(
+            WorkerInstance.status == "injured",
+            WorkerInstance.injured_at.isnot(None)
         ).all()
 
         deaths = 0
@@ -299,15 +291,14 @@ def process_injured_workers():
                 logger.error(f"[Death] Worker {worker.id} died after {days_injured} days injured")
 
                 # Death penalty for company (if employed)
-                if worker.company_id:
-                    company = db.query(Company).filter(Company.id == worker.company_id).first()
+                if worker.owner_company_id:
+                    company = db.query(Company).filter(Company.id == worker.owner_company_id).first()
                     if company:
                         # Penalty: lose 10000 credits
                         company.balance = max(0, company.balance - 10000)
                         logger.warning(f"[Death Penalty] Company {company.id} penalized 10000 for worker death")
 
-                # Remove from company/factory
-                worker.company_id = None
+                # Remove from factory (keep ownership for records)
                 worker.factory_id = None
 
         db.commit()
@@ -336,18 +327,18 @@ def process_salary_payments():
         now = datetime.utcnow()
         logger.info(f"[V0.6] {now.isoformat()} - Processing salary payments...")
 
-        # Get all employed workers
-        workers = db.query(Worker).filter(
-            Worker.company_id.isnot(None),
-            Worker.status.in_(["working", "available"])
+        # Get all employed workers (V2)
+        workers = db.query(WorkerInstance).filter(
+            WorkerInstance.owner_company_id.isnot(None),
+            WorkerInstance.status.in_(["working", "available"])
         ).all()
 
         # Group by company (1 hour of salary)
         company_salaries = {}
         for worker in workers:
-            if worker.company_id not in company_salaries:
-                company_salaries[worker.company_id] = 0
-            company_salaries[worker.company_id] += float(worker.hourly_salary)
+            if worker.owner_company_id not in company_salaries:
+                company_salaries[worker.owner_company_id] = 0
+            company_salaries[worker.owner_company_id] += float(worker.hourly_salary)
 
         # Deduct from company balance
         total_paid = 0

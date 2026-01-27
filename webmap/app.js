@@ -154,6 +154,14 @@ function showApp() {
     loadAllData();
 }
 
+// Toggle user dropdown menu
+function toggleUserMenu() {
+    const dropdown = document.getElementById('user-dropdown');
+    if (dropdown) {
+        dropdown.classList.toggle('active');
+    }
+}
+
 async function loadAllData() {
     // Load factories first
     await loadFactoriesData();
@@ -627,39 +635,6 @@ function getProductEmoji(product, category) {
 
 function getTypeEmoji(type) {
     return CATEGORY_ICONS[type] || '🏭';
-}
-
-function createFactoryPopup(factory) {
-    const tierBadge = factory.tier === 0
-        ? '<span class="badge badge-t0">T0 NPC</span>'
-        : `<span class="badge badge-t1">T${factory.tier}</span>`;
-
-    const productEmoji = getProductEmoji(factory.product, factory.type);
-    const productName = factory.product_name || factory.product || 'N/A';
-
-    return `
-        <div class="popup-header">
-            <div class="popup-title">${factory.name}</div>
-        </div>
-        <div class="popup-body">
-            <div class="popup-row">
-                <span class="popup-label">Tier</span>
-                ${tierBadge}
-            </div>
-            <div class="popup-row">
-                <span class="popup-label">Aéroport</span>
-                <span class="popup-value">${factory.airport_ident}</span>
-            </div>
-            <div class="popup-row">
-                <span class="popup-label">Produit</span>
-                <span class="popup-value">${productEmoji} ${productName}</span>
-            </div>
-            <div class="popup-row">
-                <span class="popup-label">Status</span>
-                <span class="popup-value" style="color: #00ff00">${factory.status || 'Active'}</span>
-            </div>
-        </div>
-    `;
 }
 
 function showFactoryInfo(factory) {
@@ -1949,20 +1924,6 @@ async function loadCompanyFactories() {
             </div>
         `;
     }
-}
-
-// Get emoji for factory type
-function getFactoryEmoji(type) {
-    const emojis = {
-        'food_processing': '🌾',
-        'extraction': '⛏️',
-        'metal_smelting': '🔥',
-        'construction': '🪵',
-        'fuel': '⛽',
-        'electronics': '💻',
-        'chemical': '🧪'
-    };
-    return emojis[type] || '🏭';
 }
 
 // ========================================
@@ -4023,106 +3984,6 @@ function openTransferModalForItem(fromContainerId, itemId, maxQty, itemName, air
 }
 
 // ========================================
-// DRAG AND DROP
-// ========================================
-
-function setupDragAndDrop() {
-    // Add drop zones to all containers (both old .container-items and new .inv-container-items)
-    document.querySelectorAll('.container-items, .inv-container-items').forEach(container => {
-        container.addEventListener('dragover', handleDragOver);
-        container.addEventListener('drop', handleDrop);
-        container.addEventListener('dragleave', handleDragLeave);
-    });
-}
-
-function handleDragStart(event) {
-    const itemEl = event.target.closest('.inventory-item');
-    if (!itemEl) return;
-
-    itemEl.classList.add('dragging');
-
-    inventoryData.dragSource = {
-        itemId: itemEl.dataset.itemId,
-        locationId: itemEl.dataset.locationId,
-        qty: parseInt(itemEl.dataset.qty),
-        itemName: itemEl.dataset.itemName
-    };
-
-    event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('text/plain', JSON.stringify(inventoryData.dragSource));
-}
-
-function handleDragEnd(event) {
-    event.target.classList.remove('dragging');
-    inventoryData.dragSource = null;
-
-    // Remove drag-over class from all containers
-    document.querySelectorAll('.container-items, .inv-container-items').forEach(container => {
-        container.classList.remove('drag-over');
-    });
-}
-
-function handleDragOver(event) {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-
-    const container = event.target.closest('.container-items, .inv-container-items');
-    if (container && inventoryData.dragSource) {
-        // Only allow drop if different location
-        if (container.dataset.locationId !== inventoryData.dragSource.locationId) {
-            container.classList.add('drag-over');
-        }
-    }
-}
-
-function handleDragLeave(event) {
-    const container = event.target.closest('.container-items, .inv-container-items');
-    if (container) {
-        container.classList.remove('drag-over');
-    }
-}
-
-function handleDrop(event) {
-    event.preventDefault();
-
-    const container = event.target.closest('.container-items, .inv-container-items');
-    if (!container) return;
-
-    container.classList.remove('drag-over');
-
-    const toLocationId = container.dataset.locationId;
-
-    if (!inventoryData.dragSource || toLocationId === inventoryData.dragSource.locationId) {
-        return;
-    }
-
-    // Open transfer modal
-    openTransferModal(
-        inventoryData.dragSource.locationId,
-        toLocationId,
-        inventoryData.dragSource.itemId,
-        inventoryData.dragSource.qty,
-        inventoryData.dragSource.itemName
-    );
-}
-
-function selectInventoryItem(event, itemId, locationId) {
-    event.stopPropagation();
-
-    // Toggle selection
-    document.querySelectorAll('.inventory-item').forEach(el => {
-        el.classList.remove('selected');
-    });
-
-    if (inventoryData.selectedItem?.itemId === itemId && inventoryData.selectedItem?.locationId === locationId) {
-        inventoryData.selectedItem = null;
-    } else {
-        event.target.closest('.inventory-item')?.classList.add('selected');
-        inventoryData.selectedItem = { itemId, locationId };
-    }
-}
-
-// ========================================
 // TRANSFER MODAL
 // ========================================
 
@@ -5018,35 +4879,50 @@ async function unassignWorkerV2(workerId) {
     }
 }
 
-// Calculate and display efficiency
+// Calculate and display efficiency (V0.8.1 Compact)
 function updateEfficiencyDisplay() {
     const factory = factoryManageState.factoryData;
     const workers = factoryManageState.workersData || [];
-    const engineers = factoryManageState.engineersData || [];
 
     if (!factory) return;
 
     const tier = factory.tier || 1;
     const maxWorkers = MAX_WORKERS_BY_TIER[tier] || factory.max_workers || 10;
-    const maxEngineers = MAX_ENGINEERS_BY_TIER[tier] || 0;
     const currentWorkers = workers.length;
-    const currentEngineers = engineers.length;
     const foodStock = factory.food_stock || 0;
 
-    // Worker efficiency: (currentWorkers / maxWorkers) * 100
-    const workerEfficiency = maxWorkers > 0 ? (currentWorkers / maxWorkers) * 100 : 0;
+    // V0.8.1: Worker base efficiency = sum(speed) / (nb_workers × 100)
+    let workerBasePercent = 0;
+    if (currentWorkers > 0) {
+        const totalSpeed = workers.reduce((sum, w) => sum + (w.speed || 50), 0);
+        workerBasePercent = (totalSpeed / (currentWorkers * 100)) * 100;
+    }
 
-    // Food efficiency: binary (OK if food > 0, else 0%)
+    // V0.8.1: Food bonus based on food tier
+    // No food = 30% multiplier, T0=100%, T1=115%, T2=130%, T3=145%, T4=160%, T5=175%
     const foodOk = foodStock > 0;
+    const foodTier = factory.food_tier || 0;
+    const FOOD_TIER_BONUS = [0, 15, 30, 45, 60, 75]; // T0-T5 bonus %
+    const foodTierBonus = foodOk ? (FOOD_TIER_BONUS[foodTier] || 0) : 0;
+    const foodMultiplier = foodOk ? (1.0 + foodTierBonus / 100) : 0.3;
+    const foodPercent = foodOk ? (100 + foodTierBonus) : 30;
 
-    // Total efficiency: workerEfficiency * food factor
-    const totalEfficiency = foodOk ? workerEfficiency : 0;
+    // V0.8.1: Worker tier bonus (separate from food)
+    let avgTier = 1;
+    let workerTierBonus = 0;
+    if (currentWorkers > 0) {
+        avgTier = workers.reduce((sum, w) => sum + (w.tier || 1), 0) / currentWorkers;
+        workerTierBonus = Math.min((avgTier - 1) * 5, 25);
+    }
 
-    // Update gauge
+    // Final efficiency = worker% × food multiplier
+    const totalEfficiency = currentWorkers > 0 ? workerBasePercent * foodMultiplier : 0;
+
+    // Update main gauge
     const gaugeFill = document.getElementById('efficiency-gauge-fill');
     const gaugeValue = document.getElementById('efficiency-value');
 
-    gaugeFill.style.width = `${totalEfficiency}%`;
+    gaugeFill.style.width = `${Math.min(totalEfficiency, 100)}%`;
 
     // Color based on efficiency
     let colorClass = 'green';
@@ -5057,11 +4933,29 @@ function updateEfficiencyDisplay() {
     gaugeValue.className = `efficiency-value ${colorClass}`;
     gaugeValue.textContent = `${Math.round(totalEfficiency)}%`;
 
-    // Update breakdown
-    document.getElementById('efficiency-workers').textContent = `Workers: ${Math.round(workerEfficiency)}% (${currentWorkers}/${maxWorkers})`;
-    document.getElementById('efficiency-engineers').textContent = `Ingénieurs: ${currentEngineers}/${maxEngineers}`;
-    document.getElementById('efficiency-food').textContent = `Food: ${foodOk ? 'OK' : 'VIDE'}`;
-    document.getElementById('efficiency-food').style.color = foodOk ? 'var(--success)' : 'var(--danger)';
+    // Update tooltip mini bars
+    const workersBar = document.getElementById('tooltip-workers-fill');
+    const workersVal = document.getElementById('tooltip-workers-value');
+    const foodBar = document.getElementById('tooltip-food-fill');
+    const foodVal = document.getElementById('tooltip-food-value');
+    const bonusBar = document.getElementById('tooltip-bonus-fill');
+    const bonusVal = document.getElementById('tooltip-bonus-value');
+
+    // Workers bar
+    workersBar.style.width = `${Math.min(workerBasePercent, 100)}%`;
+    workersBar.className = `tooltip-mini-fill ${workerBasePercent >= 50 ? 'green' : workerBasePercent > 0 ? 'yellow' : 'red'}`;
+    workersVal.textContent = `${Math.round(workerBasePercent)}%`;
+
+    // Food bar
+    foodBar.style.width = `${foodPercent}%`;
+    foodBar.className = `tooltip-mini-fill ${foodOk ? 'green' : 'red'}`;
+    foodVal.textContent = `${foodPercent}%`;
+
+    // Bonus bar: shows food tier bonus + worker tier bonus
+    const totalBonus = foodTierBonus + workerTierBonus;
+    bonusBar.style.width = `${Math.min(totalBonus, 100)}%`;
+    bonusBar.className = `tooltip-mini-fill ${totalBonus > 0 ? 'green' : 'yellow'}`;
+    bonusVal.textContent = `+${Math.round(totalBonus)}%`;
 
     // Update upgrade button visibility (hide for T10)
     const upgradeBtn = document.getElementById('btn-factory-upgrade');
@@ -5129,9 +5023,7 @@ function checkCanProduce() {
         return { ok: false, reason: 'Aucun worker assigné' };
     }
 
-    if ((factory.food_stock || 0) <= 0) {
-        return { ok: false, reason: 'Stock de food vide' };
-    }
+    // Note: food_stock = 0 reduces efficiency but does NOT block production
 
     // Check ingredients
     const storage = factory.storage || {};
@@ -5145,24 +5037,54 @@ function checkCanProduce() {
     return { ok: true };
 }
 
-// Update food display
+// Update food display (V0.8.1 - item-based, same style as efficiency)
 function updateFoodDisplay(factory) {
     const foodStock = factory.food_stock || 0;
     const foodCapacity = factory.food_capacity || 100;
     const percentage = (foodStock / foodCapacity) * 100;
 
-    document.getElementById('food-stock').textContent = foodStock;
-    document.getElementById('food-capacity').textContent = foodCapacity;
+    // V0.8.1: Display food item info
+    const foodIcon = document.getElementById('food-icon');
+    const foodItemName = document.getElementById('food-item-name');
+    const foodTierBadge = document.getElementById('food-tier-badge');
+    const foodBonus = document.getElementById('food-bonus');
+    const foodValue = document.getElementById('food-value');
+
+    if (factory.food_item_id && factory.food_item_name) {
+        // Food is loaded
+        foodIcon.textContent = factory.food_item_icon || '🍎';
+        foodItemName.textContent = factory.food_item_name;
+        foodTierBadge.textContent = `T${factory.food_tier || 0}`;
+        foodTierBadge.style.display = 'inline';
+
+        // Calculate bonus based on tier (T0=0%, T1=15%, T2=30%, T3=45%, T4=60%, T5=75%)
+        const tierBonus = [0, 15, 30, 45, 60, 75][factory.food_tier] || 0;
+        foodBonus.textContent = `+${tierBonus}%`;
+        foodBonus.className = tierBonus > 0 ? 'food-bonus' : 'food-bonus no-bonus';
+    } else {
+        // No food loaded
+        foodIcon.textContent = '❌';
+        foodItemName.textContent = 'Aucun';
+        foodTierBadge.style.display = 'none';
+        foodBonus.textContent = '-30%';
+        foodBonus.className = 'food-bonus no-food';
+    }
+
+    // Update value display
+    foodValue.textContent = `${foodStock}/${foodCapacity}`;
 
     // Calculate hours of food
-    const consumptionPerHour = factory.food_consumption_rate || 1;
+    const consumptionPerHour = factory.food_consumption_per_hour || 0;
     const hoursLeft = consumptionPerHour > 0 ? Math.floor(foodStock / consumptionPerHour) : 0;
-    document.getElementById('food-hours').textContent = `(${hoursLeft}h)`;
+    document.getElementById('food-hours').textContent = consumptionPerHour > 0 ? `(${hoursLeft}h)` : '';
 
     // Update gauge
     const gaugeFill = document.getElementById('food-gauge-fill');
-    gaugeFill.style.width = `${Math.min(100, percentage)}%`;
-    gaugeFill.className = `food-gauge-fill ${percentage < 20 ? 'low' : ''}`;
+    if (gaugeFill) {
+        const widthPercent = Math.min(100, percentage);
+        gaugeFill.style.width = `${widthPercent}%`;
+        gaugeFill.classList.toggle('low', percentage < 20);
+    }
 }
 
 // Format time remaining
@@ -5177,16 +5099,34 @@ function formatTimeRemaining(seconds) {
 // ========================================
 
 async function startProduction() {
+    console.log('[START] Button clicked');
+
     const factoryId = factoryManageState.currentFactoryId;
-    if (!factoryId) return;
+    console.log('[START] factoryId:', factoryId);
+    if (!factoryId) {
+        console.log('[START] No factoryId - abort');
+        return;
+    }
 
     const recipe = factoryManageState.recipeData;
     const workers = factoryManageState.workersData;
     const factory = factoryManageState.factoryData;
+    const quantity = factoryManageState.selectedBatches || 1;
+
+    console.log('[START] recipe:', recipe);
+    console.log('[START] workers:', workers?.length);
+    console.log('[START] quantity:', quantity, '/ max:', factoryManageState.maxBatches);
 
     // V2: Validate locally before API call
     if (!recipe || !recipe.id) {
+        console.log('[START] No recipe - abort');
         showToast('Aucune recette détectée - sélectionnez des ingrédients', 'warning');
+        return;
+    }
+
+    if (quantity < 1 || quantity > factoryManageState.maxBatches) {
+        console.log('[START] Invalid quantity - abort');
+        showToast('Quantité invalide', 'warning');
         return;
     }
 
@@ -5195,22 +5135,20 @@ async function startProduction() {
         return;
     }
 
-    if ((factory?.food_stock || 0) <= 0) {
-        showToast('Stock de food vide', 'warning');
-        return;
-    }
+    // Note: food_stock = 0 reduces efficiency but does NOT block production
 
     const btn = document.getElementById('btn-start-production');
     btn.disabled = true;
     btn.textContent = 'Démarrage...';
 
     try {
-        // V2: Only send recipe_id - backend handles ingredient consumption
+        // V2.1: Send recipe_id + quantity (number of batches)
         const response = await authFetch(`${API_BASE}/factories/${factoryId}/production`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                recipe_id: recipe.id
+                recipe_id: recipe.id,
+                quantity: quantity
             })
         });
 
@@ -5219,7 +5157,7 @@ async function startProduction() {
             throw new Error(error.detail || 'Erreur au démarrage');
         }
 
-        showToast('Production démarrée!', 'success');
+        showToast(`Production démarrée: ${quantity} batch(es)!`, 'success');
         await loadFactoryDetails(factoryId);
 
     } catch (error) {
@@ -5720,18 +5658,20 @@ function renderIngredientSlots(tier) {
     const numSlots = SLOTS_BY_TIER[tier] || 2;
     const items = factoryManageState.inventoryData;
 
-    // Reset selected ingredients
+    // Reset selected ingredients and batches
     factoryManageState.selectedIngredients = [];
     factoryManageState.recipeData = null;
     factoryManageState.detectedRecipes = [];
+    factoryManageState.maxBatches = 0;
+    factoryManageState.selectedBatches = 0;
 
-    // Build dropdown options
+    // Build dropdown options with stock info
     const itemOptions = items.map(item => {
         const emoji = getItemEmoji(item.item_name);
-        return `<option value="${item.item_id}" data-name="${item.item_name}" data-qty="${item.qty}">${emoji} ${item.item_name} (${item.qty})</option>`;
+        return `<option value="${item.item_id}" data-name="${item.item_name}" data-stock="${item.qty}">${emoji} ${item.item_name} (${item.qty} en stock)</option>`;
     }).join('');
 
-    // Build slots
+    // Build slots - NO quantity input, just dropdown + clear button
     let slotsHtml = '';
     for (let i = 0; i < numSlots; i++) {
         slotsHtml += `
@@ -5740,8 +5680,6 @@ function renderIngredientSlots(tier) {
                     <option value="">-- Slot ${i + 1} --</option>
                     ${itemOptions}
                 </select>
-                <input type="number" class="slot-qty" data-slot="${i}" min="1" value="1"
-                    onchange="onIngredientQtyChange(${i})" disabled>
                 <button class="slot-clear" onclick="clearSlot(${i})" title="Vider">✕</button>
             </div>
         `;
@@ -5757,8 +5695,6 @@ function renderIngredientSlots(tier) {
 // When ingredient is selected in a slot
 function onIngredientChange(slotIndex) {
     const select = document.querySelector(`.slot-item-select[data-slot="${slotIndex}"]`);
-    const qtyInput = document.querySelector(`.slot-qty[data-slot="${slotIndex}"]`);
-
     const itemId = select.value;
     const selectedOption = select.options[select.selectedIndex];
 
@@ -5767,17 +5703,13 @@ function onIngredientChange(slotIndex) {
 
     if (itemId) {
         const itemName = selectedOption.dataset.name;
-        const maxQty = parseInt(selectedOption.dataset.qty) || 1;
-
-        qtyInput.disabled = false;
-        qtyInput.max = maxQty;
-        qtyInput.value = Math.min(parseInt(qtyInput.value) || 1, maxQty);
+        const stock = parseInt(selectedOption.dataset.stock) || 0;
 
         const ingredient = {
             slot: slotIndex,
             item_id: itemId,
             item_name: itemName,
-            qty: parseInt(qtyInput.value)
+            stock: stock  // Store available stock, not selected qty
         };
 
         if (existingIndex >= 0) {
@@ -5786,38 +5718,19 @@ function onIngredientChange(slotIndex) {
             factoryManageState.selectedIngredients.push(ingredient);
         }
     } else {
-        qtyInput.disabled = true;
-        qtyInput.value = 1;
         if (existingIndex >= 0) {
             factoryManageState.selectedIngredients.splice(existingIndex, 1);
         }
     }
 
-    // Detect matching recipes
-    detectMatchingRecipes();
-}
-
-// When quantity changes in a slot
-function onIngredientQtyChange(slotIndex) {
-    const qtyInput = document.querySelector(`.slot-qty[data-slot="${slotIndex}"]`);
-    const ingredient = factoryManageState.selectedIngredients.find(s => s.slot === slotIndex);
-
-    if (ingredient) {
-        ingredient.qty = parseInt(qtyInput.value) || 1;
-    }
-
-    // Re-detect (qty might affect validity)
+    // Detect matching recipes and calculate batches
     detectMatchingRecipes();
 }
 
 // Clear a slot
 function clearSlot(slotIndex) {
     const select = document.querySelector(`.slot-item-select[data-slot="${slotIndex}"]`);
-    const qtyInput = document.querySelector(`.slot-qty[data-slot="${slotIndex}"]`);
-
     select.value = '';
-    qtyInput.disabled = true;
-    qtyInput.value = 1;
 
     const existingIndex = factoryManageState.selectedIngredients.findIndex(s => s.slot === slotIndex);
     if (existingIndex >= 0) {
@@ -5827,16 +5740,17 @@ function clearSlot(slotIndex) {
     detectMatchingRecipes();
 }
 
-// Detect recipes that match the selected ingredients
+// Detect recipes that match the selected ingredients and calculate batches
 function detectMatchingRecipes() {
     const selected = factoryManageState.selectedIngredients;
     const allRecipes = factoryManageState.allRecipes;
     const factory = factoryManageState.factoryData;
 
     console.log('[RECIPE DETECT] Selected ingredients:', selected);
-    console.log('[RECIPE DETECT] All recipes count:', allRecipes.length);
-    console.log('[RECIPE DETECT] Factory tier:', factory?.tier);
-    console.log('[RECIPE DETECT] Sample recipe (first):', allRecipes[0]);
+
+    // Reset batches
+    factoryManageState.maxBatches = 0;
+    factoryManageState.selectedBatches = 0;
 
     if (selected.length === 0) {
         factoryManageState.detectedRecipes = [];
@@ -5848,9 +5762,8 @@ function detectMatchingRecipes() {
 
     // Get unique selected item names (lowercase for matching)
     const selectedItemNames = [...new Set(selected.map(s => s.item_name.toLowerCase()))];
-    console.log('[RECIPE DETECT] Selected item names:', selectedItemNames);
 
-    // Find recipes where ALL inputs match selected items
+    // Find recipes where ALL inputs match selected items (just check item match, not quantity)
     const matching = allRecipes.filter(recipe => {
         // Recipe must be same tier or lower than factory
         if (recipe.tier > factory.tier) return false;
@@ -5866,28 +5779,7 @@ function detectMatchingRecipes() {
         const allInputsSelected = recipeInputNames.every(name => selectedItemNames.includes(name));
         const allSelectedAreInputs = selectedItemNames.every(name => recipeInputNames.includes(name));
 
-        if (!allInputsSelected || !allSelectedAreInputs) {
-            return false;
-        }
-
-        // Log potential match
-        console.log(`[RECIPE DETECT] Checking "${recipe.name}":`, recipeInputNames);
-
-        // Check if we have enough quantity for each input
-        for (const input of inputs) {
-            const inputName = (input.item_name || input.name || '').toLowerCase();
-            const matchingSelected = selected.filter(s => s.item_name.toLowerCase() === inputName);
-            const totalQty = matchingSelected.reduce((sum, s) => sum + s.qty, 0);
-            const requiredQty = input.quantity_required || input.qty || 1;
-            console.log(`[RECIPE DETECT]   - ${inputName}: have ${totalQty}, need ${requiredQty}`);
-            if (totalQty < requiredQty) {
-                console.log(`[RECIPE DETECT]   => FAILED (not enough ${inputName})`);
-                return false;
-            }
-        }
-
-        console.log(`[RECIPE DETECT]   => MATCH!`);
-        return true;
+        return allInputsSelected && allSelectedAreInputs;
     });
 
     console.log('[RECIPE DETECT] Matching recipes:', matching.length, matching.map(r => r.name));
@@ -5898,14 +5790,52 @@ function detectMatchingRecipes() {
     if (matching.length === 1) {
         factoryManageState.recipeData = matching[0];
     } else if (matching.length > 1) {
-        // Multiple matches - let user choose
-        factoryManageState.recipeData = matching[0]; // Default to first
+        factoryManageState.recipeData = matching[0];
     } else {
         factoryManageState.recipeData = null;
     }
 
+    // Calculate max batches for selected recipe
+    calculateMaxBatches();
+
     updateRecipeDisplay();
     updateStartButton();
+}
+
+// Calculate maximum batches possible based on stock
+function calculateMaxBatches() {
+    const recipe = factoryManageState.recipeData;
+    const selected = factoryManageState.selectedIngredients;
+
+    if (!recipe) {
+        factoryManageState.maxBatches = 0;
+        factoryManageState.selectedBatches = 0;
+        return;
+    }
+
+    const inputs = recipe.inputs || [];
+    let minBatches = Infinity;
+
+    // For each recipe input, calculate how many batches we can make
+    for (const input of inputs) {
+        const inputName = (input.item_name || input.name || '').toLowerCase();
+        const requiredPerBatch = input.quantity_required || input.qty || 1;
+
+        // Find stock for this ingredient
+        const matchingIngredient = selected.find(s => s.item_name.toLowerCase() === inputName);
+        const availableStock = matchingIngredient?.stock || 0;
+
+        // Calculate batches possible with this ingredient
+        const batchesForIngredient = Math.floor(availableStock / requiredPerBatch);
+        console.log(`[BATCHES] ${inputName}: ${availableStock} stock / ${requiredPerBatch} required = ${batchesForIngredient} batches`);
+
+        minBatches = Math.min(minBatches, batchesForIngredient);
+    }
+
+    factoryManageState.maxBatches = minBatches === Infinity ? 0 : minBatches;
+    factoryManageState.selectedBatches = factoryManageState.maxBatches; // Default to max
+
+    console.log('[BATCHES] Max batches possible:', factoryManageState.maxBatches);
 }
 
 // Update the recipe display section
@@ -5915,6 +5845,7 @@ function updateRecipeDisplay() {
     const selectorEl = document.getElementById('recipe-selector');
     const detected = factoryManageState.detectedRecipes;
     const recipe = factoryManageState.recipeData;
+    const maxBatches = factoryManageState.maxBatches;
 
     if (!recipe) {
         noRecipeEl.style.display = 'block';
@@ -5933,6 +5864,31 @@ function updateRecipeDisplay() {
     document.getElementById('detected-recipe-time').textContent = formatTimeRemaining(recipe.base_time_seconds || 60);
     document.getElementById('detected-recipe-output').textContent = `${recipe.output_qty || 1}x`;
 
+    // Build required ingredients string
+    const inputs = recipe.inputs || [];
+    const reqStr = inputs.map(i => `${i.quantity_required || i.qty || 1}× ${i.item_name || i.name}`).join(' + ');
+    document.getElementById('detected-recipe-required').textContent = reqStr || '-';
+
+    // Update batches section
+    const batchesStatusEl = document.getElementById('batches-status');
+    const batchesInputEl = document.getElementById('batches-input');
+    const batchesMaxEl = document.getElementById('batches-max');
+
+    if (maxBatches > 0) {
+        batchesStatusEl.textContent = `${maxBatches} batches possibles`;
+        batchesStatusEl.className = 'batches-status success';
+        batchesInputEl.disabled = false;
+        batchesInputEl.max = maxBatches;
+        batchesInputEl.value = factoryManageState.selectedBatches || maxBatches;
+        batchesMaxEl.textContent = `(max: ${maxBatches})`;
+    } else {
+        batchesStatusEl.textContent = 'Stock insuffisant';
+        batchesStatusEl.className = 'batches-status warning';
+        batchesInputEl.disabled = true;
+        batchesInputEl.value = 0;
+        batchesMaxEl.textContent = '';
+    }
+
     // Show selector if multiple recipes match
     if (detected.length > 1) {
         selectorEl.style.display = 'block';
@@ -5945,6 +5901,19 @@ function updateRecipeDisplay() {
     }
 }
 
+// When user changes batch quantity
+function onBatchesChange() {
+    const input = document.getElementById('batches-input');
+    const value = parseInt(input.value) || 0;
+    const max = factoryManageState.maxBatches;
+
+    // Clamp value between 1 and max
+    factoryManageState.selectedBatches = Math.max(1, Math.min(value, max));
+    input.value = factoryManageState.selectedBatches;
+
+    updateStartButton();
+}
+
 // When user selects a recipe from dropdown (multiple matches)
 function onRecipeSelect() {
     const selectorEl = document.getElementById('recipe-selector');
@@ -5953,6 +5922,7 @@ function onRecipeSelect() {
 
     if (detected[index]) {
         factoryManageState.recipeData = detected[index];
+        calculateMaxBatches(); // Recalculate batches for new recipe
         updateRecipeDisplay();
         updateStartButton();
     }
@@ -5965,9 +5935,13 @@ function updateStartButton() {
     const factory = factoryManageState.factoryData;
     const recipe = factoryManageState.recipeData;
     const workers = factoryManageState.workersData;
+    const selectedBatches = factoryManageState.selectedBatches || 0;
+
+    console.log('[updateStartButton] recipe:', !!recipe, 'maxBatches:', factoryManageState.maxBatches, 'selectedBatches:', selectedBatches, 'workers:', workers?.length);
 
     // If already producing, don't change
     if (factory?.status === 'producing') {
+        console.log('[updateStartButton] Factory producing - skip');
         return;
     }
 
@@ -5975,6 +5949,23 @@ function updateStartButton() {
         btnStart.disabled = true;
         messageEl.textContent = 'Sélectionnez des ingrédients pour détecter une recette';
         messageEl.className = 'production-message warning';
+        console.log('[updateStartButton] No recipe - disabled');
+        return;
+    }
+
+    if (factoryManageState.maxBatches === 0) {
+        btnStart.disabled = true;
+        messageEl.textContent = 'Stock insuffisant pour cette recette';
+        messageEl.className = 'production-message warning';
+        console.log('[updateStartButton] maxBatches=0 - disabled');
+        return;
+    }
+
+    if (selectedBatches < 1) {
+        btnStart.disabled = true;
+        messageEl.textContent = 'Sélectionnez au moins 1 batch';
+        messageEl.className = 'production-message warning';
+        console.log('[updateStartButton] selectedBatches<1 - disabled');
         return;
     }
 
@@ -5982,18 +5973,16 @@ function updateStartButton() {
         btnStart.disabled = true;
         messageEl.textContent = 'Aucun worker assigné';
         messageEl.className = 'production-message warning';
+        console.log('[updateStartButton] No workers - disabled');
         return;
     }
 
-    if ((factory?.food_stock || 0) <= 0) {
-        btnStart.disabled = true;
-        messageEl.textContent = 'Stock de food vide';
-        messageEl.className = 'production-message warning';
-        return;
-    }
+    // Note: food_stock = 0 reduces efficiency but does NOT block production
 
+    console.log('[updateStartButton] All checks passed - ENABLED');
     btnStart.disabled = false;
-    messageEl.textContent = 'Prêt à produire';
+    const outputQty = (recipe.output_qty || 1) * selectedBatches;
+    messageEl.textContent = `Prêt: ${selectedBatches} batch(es) → ${outputQty} unités`;
     messageEl.className = 'production-message';
 }
 
@@ -6020,16 +6009,30 @@ async function loadFoodItems() {
     const factory = factoryManageState.factoryData;
     const items = factoryManageState.inventoryData;
 
-    // Filter for food items
+    // Filter for food items - V0.8.1: Check tags array for 'food' or 'consumable'
     const foodItems = items.filter(item => {
+        // Check tags array (V0.8.1)
+        if (item.tags && Array.isArray(item.tags)) {
+            if (item.tags.includes('food') || item.tags.includes('consumable')) {
+                return true;
+            }
+        }
+        // Fallback: check item name patterns
         const name = item.item_name.toLowerCase();
-        return item.is_food ||
-            name.includes('food') ||
-            name.includes('meal') ||
+        return name.includes('ration') ||
             name.includes('bread') ||
-            name.includes('sandwich') ||
-            name.includes('pizza') ||
-            name.includes('soup');
+            name.includes('meat') ||
+            name.includes('fish') ||
+            name.includes('cheese') ||
+            name.includes('butter') ||
+            name.includes('flour') ||
+            name.includes('jam') ||
+            name.includes('stew') ||
+            name.includes('cake') ||
+            name.includes('chocolate') ||
+            name.includes('syrup') ||
+            name.includes('cocoa') ||
+            name.includes('vanilla');
     });
 
     const selectEl = document.getElementById('food-item-select');
@@ -6082,7 +6085,7 @@ async function submitFoodDeposit() {
     }
 
     try {
-        const response = await authFetch(`${API_BASE}/factories/${factoryId}/food/deposit`, {
+        const response = await authFetch(`${API_BASE}/factories/${factoryId}/food`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

@@ -1,5 +1,7 @@
 # Workers System V2 - Documentation Technique
 
+> **Version**: V0.8.1 (Workers V2 - Item-based)
+
 ## Vue d'ensemble
 
 Le systeme Workers V2 transforme les workers en **items individuels** avec stats uniques:
@@ -337,10 +339,13 @@ Anciens pools de recrutement par aeroport.
 
 ---
 
-## Scheduler Jobs (Future)
+## Scheduler Jobs (V0.8.1)
 
 | Job | Intervalle | Description |
 |-----|------------|-------------|
+| `food_and_injuries` | 1 heure | Consomme food + vérifie blessures |
 | `salary_payments` | 1 heure | Paie les salaires workers V2 |
-| `injury_processing` | 1 heure | Traite blessures (mort apres 10j) |
-| `xp_progression` | Production | +XP selon travail effectue |
+| `injury_processing` | 1 heure | Traite blessures (guérison/mort) |
+| `dead_workers_cleanup` | 24 heures | Supprime workers morts > 30 jours |
+
+> **V0.8.1**: XP gagné automatiquement à chaque batch complété (`recipe.tier × 10`)

@@ -22,6 +22,7 @@ class InventoryItemOut(BaseModel):
     total_weight_kg: Decimal
     base_value: Decimal
     total_value: Decimal
+    tags: list[str] = []  # V0.8.1: Item tags for filtering (food, preserved, etc.)
 
     class Config:
         from_attributes = True
@@ -212,8 +213,8 @@ class LocationOutV2(BaseModel):
 
 class ContainerOut(BaseModel):
     """A container (warehouse, aircraft) with its items"""
-    id: UUID
-    type: str  # player_warehouse, company_warehouse, aircraft
+    id: UUID | None = None  # None for production containers (CompanyInventory)
+    type: str  # player_warehouse, company_warehouse, aircraft, production
     name: str
     owner_name: str | None = None
     aircraft_type: str | None = None

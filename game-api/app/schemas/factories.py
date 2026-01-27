@@ -248,7 +248,11 @@ class FactoryOut(BaseModel):
     # V0.6 Workers capacity
     max_workers: int = 10
     max_engineers: int = 2
-    # V0.6 Food system
+    # V0.8.1 Food system (enhanced)
+    food_item_id: uuid.UUID | None = None
+    food_item_name: str | None = None
+    food_item_icon: str | None = None
+    food_tier: int = 0
     food_stock: int = 0
     food_capacity: int = 100
     food_consumption_per_hour: float = 0.0
@@ -290,23 +294,28 @@ class FactoryUpdateIn(BaseModel):
 
 
 # =====================================================
-# FACTORY FOOD SYSTEM
+# FACTORY FOOD SYSTEM V0.8.1
 # =====================================================
 
 class FoodDepositIn(BaseModel):
-    """Deposit food into factory."""
+    """Deposit food into factory (V0.8.1 - item-based)."""
+    item_id: uuid.UUID = Field(..., description="Food item ID from company inventory")
     quantity: int = Field(..., ge=1, description="Amount of food to deposit")
 
 
 class FoodStatusOut(BaseModel):
-    """Factory food status."""
+    """Factory food status (V0.8.1 - includes item info and tier bonus)."""
     factory_id: uuid.UUID
+    food_item_id: uuid.UUID | None = None
+    food_item_name: str | None = None
+    food_item_icon: str | None = None
+    food_tier: int = 0
+    food_bonus_percent: int = 0  # 0, 15, 30, 45, 60, 75
     food_stock: int
     food_capacity: int
     food_consumption_per_hour: float
     hours_until_empty: float | None = None
-    workers_fed: int
-    workers_hungry: int
+    workers_count: int = 0
 
 
 # =====================================================
@@ -346,8 +355,10 @@ class ProductionBatchOut(BaseModel):
 
 
 class StartProductionIn(BaseModel):
-    """Start production input (V2). Only recipe_id is required."""
+    """Start production input (V2.1). Recipe + quantity (number of batches)."""
     recipe_id: uuid.UUID
+    # V2.1: Number of batches to produce (default 1)
+    quantity: int = Field(default=1, ge=1, le=1000)
     # V2: workers_assigned is now optional - backend uses workers assigned to factory
     workers_assigned: int | None = Field(default=None, ge=1, le=100)
 

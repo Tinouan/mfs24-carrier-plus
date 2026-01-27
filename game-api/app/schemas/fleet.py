@@ -143,3 +143,21 @@ class UnloadCargoIn(BaseModel):
 class AircraftLocationUpdateIn(BaseModel):
     """Update aircraft location after flight"""
     airport_ident: str = Field(..., min_length=2, max_length=8)
+
+
+# =====================================================
+# V0.8 Mission System - Fleet Available
+# =====================================================
+
+class FleetAvailableOut(BaseModel):
+    """Aircraft available at airport for mission (V0.8 specs)."""
+    id: UUID
+    registration: Optional[str] = None
+    aircraft_type: str
+    aircraft_model: Optional[str] = None  # ICAO type code (C185, C208, etc.)
+    current_icao: Optional[str] = None
+    cargo_capacity_kg: int
+    status: str
+
+    class Config:
+        from_attributes = True

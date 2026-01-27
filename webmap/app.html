@@ -1136,19 +1136,34 @@
                         <span class="factory-manage-status" id="factory-manage-status">idle</span>
                     </div>
 
-                    <!-- Efficiency Section -->
-                    <div class="factory-section">
-                        <div class="factory-section-title">EFFICACITÉ</div>
-                        <div class="efficiency-container">
+                    <!-- Efficiency Section (V0.8.1 Compact) -->
+                    <div class="factory-section efficiency-section-compact">
+                        <div class="efficiency-header">
+                            <span class="factory-section-title">EFFICACITÉ</span>
                             <div class="efficiency-gauge">
                                 <div class="efficiency-gauge-fill" id="efficiency-gauge-fill" style="width: 0%"></div>
                             </div>
                             <span class="efficiency-value" id="efficiency-value">0%</span>
-                        </div>
-                        <div class="efficiency-breakdown">
-                            <span id="efficiency-workers">Workers: 0% (0/10)</span>
-                            <span id="efficiency-engineers">Ingénieurs: 0/0</span>
-                            <span id="efficiency-food">Food: OK</span>
+                            <div class="efficiency-info-wrapper">
+                                <span class="efficiency-info-icon" id="efficiency-info-icon">ⓘ</span>
+                                <div class="efficiency-tooltip" id="efficiency-tooltip">
+                                    <div class="efficiency-tooltip-row">
+                                        <span class="tooltip-label">Workers</span>
+                                        <div class="tooltip-mini-gauge"><div class="tooltip-mini-fill" id="tooltip-workers-fill"></div></div>
+                                        <span class="tooltip-value" id="tooltip-workers-value">0%</span>
+                                    </div>
+                                    <div class="efficiency-tooltip-row">
+                                        <span class="tooltip-label">Food</span>
+                                        <div class="tooltip-mini-gauge"><div class="tooltip-mini-fill" id="tooltip-food-fill"></div></div>
+                                        <span class="tooltip-value" id="tooltip-food-value">0%</span>
+                                    </div>
+                                    <div class="efficiency-tooltip-row">
+                                        <span class="tooltip-label">Bonus</span>
+                                        <div class="tooltip-mini-gauge"><div class="tooltip-mini-fill" id="tooltip-bonus-fill"></div></div>
+                                        <span class="tooltip-value" id="tooltip-bonus-value">+0%</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -1160,7 +1175,7 @@
                         </div>
                     </div>
 
-                    <!-- Detected Recipe Section (V2) -->
+                    <!-- Detected Recipe Section (V2.1) -->
                     <div class="factory-section">
                         <div class="factory-section-title">RECETTE DÉTECTÉE</div>
                         <div class="detected-recipe" id="detected-recipe">
@@ -1174,12 +1189,25 @@
                                     <span class="recipe-tier-badge" id="detected-recipe-tier">T1</span>
                                 </div>
                                 <div class="recipe-details">
-                                    <span>Temps: <strong id="detected-recipe-time">-</strong></span>
-                                    <span>Output: <strong id="detected-recipe-output">-</strong></span>
+                                    <span>Requis/batch: <strong id="detected-recipe-required">-</strong></span>
+                                </div>
+                                <div class="recipe-details">
+                                    <span>Temps/batch: <strong id="detected-recipe-time">-</strong></span>
+                                    <span>Output/batch: <strong id="detected-recipe-output">-</strong></span>
                                 </div>
                                 <select id="recipe-selector" class="form-select" style="display: none;" onchange="onRecipeSelect()">
                                     <!-- Options populated when multiple recipes match -->
                                 </select>
+                                <!-- Batches section -->
+                                <div class="batches-section">
+                                    <div class="batches-status success" id="batches-status">0 batches possibles</div>
+                                    <div class="batches-input-row">
+                                        <label>Produire:</label>
+                                        <input type="number" id="batches-input" class="batches-input" min="1" value="1" onchange="onBatchesChange()">
+                                        <span>batches</span>
+                                        <span class="batches-max" id="batches-max">(max: 0)</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1209,20 +1237,23 @@
                         </div>
                     </div>
 
-                    <!-- Food Section -->
-                    <div class="factory-section">
-                        <div class="factory-section-title">FOOD</div>
-                        <div class="food-status">
-                            <span class="food-icon">🍎</span>
-                            <span id="food-stock">0</span> / <span id="food-capacity">100</span>
-                            <span class="food-hours" id="food-hours">(0h)</span>
+                    <!-- Food Section (V0.8.1) -->
+                    <div class="factory-section food-section-compact">
+                        <div class="food-header">
+                            <span class="factory-section-title">FOOD</span>
+                            <div class="food-gauge">
+                                <div class="food-gauge-fill" id="food-gauge-fill" style="width: 0%"></div>
+                            </div>
+                            <span class="food-value" id="food-value">0/100</span>
+                            <span class="food-bonus" id="food-bonus">+0%</span>
                         </div>
-                        <div class="food-gauge">
-                            <div class="food-gauge-fill" id="food-gauge-fill" style="width: 0%"></div>
+                        <div class="food-info">
+                            <span class="food-icon" id="food-icon">🍎</span>
+                            <span id="food-item-name">Aucun</span>
+                            <span class="food-tier-badge" id="food-tier-badge" style="display: none;">T0</span>
+                            <span class="food-hours" id="food-hours"></span>
+                            <button class="btn btn-small btn-secondary" onclick="openFoodModal()">Recharger</button>
                         </div>
-                        <button class="btn btn-small btn-secondary" onclick="openFoodModal()">
-                            Recharger
-                        </button>
                     </div>
 
                     <!-- Workers Section -->

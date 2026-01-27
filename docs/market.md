@@ -329,3 +329,55 @@ curl "http://localhost:8000/api/inventory/market/stats"
 ```bash
 curl "http://localhost:8000/api/inventory/market?airport=LFPG&tier=0"
 ```
+
+---
+
+## EFB Tablet (V0.8)
+
+L'onglet Market est également disponible dans l'EFB in-game.
+
+### Fonctionnalités EFB
+
+| Élément | Description |
+|---------|-------------|
+| **Wallets Header** | Affiche solde perso + solde company |
+| **Filtres Tier** | Boutons T0/T1/T2/T3 pour filtrer |
+| **Liste offres** | Cards avec tier coloré, nom, prix, qty, vendeur |
+| **Popup achat** | Slider quantité + choix wallet + total |
+
+### Particularités Coherent GT
+
+- Les listes sont rendues via **refs + innerHTML** (pas de `.map()` JSX)
+- Les clicks sont gérés via **addEventListener** après le rendu
+- Le total d'achat utilise un **Subject** reactif séparé
+
+### État React (Subjects)
+
+```typescript
+// Données
+private marketListings = Subject.create<MarketListing[]>([]);
+private walletPersonal = Subject.create<number>(0);
+
+// UI
+private marketLoading = Subject.create<boolean>(false);
+private marketTierFilter = Subject.create<number | null>(null);
+
+// Popup achat
+private showMarketBuyPopup = Subject.create<boolean>(false);
+private marketBuyItem = Subject.create<MarketItem | null>(null);
+private marketBuyQty = Subject.create<number>(1);
+private marketBuyTotal = Subject.create<number>(0);
+private marketBuyWallet = Subject.create<"player" | "company">("company");
+```
+
+### Flux d'achat EFB
+
+```
+1. User clique sur une offre
+2. openMarketBuyPopup() - charge les infos item
+3. User ajuste quantité via slider
+4. updateMarketBuyQty() - met à jour total
+5. User choisit wallet (perso/company)
+6. confirmMarketBuy() - POST /inventory/market/buy
+7. Refresh listings + ferme popup
+```

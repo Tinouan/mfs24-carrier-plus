@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import text, func
+from sqlalchemy import text, func, or_
 from uuid import UUID
 from typing import List, Optional
 
@@ -27,6 +27,7 @@ from app.schemas.fleet import (
     AircraftCreateIn,
     AircraftUpdateIn,
     FleetStatsOut,
+    FleetAvailableOut,
 )
 
 router = APIRouter(prefix="/fleet", tags=["fleet"])
@@ -204,6 +205,54 @@ def get_fleet_stats(
         total_cargo_capacity_kg=total_capacity,
         categories=categories
     )
+
+
+# ═══════════════════════════════════════════════════════════
+# V0.8 FLEET AVAILABLE FOR MISSIONS
+# ═══════════════════════════════════════════════════════════
+
+@router.get("/available", response_model=List[FleetAvailableOut])
+def get_fleet_available(
+    icao: str = Query(..., min_length=3, max_length=4, description="Airport ICAO code"),
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """
+    V0.8 Mission System - Get available aircraft at a specific airport.
+    Returns BOTH company AND player-owned aircraft at this ICAO that are available.
+    ICAO is required to prevent cheating (player must be at the airport).
+    Used by EFB to populate aircraft dropdown for mission creation.
+    """
+    company = _get_my_company(db, user.id)
+    icao = icao.upper()
+
+    # Build ownership filter: company aircraft OR player-owned aircraft
+    ownership_conditions = [CompanyAircraft.user_id == user.id]  # Player-owned
+    if company:
+        ownership_conditions.append(CompanyAircraft.company_id == company.id)  # Company-owned
+
+    # Get aircraft at this specific airport (company OR player owned)
+    aircraft_list = db.query(CompanyAircraft).filter(
+        or_(*ownership_conditions),
+        CompanyAircraft.is_active == True,
+        CompanyAircraft.current_airport_ident == icao,
+        CompanyAircraft.status.in_(["stored", "parked"]),
+    ).all()
+
+    # Map to response with aircraft_model field
+    result = []
+    for a in aircraft_list:
+        result.append(FleetAvailableOut(
+            id=a.id,
+            registration=a.registration,
+            aircraft_type=a.aircraft_type,
+            aircraft_model=a.icao_type,  # Maps icao_type to aircraft_model for specs
+            current_icao=a.current_airport_ident,
+            cargo_capacity_kg=a.cargo_capacity_kg,
+            status=a.status,
+        ))
+
+    return result
 
 
 # ═══════════════════════════════════════════════════════════
