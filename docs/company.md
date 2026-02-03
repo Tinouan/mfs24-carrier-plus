@@ -1,401 +1,414 @@
 # Company System - Documentation Technique
 
+> **Version**: V0.9 (Architecture P2P)
+
 ## Vue d'ensemble
 
-Le système Company gère les compagnies de transport aérien des joueurs avec:
-- Création et gestion de company
-- Système de membres avec rôles (owner, admin, member)
-- Profil company personnalisable
-- Wallet/Balance pour l'économie
-- Vault global pour le stockage
+Le système Company gère les compagnies de transport aérien des joueurs:
+- **Mode P2P**: Le joueur démarre sans company et peut en acheter une (50,000 CR)
+- **Wallet/Balance**: Argent de la company séparé du wallet personnel
+- **Ownership Model**: Avions personnels vs avions company
+
+**Architecture P2P**: Les données sont stockées localement en SQLite. En mode solo, le système de membres n'est pas utilisé.
 
 ---
 
-## Tables SQL
+## Tables SQLite
 
-### `game.companies`
+### `company`
 
-Table principale des compagnies.
+Table principale de la company (une seule par joueur).
 
 | Colonne | Type | Description |
 |---------|------|-------------|
-| `id` | UUID | Clé primaire |
-| `world_id` | INT | ID du monde (défaut: 1) |
-| `name` | VARCHAR(80) | Nom de la company |
-| `slug` | VARCHAR(50) | Slug URL unique (auto-généré) |
-| `owner_user_id` | UUID | FK → users (propriétaire) |
-| `home_airport_ident` | VARCHAR(8) | Code ICAO aéroport de base |
-| `display_name` | VARCHAR(48) | Nom d'affichage public |
-| `description` | VARCHAR(400) | Description de la company |
-| `logo_url` | VARCHAR(300) | URL du logo |
-| `is_public` | BOOLEAN | Profil public (défaut: false) |
-| `settings` | JSONB | Paramètres personnalisés |
-| `balance` | DECIMAL(14,2) | Solde en crédits (défaut: 0) |
-| `created_at` | TIMESTAMPTZ | Date de création |
-| `updated_at` | TIMESTAMPTZ | Dernière modification |
+| `id` | TEXT (UUID) | Clé primaire |
+| `name` | TEXT | Nom de la company |
+| `owner_id` | TEXT | FK → player |
+| `home_airport_ident` | TEXT | Code ICAO aéroport de base |
+| `balance` | REAL | Solde en crédits |
+| `created_at` | TEXT | Date de création |
 
-### `game.company_members`
+### `player`
 
-Table de liaison users ↔ companies.
+Profil du joueur.
 
 | Colonne | Type | Description |
 |---------|------|-------------|
-| `company_id` | UUID | PK, FK → companies |
-| `user_id` | UUID | PK, FK → users |
-| `role` | VARCHAR | owner, admin, member |
-| `joined_at` | TIMESTAMPTZ | Date d'adhésion |
-
-**Contraintes:**
-- Clé primaire composite (company_id, user_id)
-- Un user ne peut être que dans UNE company (MVP)
-- Rôles: `owner`, `admin`, `member`
+| `id` | TEXT (UUID) | Clé primaire |
+| `name` | TEXT | Nom du joueur |
+| `xp` | INTEGER | Points d'expérience |
+| `money` | REAL | Wallet personnel |
+| `home_airport` | TEXT | Aéroport de base |
+| `created_at` | TEXT | Date de création |
 
 ---
 
-## Système de Rôles
+## Cycle de Vie
 
-| Rôle | Permissions |
-|------|-------------|
-| `owner` | Tout (créateur de la company) |
-| `admin` | Modifier profil, ajouter membres, gérer factories |
-| `member` | Lecture seule, utiliser factories |
-
-**Hiérarchie des droits:**
-- Owner peut tout faire
-- Admin peut modifier company profile et ajouter des membres
-- Member peut voir les infos et travailler dans les factories
-
----
-
-## Cycle de Vie d'une Company
+### Démarrage sans Company
 
 ```
-[User s'inscrit]
+[Première connexion]
        │
-       │ POST /auth/register
+       │ InitService.firstLaunchSetup()
        ▼
-[User connecté] (sans company)
+[Joueur créé]
+  ├── 100,000 CR (wallet personnel)
+  ├── 1 avion personnel (C172)
+  └── Pas de company
        │
-       │ POST /company
+       │ Joue en solo avec avion personnel
        ▼
-[Company créée]
-       ├── Owner assigné automatiquement
-       ├── Vault créé automatiquement
-       └── Balance = 0
+[Tab Company] → "Aucune compagnie"
        │
-       │ POST /company/members/add
-       ▼
-[Membres ajoutés]
+       │ Formulaire d'achat
+       │   - Nom de la company
+       │   - Coût: 50,000 CR
        │
-       │ PATCH /company-profile/me
        ▼
-[Profil personnalisé]
+[Bouton "Acheter une compagnie"]
+       │
+       │ InitService.purchaseCompany()
+       │
+       ├── Vérifier solde ≥ 50,000
+       ├── Déduire 50,000 du wallet joueur
+       └── Créer la company
+       │
+       ▼
+[Company créée et active]
+  ├── Balance: 0 CR
+  ├── Accès aux factories
+  ├── Accès aux workers
+  └── Peut acheter des avions company
 ```
 
 ---
 
-## API Endpoints
+## Services TypeScript
 
-### Company Core
+### InitService
 
-| Méthode | Endpoint | Description |
-|---------|----------|-------------|
-| POST | `/company` | Créer une company |
-| GET | `/company/me` | Ma company |
-| GET | `/company/{id}` | Company par ID (V0.8 - pour wallet display) |
-| GET | `/company/members` | Liste des membres |
-| POST | `/company/members/add` | Ajouter un membre |
+```typescript
+// services/InitService.ts
 
-### Permissions (V0.7)
+class InitServiceClass {
+  private readonly COMPANY_COST = 50000;
 
-| Méthode | Endpoint | Description |
-|---------|----------|-------------|
-| GET | `/company/permissions` | Liste permissions membres |
-| GET | `/company/permissions/{user_id}` | Permissions d'un membre |
-| PATCH | `/company/permissions/{user_id}` | Modifier permissions |
+  /**
+   * Acheter une company
+   */
+  async purchaseCompany(companyName: string): Promise<Company> {
+    const player = await DatabaseManager.getPlayer();
+    if (!player) throw new Error("No player found");
 
-### Company Profile
-
-| Méthode | Endpoint | Description |
-|---------|----------|-------------|
-| GET | `/company-profile/me` | Profil complet |
-| PATCH | `/company-profile/me` | Modifier profil |
-
----
-
-## Company par ID (V0.8)
-
-### Endpoint: `GET /company/{id}`
-
-Récupère les informations d'une company par son ID. Utilisé pour afficher le wallet company dans les vues Market/Inventory.
-
-**Prérequis:** Être membre de la company
-
-**Réponse:**
-```json
-{
-    "id": "uuid",
-    "name": "Air France Cargo",
-    "home_airport_ident": "LFPG",
-    "balance": 25000.00,
-    "created_at": "2026-01-22T..."
-}
-```
-
-**Note:** Le champ `balance` est inclus pour permettre l'affichage du wallet company dans le frontend.
-
----
-
-## Création de Company
-
-### Endpoint: `POST /company`
-
-**Body:**
-```json
-{
-    "name": "Air France Cargo",
-    "home_airport_ident": "LFPG"
-}
-```
-
-**Validations:**
-1. User n'est pas déjà dans une company
-2. `home_airport_ident` existe dans `public.airports`
-3. Nom entre 3 et 80 caractères
-
-**Actions automatiques:**
-1. Génère un slug unique (ex: `air-france-cargo`)
-2. Crée la company
-3. Ajoute le user comme `owner`
-4. Crée un `vault` (stockage global company)
-
-**Réponse:**
-```json
-{
-    "id": "uuid",
-    "name": "Air France Cargo",
-    "home_airport_ident": "LFPG",
-    "created_at": "2026-01-22T..."
-}
-```
-
----
-
-## Gestion des Membres
-
-### Ajouter un membre: `POST /company/members/add`
-
-**Prérequis:** Être `owner` ou `admin`
-
-**Body:**
-```json
-{
-    "email": "pilote@example.com",
-    "role": "member"
-}
-```
-
-**Validations:**
-1. User appelant est owner ou admin
-2. Target user existe (par email)
-3. Target user n'est pas déjà dans cette company
-4. Target user n'est pas dans une autre company
-
-**Réponse:**
-```json
-{
-    "company_id": "uuid",
-    "user_id": "uuid",
-    "role": "member",
-    "username": "pilote123",
-    "email": "pilote@example.com"
-}
-```
-
-### Lister les membres: `GET /company/members`
-
-**Réponse:**
-```json
-[
-    {
-        "company_id": "uuid",
-        "user_id": "uuid",
-        "role": "owner",
-        "username": "boss",
-        "email": "boss@example.com"
-    },
-    {
-        "company_id": "uuid",
-        "user_id": "uuid",
-        "role": "member",
-        "username": "pilote123",
-        "email": "pilote@example.com"
+    // Vérifier si le joueur a déjà une company
+    const existingCompany = await DatabaseManager.getCompanyByOwner(player.id);
+    if (existingCompany) {
+      throw new Error("Player already has a company");
     }
-]
-```
 
----
-
-## Permissions System (V0.7)
-
-### Table: `game.company_permissions`
-
-| Permission | Description |
-|------------|-------------|
-| `can_withdraw_warehouse` | Retirer du warehouse company |
-| `can_deposit_warehouse` | Déposer au warehouse company |
-| `can_withdraw_factory` | Retirer du factory storage |
-| `can_deposit_factory` | Déposer au factory storage |
-| `can_manage_aircraft` | Gérer les avions (acheter, vendre) |
-| `can_use_aircraft` | Utiliser les avions (load/unload cargo) |
-| `can_sell_market` | Mettre en vente sur le marché |
-| `can_buy_market` | Acheter sur le marché |
-| `can_manage_workers` | Gérer les workers |
-| `can_manage_members` | Gérer les permissions membres |
-| `can_manage_factories` | Gérer les usines |
-| `is_founder` | Tous les droits (non modifiable) |
-
-### Permissions par défaut selon le rôle
-
-| Rôle | Permissions |
-|------|-------------|
-| **Founder/Owner** | Toutes (is_founder=true) |
-| **Admin** | withdraw_*, manage_aircraft, sell_market, manage_workers, manage_factories |
-| **Member** | deposit_*, use_aircraft, buy_market |
-
-### Modifier les permissions: `PATCH /company/permissions/{user_id}`
-
-**Prérequis:** Être founder ou avoir `can_manage_members`
-
-**Body (champs optionnels):**
-```json
-{
-    "can_buy_market": true,
-    "can_sell_market": false,
-    "can_manage_aircraft": true
-}
-```
-
-**Note:** Les permissions du founder ne peuvent être modifiées que par lui-même.
-
----
-
-## Company Profile
-
-### Endpoint: `PATCH /company-profile/me`
-
-**Prérequis:** Être `owner` ou `admin`
-
-**Body (tous les champs optionnels):**
-```json
-{
-    "display_name": "Air France Cargo Express",
-    "description": "Transport de fret premium en Europe",
-    "logo_url": "https://example.com/logo.png",
-    "is_public": true,
-    "settings": {
-        "theme": "dark",
-        "notifications": true
+    // Vérifier les fonds
+    if (player.money < this.COMPANY_COST) {
+      throw new Error(`Insufficient funds. Need ${this.COMPANY_COST}, have ${player.money}`);
     }
+
+    // Déduire le coût
+    player.money -= this.COMPANY_COST;
+    await DatabaseManager.savePlayer(player);
+
+    // Créer la company
+    const company: Company = {
+      id: generateUUID(),
+      name: companyName,
+      balance: 0,
+      owner_id: player.id,
+      home_airport_ident: player.home_airport,
+      created_at: new Date().toISOString(),
+    };
+
+    await DatabaseManager.put("company", company);
+
+    // Mettre à jour le state
+    companyState.info.set(company);
+
+    return company;
+  }
 }
 ```
 
-**Validations:**
-- `display_name`: 3-48 caractères, alphanumériques + espaces/tirets
-- `description`: max 400 caractères
-- `logo_url`: doit commencer par http:// ou https://
-- `settings`: doit être un objet JSON
+### CompanyService
+
+```typescript
+// services/CompanyService.ts
+
+class CompanyServiceClass {
+  // Récupérer ma company
+  async getMyCompany(): Promise<Company | null>;
+
+  // Modifier le profil company
+  async updateProfile(params: {
+    name?: string;
+    home_airport_ident?: string;
+  }): Promise<Company>;
+
+  // Ajouter des fonds à la balance
+  async addToBalance(amount: number): Promise<void>;
+
+  // Retirer des fonds de la balance
+  async withdrawFromBalance(amount: number): Promise<void>;
+
+  // Vérifier si le joueur a une company
+  async hasCompany(): Promise<boolean>;
+}
+```
+
+---
+
+## Ownership Model
+
+### Avions personnels vs Company
+
+Le système supporte deux types de propriété d'avion:
+
+| Type | Champs | Description |
+|------|--------|-------------|
+| **Personal** | `owner_id = player_id`, `company_id = null` | Avion appartenant au joueur |
+| **Company** | `owner_id = null`, `company_id = company_id` | Avion appartenant à la company |
+
+### Table `aircraft`
+
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `id` | TEXT (UUID) | Clé primaire |
+| `registration` | TEXT | Immatriculation |
+| `type_code` | TEXT | Code ICAO type avion |
+| `owner_id` | TEXT | FK → player (si personnel) |
+| `company_id` | TEXT | FK → company (si company) |
+| `location_icao` | TEXT | Position actuelle |
+| `fuel_gallons` | REAL | Carburant actuel |
+
+### Logique d'affichage Hangar
+
+```typescript
+async getFleet(): Promise<HangarAircraftItem[]> {
+  const player = await DatabaseManager.getPlayer();
+  const result: HangarAircraftItem[] = [];
+
+  // 1. Avions personnels
+  const personalAircraft = await DatabaseManager.query(
+    'SELECT * FROM aircraft WHERE owner_id = ?',
+    [player.id]
+  );
+  for (const ac of personalAircraft) {
+    result.push({ ...ac, owner_type: "personal" });
+  }
+
+  // 2. Avions company (si le joueur a une company)
+  const company = await DatabaseManager.getCompanyByOwner(player.id);
+  if (company) {
+    const companyAircraft = await DatabaseManager.query(
+      'SELECT * FROM aircraft WHERE company_id = ?',
+      [company.id]
+    );
+    for (const ac of companyAircraft) {
+      result.push({ ...ac, owner_type: "company" });
+    }
+  }
+
+  return result;
+}
+```
+
+### Badge d'affichage UI
+
+| Type | Badge | Couleur |
+|------|-------|---------|
+| Personal | 👤 PERSO | Vert |
+| Company | 🏢 COMPANY | Bleu |
 
 ---
 
 ## Système de Balance
 
-La company a un wallet (`balance`) utilisé pour:
-- Payer les salaires des workers (automatique, horaire)
-- Pénalités (mort d'un worker: -10,000)
-- Achats sur le marché (futur)
-- Construction de factories (futur)
+### Deux wallets distincts
 
-**Balance actuelle:** Lecture seule via le profil company.
+| Wallet | Usage | Source |
+|--------|-------|--------|
+| `player.money` | Achats personnels, company | Missions, ventes perso |
+| `company.balance` | Salaires, factories, achats company | Ventes company |
 
-**Déductions automatiques:**
-- Scheduler `salary_payments` (toutes les heures)
-- Scheduler `injury_processing` (pénalité mort)
+### Affichage dans l'UI
 
----
+```
+┌─────────────────────────────────────────────────────┐
+│ 📦 INVENTAIRE          👤 5,000$ | 🏢 25,000$       │
+└─────────────────────────────────────────────────────┘
+```
 
-## Inventory Locations
+Les deux wallets sont affichés dans le header des vues Market et Inventory.
 
-Chaque company a plusieurs types de stockage:
+### Déductions automatiques
 
-| Kind | Description |
-|------|-------------|
-| `vault` | Stockage global (créé automatiquement) |
-| `warehouse` | Stockage par aéroport (créé à la demande) |
-
-Les warehouses sont créés automatiquement lors du premier `withdraw` depuis une factory.
-
----
-
-## Relations avec les autres systèmes
-
-### Factories
-- Une company peut avoir plusieurs factories
-- `company_id` dans `game.factories`
-
-### Workers
-- Les workers sont embauchés par la company
-- `company_id` dans `game.workers`
-- Assignés ensuite à une factory
-
-### Inventory
-- `company_id` dans `game.inventory_locations`
-- Vault global + warehouses par aéroport
+Le scheduler local déduit automatiquement de `company.balance`:
+- **Salaires workers**: Toutes les heures
+- **Pénalité mort worker**: -10,000 CR
+- **Frais de maintenance**: (futur)
 
 ---
 
-## Exemples de Flux
+## Vue Company (EFB)
 
-### Créer une company et embaucher
+### Sans Company
 
-```bash
-# 1. Créer la company
-POST /company
-{"name": "My Cargo Co", "home_airport_ident": "LFPG"}
+```
+┌─────────────────────────────────────────────────────┐
+│ 🏢 COMPANY                                          │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│              Aucune compagnie                       │
+│                                                     │
+│   Créer une compagnie pour débloquer:               │
+│   • Usines de production                            │
+│   • Recrutement de workers                          │
+│   • Flotte d'avions company                         │
+│                                                     │
+│   ┌─────────────────────────────────────────────┐  │
+│   │ Nom: [Ma Compagnie              ]           │  │
+│   │                                             │  │
+│   │ Votre solde: 75,000 CR                      │  │
+│   │ Coût: 50,000 CR                             │  │
+│   │                                             │  │
+│   │           [Acheter une compagnie]           │  │
+│   └─────────────────────────────────────────────┘  │
+│                                                     │
+└─────────────────────────────────────────────────────┘
+```
 
-# 2. Voir ma company
-GET /company/me
+### Avec Company
 
-# 3. Modifier le profil
-PATCH /company-profile/me
-{"display_name": "My Cargo Express", "is_public": true}
-
-# 4. Ajouter un pilote
-POST /company/members/add
-{"email": "pilote@test.com", "role": "member"}
-
-# 5. Voir les membres
-GET /company/members
+```
+┌─────────────────────────────────────────────────────┐
+│ 🏢 MA COMPAGNIE                    Balance: 25,000$ │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│ 📍 Base: LFPG (Paris CDG)                          │
+│ 📅 Créée le: 22/01/2026                            │
+│                                                     │
+│ ───────────────────────────────────────────────────│
+│                                                     │
+│ 🏭 Usines: 3                                        │
+│ 👷 Workers: 15                                      │
+│ ✈️ Avions Company: 2                               │
+│                                                     │
+│ ───────────────────────────────────────────────────│
+│                                                     │
+│ Transfert de fonds:                                 │
+│ [Perso → Company] [Company → Perso]                │
+│                                                     │
+└─────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Limitations actuelles (MVP)
+## Transfert de fonds
 
-- Un user ne peut être que dans **une seule company**
-- Pas de système d'invitation (ajout direct par email)
-- Pas de suppression de company
-- Pas de retrait de membres
-- Pas de transfert de propriété
+### Service de transfert
+
+```typescript
+// CompanyService.ts
+
+async transferToCompany(amount: number): Promise<void> {
+  const player = await DatabaseManager.getPlayer();
+  const company = await this.getMyCompany();
+
+  if (!company) throw new Error("No company");
+  if (player.money < amount) throw new Error("Insufficient personal funds");
+
+  player.money -= amount;
+  company.balance += amount;
+
+  await DatabaseManager.savePlayer(player);
+  await DatabaseManager.saveCompany(company);
+
+  // Update states
+  authState.wallet.set(player.money);
+  companyState.balance.set(company.balance);
+}
+
+async transferToPersonal(amount: number): Promise<void> {
+  const player = await DatabaseManager.getPlayer();
+  const company = await this.getMyCompany();
+
+  if (!company) throw new Error("No company");
+  if (company.balance < amount) throw new Error("Insufficient company balance");
+
+  company.balance -= amount;
+  player.money += amount;
+
+  await DatabaseManager.saveCompany(company);
+  await DatabaseManager.savePlayer(player);
+
+  // Update states
+  companyState.balance.set(company.balance);
+  authState.wallet.set(player.money);
+}
+```
+
+---
+
+## États React (Subjects)
+
+```typescript
+// state/CompanyState.ts
+
+export const companyState = {
+  info: Subject.create<Company | null>(null),
+  balance: Subject.create<number>(0),
+  hasCompany: Subject.create<boolean>(false),
+
+  // Stats
+  factoriesCount: Subject.create<number>(0),
+  workersCount: Subject.create<number>(0),
+  aircraftCount: Subject.create<number>(0),
+};
+```
+
+---
+
+## Sync P2P
+
+### Données synchronisées
+
+| Donnée | Direction | Fréquence |
+|--------|-----------|-----------|
+| Infos company | Local uniquement | - |
+| Balance | Local uniquement | - |
+
+En mode P2P solo, les données de company ne sont pas synchronisées car chaque joueur a sa propre company locale.
+
+### Mode Multi (futur)
+
+Dans une future version avec multi-membres:
+- Les membres verraient la même company
+- La balance serait partagée
+- Les transactions seraient synchronisées
+
+---
+
+## Limitations (Mode P2P Solo)
+
+- **Solo uniquement**: Pas de système de membres
+- **Pas d'invitations**: Chaque joueur a sa propre company
+- **Pas de transfert de propriété**: Company liée au joueur
+- **Pas de suppression**: Company permanente une fois créée
 
 ---
 
 ## Évolutions futures
 
+- [ ] Système de membres (multi-joueurs dans une company)
+- [ ] Permissions granulaires
 - [ ] Invitations avec acceptation
-- [ ] Retrait/kick de membres
-- [ ] Transfert de propriété (owner → autre)
-- [ ] Suppression de company
-- [ ] Multi-company pour admin
-- [ ] Système de rangs personnalisés
-- [ ] Historique des transactions (balance)
+- [ ] Transfert de propriété
+- [ ] Historique des transactions
+- [ ] Statistiques détaillées

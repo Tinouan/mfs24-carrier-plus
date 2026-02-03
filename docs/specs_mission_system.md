@@ -2,6 +2,7 @@
 
 > Document pour Claude Code (VS Code)
 > Projet: MFS Carrier+
+> Architecture: P2P (SQLite local)
 
 ---
 
@@ -52,39 +53,39 @@ Le joueur crée sa mission depuis l'EFB en cliquant sur un aéroport de destinat
 
 ---
 
-## 2. ENDPOINTS API
+## 2. SERVICES TypeScript (Architecture P2P)
 
-### POST `/api/missions/`
+### MissionService.createMission()
 Créer une mission (status: pending)
 
-**Body:**
-```json
+**Paramètres:**
+```typescript
 {
-  "destination_icao": "LFPG",
-  "aircraft_id": "uuid",
-  "cargo_items": [
-    {"inventory_item_id": "uuid", "quantity": 10}
+  destination_icao: "LFPG",
+  aircraft_id: "uuid",
+  cargo_items: [
+    { inventory_item_id: "uuid", quantity: 10 }
   ]
 }
 ```
 
 **Validations:**
-- User authentifié + membre d'une company
-- aircraft_id appartient à la company
+- Joueur authentifié
+- aircraft_id appartient au joueur/company
 - Position GPS avion ≈ aéroport origine (tolérance 5nm)
 - Items existent dans inventaire à cet aéroport
 - Poids total ≤ payload max avion
 - Pax count ≤ sièges avion
 
-**Response:** Mission créée avec origin_icao déduit de la position
+**Résultat:** Mission créée avec origin_icao déduit de la position
 
 ---
 
-### POST `/api/missions/{id}/start`
+### MissionService.startMission()
 Démarrer la mission (pending → in_progress)
 
 **Validations:**
-- Mission appartient au user
+- Mission appartient au joueur
 - Status = pending
 - Position GPS toujours à l'origine
 
@@ -95,17 +96,17 @@ Démarrer la mission (pending → in_progress)
 
 ---
 
-### POST `/api/missions/{id}/complete`
+### MissionService.completeMission()
 Terminer la mission avec succès
 
-**Body:**
-```json
+**Paramètres:**
+```typescript
 {
-  "landing_fpm": -180,
-  "max_gforce": 1.8,
-  "final_icao": "LFPG",
-  "flight_time_minutes": 95,
-  "fuel_used_percent": 45
+  landing_fpm: -180,
+  max_gforce: 1.8,
+  final_icao: "LFPG",
+  flight_time_minutes: 95,
+  fuel_used_percent: 45
 }
 ```
 
@@ -116,19 +117,20 @@ Terminer la mission avec succès
 **Actions:**
 - Calculer scores (voir section 4)
 - Transférer cargo vers inventaire destination
-- **Mettre à jour `company_aircraft.current_icao` → destination**
-- Créditer XP au pilot_user
+- **Mettre à jour `aircraft.current_airport_ident` → destination**
+- Créditer XP au joueur
 - Status → completed
 
 ---
 
-### POST `/api/missions/{id}/fail`
+### MissionService.failMission()
 Mission échouée (crash, abandon)
 
-**Body:**
-```json
+**Paramètres:**
+```typescript
 {
-  "reason": "crash" | "timeout" | "cancelled"
+  reason: "crash" | "timeout" | "cancelled",
+  final_icao?: string
 }
 ```
 
@@ -139,13 +141,13 @@ Mission échouée (crash, abandon)
 
 ---
 
-### GET `/api/missions/active`
-Mission en cours du user (une seule à la fois ?)
+### MissionService.getActiveMission()
+Mission en cours du joueur (une seule à la fois)
 
 ---
 
-### GET `/api/missions/history`
-Historique missions du user/company
+### MissionService.getMissionHistory()
+Historique missions du joueur/company
 
 ---
 
@@ -312,25 +314,25 @@ total_xp = (base_xp × multiplier) + cargo_bonus
 
 ---
 
-## 5. FICHIERS À MODIFIER/CRÉER
+## 5. FICHIERS TypeScript (Architecture P2P)
 
-### Backend (game-api/)
-- `app/models/mission.py` - Nouveau modèle
-- `app/models/company_aircraft.py` - Ajouter champ `current_icao` si absent
-- `app/schemas/mission.py` - Schemas Pydantic
-- `app/routers/missions.py` - Endpoints missions
-- `app/routers/fleet.py` - Ajouter endpoint `GET /fleet/available?icao=`
-- `app/core/scheduler.py` - Ajouter job timeout missions
-- `app/main.py` - Inclure router missions
+### Services
+- `services/MissionService.ts` - Création, tracking, completion
+- `services/ScoringService.ts` - Calcul scores et XP
+- `services/FleetService.ts` - Gestion avions et positions
 
-### SQL
-- `sql/v0_8_missions_schema.sql` - Table missions + migration company_aircraft
+### Managers
+- `managers/DatabaseManager.ts` - Operations SQLite
+- `managers/LocalScheduler.ts` - Job timeout missions
 
-### EFB (msfs-efb/ ou équivalent)
+### Types
+- `types/mission.ts` - Types TypeScript pour Mission, MissionCreate, etc.
+
+### EFB (CarrierPlus.tsx)
 - Modifier panel principal - Ajouter onglet MISSION
 - Menu déroulant sélection avion
 - Logique tracking vol
-- Appels API missions
+- Appels services missions
 
 ### Docs
 - `docs/missions.md` - Documentation système
@@ -351,48 +353,61 @@ L'EFB affiche un **menu déroulant** avec uniquement les avions de la company qu
 
 Si aucun avion fleet n'est sur place → message "Aucun avion disponible ici" → mission impossible.
 
-### Nouveau endpoint nécessaire
+### Service disponible
 
-**GET `/api/fleet/available?icao=LFBO`**
-Retourne les avions de la company positionnés à cet ICAO.
+**FleetService.getAvailableAircraftAtAirport(icao)**
+Retourne les avions du joueur/company positionnés à cet ICAO.
 
-```json
+```typescript
+// FleetService.getAvailableAircraftAtAirport("LFBO")
 [
   {
-    "id": "uuid",
-    "registration": "F-ABCD",
-    "aircraft_type": "Cessna 185",
-    "current_icao": "LFBO",
-    "max_pax": 2,
-    "max_cargo_kg": 450
+    id: "uuid",
+    registration: "F-ABCD",
+    aircraft_type: "Cessna 185",
+    current_airport_ident: "LFBO",
+    max_pax: 2,
+    max_cargo_kg: 450
   }
 ]
 ```
 
-## 7. APSCHEDULER JOB - Timeout Missions
+## 7. LOCALSCHEDULER - Timeout Missions
 
-### Job `check_mission_timeouts`
+### Job `checkMissionTimeouts`
 **Fréquence:** Toutes les 15 minutes
 
-```python
-# Pseudo-code
-async def check_mission_timeouts():
-    # Missions in_progress depuis > 24h
-    expired = await db.execute(
-        select(Mission)
-        .where(Mission.status == "in_progress")
-        .where(Mission.started_at < now() - timedelta(hours=24))
-    )
-    
-    for mission in expired:
-        # Retourner cargo à l'origine
-        await return_cargo_to_origin(mission)
-        
-        # L'avion reste à l'origine (pas bougé)
-        
-        mission.status = "failed"
-        mission.completed_at = now()
-        # Pas de XP
+```typescript
+// LocalScheduler.ts
+async checkMissionTimeouts(): Promise<void> {
+    // Missions in_progress depuis > 2h (V1.6: reduit de 24h)
+    const cutoff = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const expired = DatabaseManager.query(
+        `SELECT * FROM missions
+         WHERE status = 'in_progress'
+         AND (last_update_at IS NULL AND started_at < ?)
+         OR (last_update_at IS NOT NULL AND last_update_at < ?)`,
+        [cutoff, cutoff]
+    );
+
+    for (const mission of expired) {
+        // Retourner cargo à l'origine
+        await InventoryService.returnCargoToOrigin(mission);
+
+        // Position avion = aeroport le plus proche
+        const closest = WorldService.findClosestAirport(
+            mission.last_position_lat,
+            mission.last_position_lon
+        );
+
+        mission.status = "failed";
+        mission.failure_reason = "timeout";
+        mission.completed_at = new Date().toISOString();
+        await DatabaseManager.saveMission(mission);
+
+        // Pas de XP
+    }
+}
 ```
 
 ---

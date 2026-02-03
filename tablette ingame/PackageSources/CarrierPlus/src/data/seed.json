@@ -1,0 +1,162 @@
+{
+  "items": [
+    {
+      "code": "FUEL_AVGAS",
+      "name": "AvGas 100LL",
+      "tier": 0,
+      "weight_kg": 0.72,
+      "base_price": 2.5,
+      "category": "fuel"
+    },
+    {
+      "code": "FUEL_JETA",
+      "name": "Jet-A",
+      "tier": 0,
+      "weight_kg": 0.8,
+      "base_price": 2.0,
+      "category": "fuel"
+    },
+    {
+      "code": "CARGO_MAIL",
+      "name": "Courrier",
+      "tier": 0,
+      "weight_kg": 0.5,
+      "base_price": 50,
+      "category": "cargo"
+    },
+    {
+      "code": "CARGO_PACKAGE",
+      "name": "Colis",
+      "tier": 0,
+      "weight_kg": 5,
+      "base_price": 100,
+      "category": "cargo"
+    },
+    {
+      "code": "CARGO_PERISHABLE",
+      "name": "Périssables",
+      "tier": 1,
+      "weight_kg": 10,
+      "base_price": 200,
+      "category": "cargo"
+    },
+    {
+      "code": "CARGO_FRAGILE",
+      "name": "Fragile",
+      "tier": 1,
+      "weight_kg": 8,
+      "base_price": 250,
+      "category": "cargo"
+    },
+    {
+      "code": "CARGO_HAZMAT",
+      "name": "Matières dangereuses",
+      "tier": 2,
+      "weight_kg": 15,
+      "base_price": 500,
+      "category": "cargo"
+    },
+    {
+      "code": "CARGO_MEDICAL",
+      "name": "Fournitures médicales",
+      "tier": 1,
+      "weight_kg": 5,
+      "base_price": 300,
+      "category": "cargo"
+    },
+    {
+      "code": "CARGO_LUXURY",
+      "name": "Produits de luxe",
+      "tier": 2,
+      "weight_kg": 3,
+      "base_price": 800,
+      "category": "cargo"
+    },
+    {
+      "code": "PARTS_ENGINE",
+      "name": "Pièces moteur",
+      "tier": 2,
+      "weight_kg": 50,
+      "base_price": 5000,
+      "category": "parts"
+    },
+    {
+      "code": "PARTS_AVIONICS",
+      "name": "Pièces avionique",
+      "tier": 2,
+      "weight_kg": 10,
+      "base_price": 3000,
+      "category": "parts"
+    },
+    {
+      "code": "PARTS_LANDING_GEAR",
+      "name": "Pièces train",
+      "tier": 2,
+      "weight_kg": 80,
+      "base_price": 4000,
+      "category": "parts"
+    },
+    {
+      "code": "PARTS_PROPELLER",
+      "name": "Pièces hélice",
+      "tier": 1,
+      "weight_kg": 30,
+      "base_price": 2500,
+      "category": "parts"
+    },
+    {
+      "code": "PARTS_ELECTRICAL",
+      "name": "Pièces électriques",
+      "tier": 1,
+      "weight_kg": 5,
+      "base_price": 1500,
+      "category": "parts"
+    }
+  ],
+  "recipes": [
+    {
+      "id": "R001",
+      "output_item": "CARGO_PACKAGE",
+      "output_quantity": 10,
+      "ingredients": "[{\"code\":\"CARGO_MAIL\",\"qty\":5}]",
+      "duration_minutes": 30,
+      "tier": 1
+    },
+    {
+      "id": "R002",
+      "output_item": "PARTS_ELECTRICAL",
+      "output_quantity": 1,
+      "ingredients": "[{\"code\":\"CARGO_PACKAGE\",\"qty\":3}]",
+      "duration_minutes": 60,
+      "tier": 1
+    }
+  ],
+  "starterAircraft": {
+    "type_code": "C172",
+    "registration": "F-XXXX",
+    "fuel_gallons": 40,
+    "condition": 100,
+    "flight_hours": 0,
+    "location_icao": "LFPG"
+  },
+  "starterMoney": 100000,
+  "starterXP": 0,
+  "companyStarterBalance": 10000,
+  "aiAirports": [
+    "LFPG",
+    "LFPO",
+    "LFBO",
+    "LFML",
+    "LFSB",
+    "LFLL",
+    "LFMN",
+    "LFBD",
+    "LFRS",
+    "LFRN",
+    "EGLL",
+    "EHAM",
+    "EDDF",
+    "LEMD",
+    "LIRF"
+  ]
+}

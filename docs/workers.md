@@ -1,44 +1,45 @@
-# Workers System V2 - Documentation Technique
+# Workers System - Documentation Technique
 
-> **Version**: V0.8.1 (Workers V2 - Item-based)
+> **Version**: V0.9 (Architecture P2P)
 
 ## Vue d'ensemble
 
-Le systeme Workers V2 transforme les workers en **items individuels** avec stats uniques:
+Le système Workers gère les travailleurs comme des **items individuels** avec stats uniques:
 - Chaque worker est une instance unique avec ses propres stats
 - Workers sont des items achetables (Worker-FR, Worker-CN, etc.)
-- Stats generees aleatoirement selon la nationalite (±20%)
-- Integration avec l'inventaire company
+- Stats générées aléatoirement selon la nationalité (±20%)
+- Intégration avec l'inventaire company
 - Visible dans la vue Inventaire globale
+
+**Architecture P2P**: Les données sont stockées localement en SQLite et synchronisées avec les autres joueurs via le NetworkManager.
 
 ---
 
-## Tables SQL
+## Tables SQLite
 
-### `game.worker_instances` (V2 - ACTIF)
+### `worker_instances`
 
 Table principale pour les workers item-based.
 
 | Colonne | Type | Description |
 |---------|------|-------------|
-| `id` | UUID | Cle primaire |
-| `owner_company_id` | UUID | FK -> companies (proprietaire) |
-| `owner_player_id` | UUID | FK -> users (proprietaire alternatif) |
-| `item_id` | UUID | FK -> items (Worker-XX item) |
-| `airport_ident` | VARCHAR(8) | Aeroport de localisation |
-| `country_code` | CHAR(2) | Code pays (FR, DE, US...) |
-| `speed` | INT (1-100) | Vitesse de travail |
-| `resistance` | INT (1-100) | Resistance aux blessures |
-| `xp` | INT | Points d'experience |
-| `tier` | INT (1-5) | Niveau (auto-calcule via XP) |
-| `hourly_salary` | DECIMAL(10,2) | Salaire horaire |
-| `status` | VARCHAR(20) | available, working, injured, dead |
-| `factory_id` | UUID | FK -> factories (si assigne) |
-| `for_sale` | BOOLEAN | En vente sur HV |
-| `sale_price` | DECIMAL(12,2) | Prix de vente HV |
-| `injured_at` | TIMESTAMPTZ | Date de blessure |
-| `created_at` | TIMESTAMPTZ | Date creation |
-| `updated_at` | TIMESTAMPTZ | Date MAJ |
+| `id` | TEXT (UUID) | Clé primaire |
+| `owner_company_id` | TEXT | FK → companies (propriétaire) |
+| `owner_player_id` | TEXT | FK → player (propriétaire alternatif) |
+| `item_id` | TEXT | FK → items (Worker-XX item) |
+| `airport_ident` | TEXT | Aéroport de localisation |
+| `country_code` | TEXT | Code pays (FR, DE, US...) |
+| `speed` | INTEGER (1-100) | Vitesse de travail |
+| `resistance` | INTEGER (1-100) | Résistance aux blessures |
+| `xp` | INTEGER | Points d'expérience |
+| `tier` | INTEGER (1-5) | Niveau (auto-calculé via XP) |
+| `hourly_salary` | REAL | Salaire horaire |
+| `status` | TEXT | available, working, injured, dead |
+| `factory_id` | TEXT | FK → factories (si assigné) |
+| `for_sale` | INTEGER | En vente (0/1) |
+| `sale_price` | REAL | Prix de vente |
+| `injured_at` | TEXT | Date de blessure (ISO8601) |
+| `created_at` | TEXT | Date création |
 
 **Contraintes:**
 - `speed BETWEEN 1 AND 100`
@@ -48,29 +49,17 @@ Table principale pour les workers item-based.
 - `hourly_salary > 0`
 - `status IN ('available', 'working', 'injured', 'dead')`
 
-### `game.items` - Worker Items (42 types)
+### `country_worker_stats`
 
-Chaque pays a un item Worker-XX correspondant.
-
-| Item Name | Categorie | Tier | Description |
-|-----------|-----------|------|-------------|
-| Worker-FR | Worker | 0 | Worker francais |
-| Worker-DE | Worker | 0 | Worker allemand |
-| Worker-US | Worker | 0 | Worker americain |
-| Worker-CN | Worker | 0 | Worker chinois |
-| ... | ... | ... | 42 pays au total |
-
-### `game.country_worker_stats`
-
-Stats de base par nationalite pour la generation.
+Stats de base par nationalité pour la génération.
 
 | Colonne | Type | Description |
 |---------|------|-------------|
-| `country_code` | CHAR(2) | PK - Code pays ISO |
-| `country_name` | VARCHAR(100) | Nom du pays |
-| `base_speed` | INT | Vitesse de base (30-70) |
-| `base_resistance` | INT | Resistance de base (30-70) |
-| `base_hourly_salary` | DECIMAL(10,2) | Salaire horaire de base |
+| `country_code` | TEXT | PK - Code pays ISO |
+| `country_name` | TEXT | Nom du pays |
+| `base_speed` | INTEGER | Vitesse de base (30-70) |
+| `base_resistance` | INTEGER | Résistance de base (30-70) |
+| `base_hourly_salary` | REAL | Salaire horaire de base |
 
 **Exemples de stats par pays:**
 
@@ -85,267 +74,265 @@ Stats de base par nationalite pour la generation.
 
 ---
 
-## Cycle de Vie d'un Worker V2
+## Cycle de Vie d'un Worker
 
 ```
-[Achat/Creation]
+[Achat/Création]
      |
-     | game.create_worker_instance()
+     | WorkerService.createWorker()
      v
 [Inventaire Company] (status: available, factory_id: NULL)
      |
-     | POST /workers/v2/{id}/assign
+     | WorkerService.assignToFactory()
      v
-[Assigne Factory] (status: working, factory_id: set)
+[Assigné Factory] (status: working, factory_id: set)
      |
      +--- Production -> +XP, risque blessure
      |
-     | POST /workers/v2/{id}/unassign
+     | WorkerService.unassignFromFactory()
      v
 [Retour Inventaire] (status: available, factory_id: NULL)
      |
      +--- Visible dans vue Inventaire
-     +--- Peut etre vendu sur HV (future)
+     +--- Peut être vendu sur HV
 ```
 
 ---
 
-## Generation des Workers
+## Génération des Workers
 
-### Fonction SQL `create_worker_instance()`
+### Formule de génération
 
-```sql
-SELECT game.create_worker_instance(
-    'FR',           -- country_code
-    'LFPG',         -- airport_ident
-    company_id,     -- owner_company_id
-    NULL,           -- owner_player_id (ou company)
-    FALSE,          -- for_sale
-    NULL            -- sale_price
-);
+```typescript
+// Stats de base du pays
+const baseSpeed = countryStats.base_speed;
+const baseResistance = countryStats.base_resistance;
+const baseSalary = countryStats.base_hourly_salary;
+
+// Variation ±20%
+const speed = Math.round(baseSpeed * (0.8 + Math.random() * 0.4));
+const resistance = Math.round(baseResistance * (0.8 + Math.random() * 0.4));
+const salary = baseSalary * (0.9 + Math.random() * 0.2);
+
+// Contraintes: 1-100 pour stats
+const finalSpeed = Math.max(1, Math.min(100, speed));
+const finalResistance = Math.max(1, Math.min(100, resistance));
 ```
 
-### Formule de generation
-
-```python
-# Stats de base du pays
-base_speed = country_stats.base_speed
-base_resistance = country_stats.base_resistance
-base_salary = country_stats.base_hourly_salary
-
-# Variation ±20%
-speed = base_speed * random(0.8, 1.2)
-resistance = base_resistance * random(0.8, 1.2)
-salary = base_salary * random(0.9, 1.1)
-
-# Contraintes: 1-100 pour stats
-speed = CLAMP(speed, 1, 100)
-resistance = CLAMP(resistance, 1, 100)
-```
-
-### Exemple - Worker Francais
+### Exemple - Worker Français
 
 Stats France: speed=55, resistance=50, salary=15$
 
-Worker genere:
+Worker généré:
 - Speed: 44-66 (55 ± 20%)
 - Resistance: 40-60 (50 ± 20%)
 - Salaire: 13.50$-16.50$ (15$ ± 10%)
 
 ---
 
-## API Endpoints V2
+## Services TypeScript
 
-### Liste Workers (Inventaire)
+### WorkerService
 
-| Methode | Endpoint | Description |
-|---------|----------|-------------|
-| GET | `/workers/v2/all` | Tous les workers de la company |
-| GET | `/workers/v2/inventory?airport=LFPG` | Workers disponibles a un aeroport |
+```typescript
+// services/WorkerService.ts
 
-**Reponse /v2/all:**
-```json
-[
-    {
-        "id": "uuid",
-        "item_name": "Worker-FR",
-        "country_code": "FR",
-        "speed": 58,
-        "resistance": 47,
-        "tier": 1,
-        "hourly_salary": 14.85,
-        "status": "available",
-        "airport_ident": "LFPG",
-        "factory_id": null
-    },
-    {
-        "id": "uuid2",
-        "item_name": "Worker-DE",
-        "country_code": "DE",
-        "speed": 62,
-        "resistance": 51,
-        "tier": 1,
-        "hourly_salary": 15.20,
-        "status": "working",
-        "airport_ident": "LFPG",
-        "factory_id": "factory-uuid"
-    }
-]
+class WorkerServiceClass {
+  // Créer un worker (achat)
+  async createWorker(countryCode: string, airportIdent: string): Promise<Worker>;
+
+  // Lister tous les workers de la company
+  async getAllWorkers(): Promise<Worker[]>;
+
+  // Workers disponibles à un aéroport
+  async getWorkersAtAirport(airportIdent: string): Promise<Worker[]>;
+
+  // Détails d'un worker
+  async getWorker(id: string): Promise<Worker>;
+
+  // Assigner à une factory
+  async assignToFactory(workerId: string, factoryId: string): Promise<void>;
+
+  // Retirer d'une factory
+  async unassignFromFactory(workerId: string): Promise<void>;
+
+  // Workers d'une factory
+  async getFactoryWorkers(factoryId: string): Promise<Worker[]>;
+}
 ```
 
-### Details Worker
+### Validations assignation
 
-| Methode | Endpoint | Description |
-|---------|----------|-------------|
-| GET | `/workers/v2/{id}` | Details complets d'un worker |
+```typescript
+// WorkerService.assignToFactory()
+async assignToFactory(workerId: string, factoryId: string): Promise<void> {
+  const worker = await this.getWorker(workerId);
+  const factory = await FactoryService.getFactory(factoryId);
 
-### Assignation Factory
+  // Worker doit appartenir à la company
+  if (worker.owner_company_id !== currentCompanyId) {
+    throw new Error("Worker does not belong to your company");
+  }
 
-| Methode | Endpoint | Description |
-|---------|----------|-------------|
-| POST | `/workers/v2/{id}/assign` | Assigner a une factory |
-| POST | `/workers/v2/{id}/unassign` | Retirer de la factory |
+  // Worker doit être disponible
+  if (worker.status !== "available") {
+    throw new Error("Worker is not available");
+  }
 
-**Body assign:**
-```json
-{"factory_id": "uuid-de-la-factory"}
-```
+  // Worker doit être au même aéroport
+  if (worker.airport_ident !== factory.airport_ident) {
+    throw new Error("Worker must be at the same airport as factory");
+  }
 
-**Validations assign:**
-- Worker doit appartenir a la company
-- Worker doit etre `status: available`
-- Worker doit etre au meme aeroport que la factory
-- Factory ne doit pas etre pleine (`max_workers`)
+  // Factory ne doit pas être pleine
+  const currentWorkers = await this.getFactoryWorkers(factoryId);
+  if (currentWorkers.length >= factory.max_workers) {
+    throw new Error("Factory is full");
+  }
 
-### Workers d'une Factory
-
-| Methode | Endpoint | Description |
-|---------|----------|-------------|
-| GET | `/workers/v2/factory/{factory_id}` | Workers assignes |
-
-**Reponse:**
-```json
-{
-    "factory_id": "uuid",
-    "factory_name": "Ma Factory",
-    "max_workers": 10,
-    "current_workers": 3,
-    "workers": [
-        {
-            "id": "uuid",
-            "item_name": "Worker-FR",
-            "country_code": "FR",
-            "speed": 58,
-            "resistance": 47,
-            "tier": 1,
-            "hourly_salary": 14.85,
-            "status": "working",
-            "airport_ident": "LFPG",
-            "factory_id": "factory-uuid"
-        }
-    ]
+  // Assigner
+  worker.factory_id = factoryId;
+  worker.status = "working";
+  await DatabaseManager.saveWorker(worker);
 }
 ```
 
 ---
 
-## Integration Frontend
+## Intégration Frontend
 
 ### Vue Inventaire
 
-Les workers V2 apparaissent dans la vue Inventaire globale avec:
+Les workers apparaissent dans la vue Inventaire globale avec:
 - Drapeau du pays (emoji)
 - Status icon: ✅ available, 🔧 working, 🤕 injured
-- Stats affichees: ⚡speed 🛡️resistance
+- Stats affichées: ⚡speed 🛡️resistance
 - Filtres: "Workers" et "En Travail"
 
 ### Factory Management Modal
 
 Le modal de gestion factory affiche:
-- Workers actuellement assignes
+- Workers actuellement assignés
 - Bouton pour ouvrir le modal d'assignation
-- Liste des workers disponibles a l'aeroport
+- Liste des workers disponibles à l'aéroport
 
 ---
 
-## Differences V1 (Legacy) vs V2
+## Progression XP
 
-| Aspect | V1 (game.workers) | V2 (worker_instances) |
-|--------|-------------------|------------------------|
-| Modele | Pool + embauche | Item individuel |
-| Identite | first_name, last_name | item_name (Worker-XX) |
-| Stockage | company_id | owner_company_id + airport |
-| Achat | Embauche depuis pool | Achat item ou creation |
-| Inventaire | Separe | Integre vue globale |
-| HV (Marche) | Non | Oui (for_sale) |
+### Tiers et XP requis
 
----
+| Tier | XP requis | Bonus Speed |
+|------|-----------|-------------|
+| Novice (1) | 0 | - |
+| Apprenti (2) | 1,000 | +5% |
+| Compagnon (3) | 5,000 | +10% |
+| Expert (4) | 15,000 | +15% |
+| Maître (5) | 50,000 | +20% |
 
-## Exemples de Flux V2
+### Gain XP
 
-### Creer des workers de test
-
-```sql
--- Creer 5 workers FR a LFPG pour une company
-DO $$
-DECLARE
-    v_company_id UUID := 'votre-company-id';
-BEGIN
-    FOR i IN 1..5 LOOP
-        PERFORM game.create_worker_instance(
-            'FR', 'LFPG', v_company_id, NULL, FALSE, NULL
-        );
-    END LOOP;
-END $$;
+À chaque batch complété par la factory:
+```
+xp_gain = recipe.tier × 10
 ```
 
-### Assigner un worker a une factory
-
-```bash
-# 1. Lister mes workers disponibles a LFPG
-GET /workers/v2/inventory?airport=LFPG
-
-# 2. Assigner a ma factory
-POST /workers/v2/{worker-id}/assign
-{"factory_id": "my-factory-id"}
-
-# 3. Verifier les workers de la factory
-GET /workers/v2/factory/my-factory-id
-```
-
-### Retirer un worker de la factory
-
-```bash
-# Le worker retourne a l'inventaire (status: available)
-POST /workers/v2/{worker-id}/unassign
-
-# Visible dans l'inventaire global
-GET /workers/v2/all
-```
+Tous les workers assignés gagnent cet XP.
 
 ---
 
-## Tables Legacy (V0.6)
+## Système de Blessures
 
-> **Note:** Ces tables sont conservees pour compatibilite mais ne sont plus utilisees activement.
+### Risque de blessure
 
-### `game.workers` (LEGACY)
+- **Risque base**: 0.5% par heure de travail
+- **Sans food**: Risque x2 (1% par heure)
+- **Calcul**: Vérifié par le scheduler local toutes les heures
 
-Ancienne table unifiee workers/engineers avec pool system.
+### Durée de blessure
 
-### `game.airport_worker_pools` (LEGACY)
+- Blessure aléatoire: 1-10 jours
+- Pendant la blessure: status = "injured", ne peut pas travailler
 
-Anciens pools de recrutement par aeroport.
+### Mort
+
+- Si blessure > 10 jours sans soins → mort
+- Worker status = "dead"
+- **Pénalité**: -10,000 CR déduit du wallet company
+
+### Soins (futur)
+
+- Possibilité d'acheter des soins médicaux
+- Réduit le temps de guérison
 
 ---
 
-## Scheduler Jobs (V0.8.1)
+## Consommation Food
+
+- **Taux**: 1 food / worker / heure
+- **Sans food**:
+  - Efficacité réduite à 30%
+  - Risque blessure doublé
+  - Salaire toujours payé
+
+---
+
+## Paiement Salaires
+
+### Scheduler local
+
+Toutes les heures (simulées), le scheduler:
+1. Compte les workers `status = 'working'`
+2. Calcule le total: `sum(hourly_salary)`
+3. Déduit de `company.balance`
+
+### Insuffisance de fonds
+
+Si `company.balance < total_salaries`:
+- Workers non payés cette heure
+- Risque de départ (futur)
+- Notification à l'utilisateur
+
+---
+
+## Scheduler Jobs (Local)
 
 | Job | Intervalle | Description |
 |-----|------------|-------------|
-| `food_and_injuries` | 1 heure | Consomme food + vérifie blessures |
-| `salary_payments` | 1 heure | Paie les salaires workers V2 |
+| `salary_payments` | 1 heure | Paie les salaires workers |
 | `injury_processing` | 1 heure | Traite blessures (guérison/mort) |
-| `dead_workers_cleanup` | 24 heures | Supprime workers morts > 30 jours |
+| `food_and_injuries` | 1 heure | Consomme food + check blessures |
 
-> **V0.8.1**: XP gagné automatiquement à chaque batch complété (`recipe.tier × 10`)
+Ces jobs s'exécutent localement dans l'EFB via des timers JavaScript.
+
+---
+
+## Sync P2P
+
+### Données synchronisées
+
+| Donnée | Direction | Fréquence |
+|--------|-----------|-----------|
+| Liste workers | Bidirectionnel | 5 sec |
+| Assignation factory | Bidirectionnel | 5 sec |
+| Status workers | Bidirectionnel | 5 sec |
+
+### Données locales uniquement
+
+- Préférences d'affichage UI
+- Filtres sélectionnés
+
+---
+
+## 42 Pays disponibles
+
+Les workers peuvent provenir de 42 pays différents, chacun avec ses propres stats de base:
+
+| Région | Pays |
+|--------|------|
+| Europe | FR, DE, GB, ES, IT, PL, NL, BE, SE, NO, FI, DK, AT, CH, PT, IE, GR, CZ, HU, RO |
+| Americas | US, CA, MX, BR, AR, CO, CL |
+| Asia | CN, JP, KR, IN, ID, TH, VN, PH, MY, SG |
+| Middle East | AE, SA, TR |
+| Africa | ZA, EG |
+| Oceania | AU, NZ |

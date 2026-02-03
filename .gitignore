@@ -16,5 +16,14 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-# claude docs and scripts (optional - uncomment to ignore)
-# claude/
+# MSFS généré
+tablette ingame/_PackageInt/
+tablette ingame/Packages/
+
+# Node.js
+node_modules/
+dist/
+
+# IDE
+.vscode/
+*.log

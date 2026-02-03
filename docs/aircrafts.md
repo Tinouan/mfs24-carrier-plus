@@ -1,7 +1,7 @@
 # MFS Carrier+ - Systeme Fleet (Avions)
 
-**Version**: 0.7.1
-**Date**: 2026-01-23
+**Version**: 2.3
+**Date**: 2026-01-30
 **Statut**: Implemente
 
 ---
@@ -17,53 +17,53 @@ Le systeme Fleet permet aux joueurs de gerer une flotte d'avions cargo pour tran
 
 ---
 
-## Base de donnees
+## Base de donnees SQLite (Architecture P2P)
 
-### Table `game.aircraft_catalog`
+### Table `aircraft_catalog`
 
 Catalogue des types d'avions disponibles a l'achat.
 
 | Colonne | Type | Description |
 |---------|------|-------------|
-| `id` | UUID | Identifiant unique |
-| `name` | VARCHAR(100) | Nom complet (ex: "Cessna 208 Caravan") |
-| `icao_type` | VARCHAR(10) | Code ICAO (ex: "C208") |
-| `manufacturer` | VARCHAR(50) | Constructeur |
-| `category` | VARCHAR(30) | Categorie (turboprop, jet_small, jet_medium, jet_large, helicopter) |
-| `cargo_capacity_kg` | INT | Capacite cargo en kg |
-| `cargo_capacity_m3` | FLOAT | Capacite cargo en m3 (optionnel) |
-| `max_range_nm` | INT | Autonomie en NM |
-| `cruise_speed_kts` | INT | Vitesse de croisiere en noeuds |
-| `base_price` | NUMERIC(14,2) | Prix d'achat |
-| `operating_cost_per_hour` | NUMERIC(10,2) | Cout operationnel horaire |
-| `min_runway_length_m` | INT | Longueur piste minimale |
-| `required_license` | VARCHAR(20) | Licence requise (PPL, CPL, ATPL) |
-| `msfs_aircraft_id` | VARCHAR(100) | ID MSFS (pour integration) |
-| `is_active` | BOOLEAN | Actif dans le catalogue |
+| `id` | TEXT (UUID) | Identifiant unique |
+| `name` | TEXT | Nom complet (ex: "Cessna 208 Caravan") |
+| `icao_type` | TEXT | Code ICAO (ex: "C208") |
+| `manufacturer` | TEXT | Constructeur |
+| `category` | TEXT | Categorie (turboprop, jet_small, jet_medium, jet_large, helicopter) |
+| `cargo_capacity_kg` | INTEGER | Capacite cargo en kg |
+| `cargo_capacity_m3` | REAL | Capacite cargo en m3 (optionnel) |
+| `max_range_nm` | INTEGER | Autonomie en NM |
+| `cruise_speed_kts` | INTEGER | Vitesse de croisiere en noeuds |
+| `base_price` | REAL | Prix d'achat |
+| `operating_cost_per_hour` | REAL | Cout operationnel horaire |
+| `min_runway_length_m` | INTEGER | Longueur piste minimale |
+| `required_license` | TEXT | Licence requise (PPL, CPL, ATPL) |
+| `msfs_aircraft_id` | TEXT | ID MSFS (pour integration) |
+| `is_active` | INTEGER | Actif dans le catalogue (0/1) |
 
-### Table `game.company_aircraft`
+### Table `aircraft`
 
 Avions possedes par les companies ou joueurs.
 
 | Colonne | Type | Description |
 |---------|------|-------------|
-| `id` | UUID | Identifiant unique |
-| `company_id` | UUID | Company proprietaire (nullable si player-owned) |
-| `user_id` | UUID | Joueur proprietaire (nullable si company-owned) |
-| `owner_type` | VARCHAR(20) | Type: "company" ou "player" |
-| `registration` | VARCHAR(10) | Immatriculation unique (F-XXXX, N12345) |
-| `name` | VARCHAR(100) | Surnom de l'avion |
-| `aircraft_type` | VARCHAR | Type d'avion |
-| `icao_type` | VARCHAR(10) | Code ICAO |
-| `cargo_capacity_kg` | INT | Capacite cargo |
-| `current_airport_ident` | VARCHAR(8) | Position actuelle (ICAO) |
-| `status` | VARCHAR(20) | Statut: stored, parked, in_flight, maintenance |
-| `condition` | FLOAT | Etat (0.0 - 1.0) |
-| `hours` | FLOAT | Heures de vol totales |
-| `purchase_price` | NUMERIC(14,2) | Prix d'achat |
-| `is_active` | BOOLEAN | Actif (soft delete) |
-| `created_at` | TIMESTAMPTZ | Date creation |
-| `updated_at` | TIMESTAMPTZ | Date modification |
+| `id` | TEXT (UUID) | Identifiant unique |
+| `company_id` | TEXT | Company proprietaire (nullable si player-owned) |
+| `owner_id` | TEXT | Joueur proprietaire (nullable si company-owned) |
+| `owner_type` | TEXT | Type: "company" ou "player" |
+| `registration` | TEXT | Immatriculation unique (F-XXXX, N12345) |
+| `name` | TEXT | Surnom de l'avion |
+| `aircraft_type` | TEXT | Type d'avion |
+| `icao_type` | TEXT | Code ICAO |
+| `cargo_capacity_kg` | INTEGER | Capacite cargo |
+| `current_airport_ident` | TEXT | Position actuelle (ICAO) |
+| `status` | TEXT | Statut: stored, parked, in_flight, maintenance |
+| `condition` | REAL | Etat (0.0 - 1.0) |
+| `hours` | REAL | Heures de vol totales |
+| `purchase_price` | REAL | Prix d'achat |
+| `is_active` | INTEGER | Actif (0/1 soft delete) |
+| `created_at` | TEXT | Date creation ISO |
+| `updated_at` | TEXT | Date modification ISO |
 
 ---
 
@@ -110,103 +110,138 @@ Avions possedes par les companies ou joueurs.
 
 ---
 
-## API Endpoints
+## Services TypeScript (Architecture P2P)
 
-### Catalogue (Public)
+### CatalogService
 
-| Methode | Endpoint | Auth | Description |
-|---------|----------|------|-------------|
-| GET | `/api/fleet/catalog` | Non | Liste le catalogue d'avions |
-| GET | `/api/fleet/catalog?category=turboprop` | Non | Filtrer par categorie |
-| GET | `/api/fleet/catalog?max_price=500000` | Non | Filtrer par prix max |
-| GET | `/api/fleet/catalog/{id}` | Non | Details d'un type d'avion |
+```typescript
+// services/CatalogService.ts
 
-### Flotte (Authentifie)
+class CatalogServiceClass {
+  // Liste le catalogue d'avions
+  async getCatalog(filters?: { category?: string; maxPrice?: number }): Promise<AircraftCatalogItem[]>;
 
-| Methode | Endpoint | Auth | Description |
-|---------|----------|------|-------------|
-| GET | `/api/fleet` | Oui | Liste mes avions |
-| GET | `/api/fleet/stats` | Oui | Statistiques de la flotte |
-| GET | `/api/fleet/{id}` | Oui | Details d'un avion |
-| GET | `/api/fleet/{id}/details` | Oui | Details avec cargo |
-| POST | `/api/fleet` | Oui | Acheter/ajouter un avion |
-| PATCH | `/api/fleet/{id}` | Oui | Modifier un avion |
-| DELETE | `/api/fleet/{id}` | Oui | Retirer un avion (soft delete) |
+  // Details d'un type d'avion
+  async getCatalogItem(id: string): Promise<AircraftCatalogItem | null>;
+}
+```
 
-### Cargo (V0.7)
+### FleetService
 
-| Methode | Endpoint | Auth | Description |
-|---------|----------|------|-------------|
-| GET | `/api/fleet/{id}/cargo` | Oui | Voir le cargo d'un avion |
-| POST | `/api/fleet/{id}/load` | Oui | Charger du cargo |
-| POST | `/api/fleet/{id}/unload` | Oui | Decharger du cargo |
-| PATCH | `/api/fleet/{id}/location` | Oui | Mettre a jour la position |
+```typescript
+// services/FleetService.ts
+
+class FleetServiceClass {
+  // Liste mes avions (personnels + company)
+  async getMyAircraft(): Promise<Aircraft[]>;
+
+  // Statistiques de la flotte
+  async getFleetStats(): Promise<FleetStats>;
+
+  // Details d'un avion
+  async getAircraftById(id: string): Promise<Aircraft | null>;
+
+  // Details avec cargo
+  async getAircraftWithCargo(id: string): Promise<AircraftWithCargo>;
+
+  // Acheter un avion
+  async purchaseAircraft(params: PurchaseParams): Promise<Aircraft>;
+
+  // Modifier un avion
+  async updateAircraft(id: string, params: UpdateParams): Promise<Aircraft>;
+
+  // Supprimer un avion (soft delete)
+  async deleteAircraft(id: string): Promise<void>;
+
+  // Mettre a jour la position
+  async updateLocation(id: string, icao: string): Promise<void>;
+}
+```
+
+### InventoryService (Cargo)
+
+```typescript
+// services/InventoryService.ts (partie cargo)
+
+class InventoryServiceClass {
+  // Voir le cargo d'un avion
+  async getAircraftCargo(aircraftId: string): Promise<AircraftCargo>;
+
+  // Charger du cargo
+  async loadCargo(params: LoadCargoParams): Promise<void>;
+
+  // Decharger du cargo
+  async unloadCargo(params: UnloadCargoParams): Promise<void>;
+}
 
 ---
 
-## Schemas Pydantic
+## Types TypeScript
 
-### AircraftCatalogOut
-```python
-class AircraftCatalogOut(BaseModel):
-    id: UUID
-    name: str
-    icao_type: str
-    manufacturer: str
-    category: str
-    cargo_capacity_kg: int
-    cargo_capacity_m3: Optional[float]
-    max_range_nm: Optional[int]
-    cruise_speed_kts: Optional[int]
-    base_price: Decimal
-    operating_cost_per_hour: Optional[Decimal]
-    min_runway_length_m: Optional[int]
-    required_license: Optional[str]
+### AircraftCatalogItem
+```typescript
+interface AircraftCatalogItem {
+  id: string;
+  name: string;
+  icao_type: string;
+  manufacturer: string;
+  category: string;
+  cargo_capacity_kg: number;
+  cargo_capacity_m3?: number;
+  max_range_nm?: number;
+  cruise_speed_kts?: number;
+  base_price: number;
+  operating_cost_per_hour?: number;
+  min_runway_length_m?: number;
+  required_license?: string;
+}
 ```
 
-### AircraftCreateIn
-```python
-class AircraftCreateIn(BaseModel):
-    catalog_id: Optional[UUID]  # Achat depuis catalogue
-    registration: str           # Immatriculation (obligatoire)
-    name: Optional[str]         # Surnom
-    aircraft_type: Optional[str]  # Requis si pas de catalog_id
-    icao_type: Optional[str]
-    cargo_capacity_kg: Optional[int]
-    current_airport: Optional[str]  # ICAO
+### PurchaseParams
+```typescript
+interface PurchaseParams {
+  catalog_id?: string;        // Achat depuis catalogue
+  registration: string;       // Immatriculation (obligatoire)
+  name?: string;              // Surnom
+  aircraft_type?: string;     // Requis si pas de catalog_id
+  icao_type?: string;
+  cargo_capacity_kg?: number;
+  current_airport?: string;   // ICAO
+}
 ```
 
-### AircraftOut
-```python
-class AircraftOut(BaseModel):
-    id: UUID
-    company_id: Optional[UUID]
-    user_id: Optional[UUID]
-    owner_type: str
-    registration: Optional[str]
-    name: Optional[str]
-    aircraft_type: str
-    icao_type: Optional[str]
-    status: str
-    condition: float
-    hours: float
-    cargo_capacity_kg: int
-    current_airport_ident: Optional[str]
-    purchase_price: Optional[Decimal]
-    is_active: bool
-    created_at: datetime
+### Aircraft
+```typescript
+interface Aircraft {
+  id: string;
+  company_id?: string;
+  owner_id?: string;
+  owner_type: string;         // "company" | "player"
+  registration?: string;
+  name?: string;
+  aircraft_type: string;
+  icao_type?: string;
+  status: string;
+  condition: number;
+  hours: number;
+  cargo_capacity_kg: number;
+  current_airport_ident?: string;
+  purchase_price?: number;
+  is_active: boolean;
+  created_at: string;
+}
 ```
 
-### FleetStatsOut
-```python
-class FleetStatsOut(BaseModel):
-    total_aircraft: int
-    available_count: int
-    in_flight_count: int
-    maintenance_count: int
-    total_cargo_capacity_kg: int
-    categories: dict[str, int]  # {"turboprop": 3, "jet_medium": 1}
-```
+### FleetStats
+```typescript
+interface FleetStats {
+  total_aircraft: number;
+  available_count: number;
+  in_flight_count: number;
+  maintenance_count: number;
+  total_cargo_capacity_kg: number;
+  categories: Record<string, number>;  // {"turboprop": 3, "jet_medium": 1}
+}
 
 ---
 
@@ -290,39 +325,152 @@ Cartes cliquables avec:
 
 ---
 
-## Migration SQL
+## Schema SQLite
 
-Fichier: `sql/v0_7_aircraft_catalog.sql`
+Les tables sont creees automatiquement par DatabaseManager au premier lancement:
 
 ```sql
 -- Creer la table aircraft_catalog
-CREATE TABLE IF NOT EXISTS game.aircraft_catalog (...);
+CREATE TABLE IF NOT EXISTS aircraft_catalog (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  icao_type TEXT NOT NULL,
+  manufacturer TEXT,
+  category TEXT,
+  cargo_capacity_kg INTEGER,
+  cargo_capacity_m3 REAL,
+  max_range_nm INTEGER,
+  cruise_speed_kts INTEGER,
+  base_price REAL,
+  operating_cost_per_hour REAL,
+  min_runway_length_m INTEGER,
+  required_license TEXT,
+  msfs_aircraft_id TEXT,
+  is_active INTEGER DEFAULT 1
+);
 
--- Ajouter les colonnes manquantes a company_aircraft
-ALTER TABLE game.company_aircraft ADD COLUMN registration VARCHAR(10) UNIQUE;
-ALTER TABLE game.company_aircraft ADD COLUMN name VARCHAR(100);
-ALTER TABLE game.company_aircraft ADD COLUMN icao_type VARCHAR(10);
-ALTER TABLE game.company_aircraft ADD COLUMN purchase_price NUMERIC(14,2);
-ALTER TABLE game.company_aircraft ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT TRUE;
-ALTER TABLE game.company_aircraft ADD COLUMN updated_at TIMESTAMPTZ DEFAULT NOW();
-
--- Seed 14 types d'avions
-INSERT INTO game.aircraft_catalog (...) VALUES (...);
+-- Table aircraft (avions possedes)
+CREATE TABLE IF NOT EXISTS aircraft (
+  id TEXT PRIMARY KEY,
+  company_id TEXT,
+  owner_id TEXT,
+  owner_type TEXT DEFAULT 'player',
+  registration TEXT UNIQUE,
+  name TEXT,
+  aircraft_type TEXT NOT NULL,
+  icao_type TEXT,
+  cargo_capacity_kg INTEGER,
+  current_airport_ident TEXT,
+  status TEXT DEFAULT 'parked',
+  condition REAL DEFAULT 1.0,
+  hours REAL DEFAULT 0,
+  purchase_price REAL,
+  is_active INTEGER DEFAULT 1,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
 ```
 
 ---
 
-## Fichiers modifies
+## Fichiers TypeScript (Architecture P2P)
 
-### Backend
-- `game-api/app/models/company_aircraft.py` - AircraftCatalog + champs supplementaires
-- `game-api/app/schemas/fleet.py` - Nouveaux schemas
-- `game-api/app/routers/fleet.py` - Endpoints catalogue et gestion
+### Services
+- `services/CatalogService.ts` - Gestion catalogue avions
+- `services/FleetService.ts` - Gestion flotte (achat, update, suppression)
+- `services/InventoryService.ts` - Gestion cargo avions
 
-### Frontend
-- `webmap/app.html` - Modals ajouter/details avion
-- `webmap/app.js` - Fonctions fleet
-- `webmap/styles.css` - Styles modals et cartes
+### Managers
+- `managers/DatabaseManager.ts` - Operations SQLite
+- `managers/PersistenceManager.ts` - Sync States ↔ SQLite
 
-### SQL
-- `sql/v0_7_aircraft_catalog.sql` - Migration et seed
+### Types
+- `types/aircraft.ts` - Types TypeScript pour Aircraft, AircraftCatalogItem, etc.
+
+---
+
+## Hangar Tab EFB (V2.3)
+
+L'onglet **Hangar** dans l'app EFB permet de voir tous les avions accessibles par le pilote.
+
+### Caracteristiques
+
+- **Liste complete**: Affiche les avions personnels ET company
+- **Distinction visuelle**: Badge colore selon le type de propriete
+  - `PERSO` (vert #10b981) - Avions du joueur
+  - `COMPANY` (violet #6366f1) - Avions de la company
+- **Details**: Panel avec carburant, cargo, position, systemes
+
+### Service utilise
+
+```typescript
+// FleetService.getMyAircraft()
+const aircraft = await FleetService.getMyAircraft();
+```
+
+Retourne tous les avions que le joueur peut utiliser:
+- Avions ou `owner_type = "player"` ET `owner_id = current_player`
+- Avions ou `owner_type = "company"` ET company appartient au joueur
+
+### Response
+
+```typescript
+// Aircraft[]
+[
+  {
+    id: "uuid",
+    registration: "F-ABCD",
+    aircraft_type: "Cessna 208 Caravan",
+    icao_type: "C208",
+    current_airport_ident: "LFPG",
+    status: "parked",
+    owner_type: "player",
+    condition: 0.95,
+    hours: 124.5,
+    cargo_capacity_kg: 1360
+  },
+  {
+    id: "uuid2",
+    registration: "F-COMP",
+    aircraft_type: "ATR 72-600F",
+    icao_type: "AT76",
+    current_airport_ident: "LFBO",
+    status: "parked",
+    owner_type: "company",
+    condition: 0.88,
+    hours: 856.2,
+    cargo_capacity_kg: 8500
+  }
+]
+```
+
+### Implementation Frontend
+
+Fichier: `tablette ingame/PackageSources/CarrierPlus/src/CarrierPlus.tsx`
+
+```tsx
+// State
+private hangarAircraftList = Subject.create<Aircraft[]>([]);
+private hangarListRef = FSComponent.createRef<HTMLDivElement>();
+
+// Fetch via service local
+private async fetchHangarAircraftList(): Promise<void> {
+  const aircraft = await FleetService.getMyAircraft();
+  this.hangarAircraftList.set(aircraft);
+  this.renderHangarList();
+}
+
+// Render (pattern FSComponent)
+private renderHangarList(): void {
+  const listEl = this.hangarListRef.getOrDefault();
+  const aircraft = this.hangarAircraftList.get();
+
+  listEl.innerHTML = aircraft.map(ac => `
+    <div class="hangar-aircraft-item" data-aircraft-id="${ac.id}">
+      <span>${ac.registration}</span>
+      <span style="background: ${ac.owner_type === 'player' ? '#10b981' : '#6366f1'}">
+        ${ac.owner_type === 'player' ? 'PERSO' : 'COMPANY'}
+      </span>
+    </div>
+  `).join("");
+}

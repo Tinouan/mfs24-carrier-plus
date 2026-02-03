@@ -1,80 +1,208 @@
 # Inventory System - Documentation Technique
 
-> **Version**: V0.8.1
+> **Version**: V0.9 (Architecture P2P)
 
 ## Vue d'ensemble
 
 Le système d'inventaire gère le stockage et le transport des items:
-- **V0.8.1 Production** - Items produits visibles dans container "Production" @ aéroport
-- **V0.8 Vente** - Items déduits de l'inventaire lors de la mise en vente, filtre "En Vente", annulation
-- **V0.7.1 UI** - Interface groupée par aéroport avec recherche et filtres
-- **V0.7 Simplifié** - 3 tables dédiées (player_inventory, company_inventory, aircraft_inventory)
-- **Legacy** - Tables originales (inventory_locations, inventory_items) conservées pour T0/NPC et HV
-- **Audit** - Historique de tous les mouvements
-- **Marché** - Système de vente entre joueurs (utilise tables legacy)
-- **Permissions V0.7** - Contrôle d'accès granulaire
+- **3 tables dédiées** (player_inventory, company_inventory, aircraft_inventory)
+- **Localisation par aéroport** - Items physiquement localisés
+- **Anti-cheat** - Transferts uniquement au même aéroport
+- **Transport = Vol** - Inter-aéroport nécessite un avion
+
+**Architecture P2P**: Les données sont stockées localement en SQLite et synchronisées avec les autres joueurs via le NetworkManager.
 
 ---
 
-## V0.8 - Système de Vente Amélioré
+## Tables SQLite
 
-### Principe: Items déduits lors de la mise en vente
+### `player_inventory`
 
-Les items mis en vente sont **retirés de l'inventaire normal** et stockés séparément jusqu'à la vente ou l'annulation:
+Inventaire personnel du joueur, localisé par aéroport.
 
-```
-Mise en vente:    inventory.qty -= sale_qty  →  for_sale=true, sale_qty=X
-Annulation:       inventory.qty += sale_qty  ←  for_sale=false, sale_qty=0
-```
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `id` | TEXT (UUID) | Clé primaire |
+| `player_id` | TEXT | FK → player |
+| `item_id` | TEXT | FK → items |
+| `qty` | INTEGER | Quantité (≥ 0) |
+| `airport_ident` | TEXT | Localisation ICAO |
+| `created_at` | TEXT | Date création |
+| `updated_at` | TEXT | Dernière modification |
 
-### Filtre "En Vente"
+**Contrainte:** `UNIQUE(player_id, item_id, airport_ident)`
 
-Un nouveau chip de filtre permet d'afficher uniquement les items en vente:
+### `company_inventory`
 
-| Filtre | Description |
-|--------|-------------|
-| Tous | Tous les items |
-| Perso | player_warehouse uniquement |
-| Company | company_warehouse uniquement |
-| Avions | aircraft uniquement |
-| Usines | factory_storage uniquement |
-| **En Vente** | Items avec `for_sale=true` |
+Inventaire de la company, localisé par aéroport. Reçoit la production des factories.
 
-### Actions conditionnelles
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `id` | TEXT (UUID) | Clé primaire |
+| `company_id` | TEXT | FK → companies |
+| `item_id` | TEXT | FK → items |
+| `qty` | INTEGER | Quantité (≥ 0) |
+| `airport_ident` | TEXT | Localisation ICAO |
+| `for_sale` | INTEGER | En vente (0/1) |
+| `sale_price` | REAL | Prix de vente unitaire |
+| `sale_qty` | INTEGER | Quantité en vente |
+| `created_at` | TEXT | Date création |
+| `updated_at` | TEXT | Dernière modification |
 
-Les actions disponibles dépendent du statut de l'item:
-- **Item normal** → Actions: Voir, Vendre, Transférer
-- **Item en vente** → Actions: Voir, **Annuler** (bouton rouge)
+**Contrainte:** `UNIQUE(company_id, item_id, airport_ident)`
 
-### Endpoints V0.8
+### `aircraft_inventory`
 
-| Méthode | Endpoint | Description |
-|---------|----------|-------------|
-| GET | `/inventory/my-listings` | Mes items en vente |
-| POST | `/inventory/set-for-sale` | Mettre en vente (déduit du stock) |
-| POST | `/inventory/cancel-sale` | Annuler vente (retourne au stock) |
+Cargo d'un avion. Pas de `airport_ident` - la position = position de l'avion.
 
-### Wallets dans le header
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `id` | TEXT (UUID) | Clé primaire |
+| `aircraft_id` | TEXT | FK → aircraft |
+| `item_id` | TEXT | FK → items |
+| `qty` | INTEGER | Quantité (≥ 0) |
+| `created_at` | TEXT | Date création |
+| `updated_at` | TEXT | Dernière modification |
 
-Le header Inventaire affiche les deux wallets:
-- 👤 **Wallet Perso** - `user.wallet`
-- 🏢 **Wallet Company** - `company.balance`
+**Contrainte:** `UNIQUE(aircraft_id, item_id)`
 
 ---
 
-## V0.7.1 UI - Interface Utilisateur
+## Types de Containers
 
-### Fonctionnalités
+| Type | Description | Owner |
+|------|-------------|-------|
+| `player_inventory` | Entrepôt personnel | Player |
+| `company_inventory` | Entrepôt company + Production | Company |
+| `aircraft_inventory` | Cargo avion (limite poids) | Company/Player |
 
-L'interface inventaire offre:
-- **Vue groupée par aéroport** - Conteneurs regroupés par aéroport avec expand/collapse
-- **Recherche temps réel** - Filtrage des items par nom
-- **Filtres par type** - Entrepôts perso/company, avions, usines, **en vente (V0.8)**
-- **Modal détail** - Vue table complète du contenu d'un conteneur
-- **Transfert drag & drop** - Glisser-déposer entre conteneurs (même aéroport)
-- **Wallets header** - Affichage wallet perso et company (V0.8)
+### Icônes UI
 
-### Structure UI (V0.8)
+| Type | Icône | Nom affiché |
+|------|-------|-------------|
+| `player_inventory` | 👤 | Stock Perso - ICAO |
+| `company_inventory` | 🏢 | Stock Company - ICAO |
+| `aircraft_inventory` | ✈️ | [Immatriculation] |
+
+---
+
+## Services TypeScript
+
+### InventoryService
+
+```typescript
+// services/InventoryService.ts
+
+class InventoryServiceClass {
+  // Inventaire personnel (tous aéroports)
+  async getPlayerInventory(airportIdent?: string): Promise<InventoryItem[]>;
+
+  // Inventaire company
+  async getCompanyInventory(airportIdent?: string): Promise<InventoryItem[]>;
+
+  // Cargo d'un avion
+  async getAircraftCargo(aircraftId: string): Promise<AircraftCargo>;
+
+  // Charger items dans avion
+  async loadCargo(params: {
+    aircraft_id: string;
+    item_id: string;
+    qty: number;
+    from_inventory: 'player' | 'company';
+  }): Promise<void>;
+
+  // Décharger items de l'avion
+  async unloadCargo(params: {
+    aircraft_id: string;
+    item_id: string;
+    qty: number;
+    to_inventory: 'player' | 'company';
+  }): Promise<void>;
+
+  // Vue globale (player + company)
+  async getOverview(): Promise<InventoryOverview>;
+}
+```
+
+### DataLayer (Abstraction)
+
+```typescript
+// En mode solo → SQLite local
+DataLayer.setLocalMode();
+
+// En mode multi → Via peer
+DataLayer.setNetworkMode({ host: '192.168.1.10', port: 7777 });
+
+// Les services utilisent DataLayer
+const inventory = await DataLayer.getInventory('player', playerId);
+```
+
+---
+
+## Validations Anti-Cheat
+
+### Règle fondamentale
+
+> **Transport inter-aéroport = Vol obligatoire**
+
+- ❌ Transfert direct LFPG → EGLL bloqué
+- ✅ Charger avion → Voler → Décharger
+
+### Load Cargo
+
+```typescript
+// InventoryService.loadCargo()
+async loadCargo(params: LoadCargoParams): Promise<void> {
+  const aircraft = await FleetService.getAircraft(params.aircraft_id);
+  const inventory = await this.getInventoryAtAirport(
+    params.from_inventory,
+    aircraft.current_airport_ident
+  );
+
+  // 1. Items doivent être au même aéroport que l'avion
+  const item = inventory.find(i => i.item_id === params.item_id);
+  if (!item || item.qty < params.qty) {
+    throw new Error("Insufficient stock at aircraft location");
+  }
+
+  // 2. Vérifier capacité cargo
+  const cargo = await this.getAircraftCargo(params.aircraft_id);
+  const itemWeight = await this.getItemWeight(params.item_id);
+  if (cargo.current_weight_kg + (params.qty * itemWeight) > cargo.capacity_kg) {
+    throw new Error("Cargo capacity exceeded");
+  }
+
+  // 3. Transférer
+  await this.removeFromInventory(params.from_inventory, params.item_id, params.qty);
+  await this.addToAircraftCargo(params.aircraft_id, params.item_id, params.qty);
+}
+```
+
+### Unload Cargo
+
+```typescript
+// InventoryService.unloadCargo()
+async unloadCargo(params: UnloadCargoParams): Promise<void> {
+  const aircraft = await FleetService.getAircraft(params.aircraft_id);
+
+  // Items arrivent à l'aéroport actuel de l'avion
+  const destinationAirport = aircraft.current_airport_ident;
+
+  await this.removeFromAircraftCargo(params.aircraft_id, params.item_id, params.qty);
+  await this.addToInventory(
+    params.to_inventory,
+    params.item_id,
+    params.qty,
+    destinationAirport
+  );
+}
+```
+
+---
+
+## Interface Utilisateur
+
+### Vue Inventaire
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -93,17 +221,13 @@ L'interface inventaire offre:
 └─────────────────────────────────────────────────────┘
 ```
 
-### Icônes Conteneurs (V0.8.1)
+### Fonctionnalités UI
 
-| Type | Icône | Nom affiché |
-|------|-------|-------------|
-| `player_warehouse` | 👤 | Stock Perso - ICAO |
-| `company_warehouse` | 🏢 | Stock Company - ICAO |
-| `factory_storage` | 🏭 | [Nom usine] |
-| `aircraft` | ✈️ | [Immatriculation] |
-| `production` | 🏭 | [Company] Production |
-
-> **V0.8.1**: Le type `production` affiche les items de `company_inventory` (production des factories T1+)
+- **Vue groupée par aéroport** - Conteneurs regroupés avec expand/collapse
+- **Recherche temps réel** - Filtrage des items par nom
+- **Filtres par type** - Entrepôts perso/company, avions, en vente
+- **Modal détail** - Vue table complète du contenu
+- **Wallets header** - Affichage wallet perso et company
 
 ### Barre Cargo (Avions)
 
@@ -112,755 +236,159 @@ Affichage visuel de la capacité cargo:
 - **Orange** - 70-90% rempli
 - **Rouge** - > 90% rempli
 
-### Fichiers Frontend
-
-| Fichier | Contenu |
-|---------|---------|
-| `webmap/app.html` | Structure HTML (view-inventory, modals) |
-| `webmap/app.js` | Logique JS (renderInventoryAirportGroups, etc.) |
-| `webmap/styles.css` | Styles CSS (.inv-airport-group, .inv-container-card)
-
 ---
 
-## V0.7 SIMPLIFIÉ - Nouveau Système
+## Système de Vente
 
-### ⚠️ Coexistence avec l'ancien système
+### Mise en vente
 
-Les anciennes tables (`inventory_locations`, `inventory_items`) sont **conservées** pour:
-- Factories T0 (NPC) - Production automatique avec vente
-- Système HV actuel - Marché entre joueurs
+Les items mis en vente sont **déduits** de l'inventaire normal:
 
-Le nouveau système V0.7 utilise **3 tables dédiées** plus simples.
+```typescript
+// InventoryService.setForSale()
+async setForSale(params: {
+  item_id: string;
+  airport_ident: string;
+  sale_price: number;
+  sale_qty: number;
+}): Promise<void> {
+  const inventory = await this.getCompanyInventoryItem(params.item_id, params.airport_ident);
 
-### Principes
+  if (inventory.qty < params.sale_qty) {
+    throw new Error("Insufficient quantity");
+  }
 
-1. **Pas de locations intermédiaires** - Items directement liés à player/company/aircraft
-2. **Localisation par aéroport** - `airport_ident` stocké directement dans chaque ligne
-3. **Production directe** - Les factories T1+ écrivent dans `company_inventory` (plus de `factory_storage`)
-4. **Anti-cheat** - Chargement avion = même aéroport obligatoire
+  // Déduire du stock normal
+  inventory.qty -= params.sale_qty;
+  inventory.for_sale = true;
+  inventory.sale_price = params.sale_price;
+  inventory.sale_qty = params.sale_qty;
 
-### Tables V0.7 Simplified
-
-#### `game.player_inventory`
-
-Inventaire personnel du joueur, localisé par aéroport.
-
-| Colonne | Type | Description |
-|---------|------|-------------|
-| `id` | UUID | Clé primaire |
-| `player_id` | UUID | FK → users |
-| `item_id` | UUID | FK → items |
-| `qty` | INT | Quantité (≥ 0) |
-| `airport_ident` | VARCHAR(8) | Localisation ICAO |
-| `created_at` | TIMESTAMPTZ | Date création |
-| `updated_at` | TIMESTAMPTZ | Dernière modification |
-
-**Contrainte:** `UNIQUE(player_id, item_id, airport_ident)`
-
-#### `game.company_inventory`
-
-Inventaire de la company, localisé par aéroport. Reçoit directement la production des factories T1+.
-
-| Colonne | Type | Description |
-|---------|------|-------------|
-| `id` | UUID | Clé primaire |
-| `company_id` | UUID | FK → companies |
-| `item_id` | UUID | FK → items |
-| `qty` | INT | Quantité (≥ 0) |
-| `airport_ident` | VARCHAR(8) | Localisation ICAO |
-| `created_at` | TIMESTAMPTZ | Date création |
-| `updated_at` | TIMESTAMPTZ | Dernière modification |
-
-**Contrainte:** `UNIQUE(company_id, item_id, airport_ident)`
-
-#### `game.aircraft_inventory`
-
-Cargo d'un avion. Pas de `airport_ident` - la position = position de l'avion.
-
-| Colonne | Type | Description |
-|---------|------|-------------|
-| `id` | UUID | Clé primaire |
-| `aircraft_id` | UUID | FK → company_aircraft |
-| `item_id` | UUID | FK → items |
-| `qty` | INT | Quantité (≥ 0) |
-| `created_at` | TIMESTAMPTZ | Date création |
-| `updated_at` | TIMESTAMPTZ | Dernière modification |
-
-**Contrainte:** `UNIQUE(aircraft_id, item_id)`
-
-### Endpoints V0.7 Simplified
-
-| Méthode | Endpoint | Description |
-|---------|----------|-------------|
-| GET | `/inventory/player` | Inventaire personnel (tous aéroports) |
-| GET | `/inventory/player?airport=LFPG` | Filtrer par aéroport |
-| GET | `/inventory/company` | Inventaire company |
-| GET | `/inventory/company?airport=LFPG` | Filtrer par aéroport |
-| GET | `/inventory/aircraft/{id}` | Cargo d'un avion |
-| POST | `/inventory/load` | Charger items dans avion |
-| POST | `/inventory/unload` | Décharger items de l'avion |
-
-### Réponses API
-
-#### GET /inventory/player
-
-```json
-{
-    "total_items": 150,
-    "total_value": 25000.00,
-    "total_weight_kg": 1500.00,
-    "airports": ["LFPG", "EGLL", "KJFK"],
-    "items": [
-        {
-            "item_id": "uuid",
-            "item_name": "Steel Ingot",
-            "tier": 2,
-            "qty": 50,
-            "airport_ident": "LFPG",
-            "weight_kg": 10.00,
-            "total_weight_kg": 500.00,
-            "base_value": 150.00,
-            "total_value": 7500.00
-        }
-    ]
+  await DatabaseManager.saveInventory(inventory);
 }
 ```
 
-#### GET /inventory/aircraft/{id}
+### Annulation de vente
 
-```json
-{
-    "aircraft_id": "uuid",
-    "aircraft_name": "Boeing 737-800",
-    "current_airport": "LFPG",
-    "cargo_capacity_kg": 20000.00,
-    "current_weight_kg": 5000.00,
-    "available_capacity_kg": 15000.00,
-    "items": [
-        {
-            "item_id": "uuid",
-            "item_name": "Steel Ingot",
-            "tier": 2,
-            "qty": 100,
-            "weight_kg": 10.00,
-            "total_weight_kg": 1000.00
-        }
-    ]
+```typescript
+// InventoryService.cancelSale()
+async cancelSale(itemId: string, airportIdent: string): Promise<void> {
+  const inventory = await this.getCompanyInventoryItem(itemId, airportIdent);
+
+  // Retourner au stock normal
+  inventory.qty += inventory.sale_qty;
+  inventory.for_sale = false;
+  inventory.sale_price = null;
+  inventory.sale_qty = 0;
+
+  await DatabaseManager.saveInventory(inventory);
 }
 ```
 
-### Load/Unload Cargo
+### Filtre "En Vente"
 
-```bash
-# Charger depuis inventaire PLAYER vers avion
-POST /inventory/load
-{
-    "aircraft_id": "uuid",
-    "item_id": "uuid",
-    "qty": 50,
-    "from_inventory": "player"  # ou "company"
-}
-
-# Décharger depuis avion vers inventaire COMPANY
-POST /inventory/unload
-{
-    "aircraft_id": "uuid",
-    "item_id": "uuid",
-    "qty": 50,
-    "to_inventory": "company"  # ou "player"
-}
-```
-
-### Validations Anti-Cheat
-
-1. **Load**: Items doivent être à `aircraft.current_airport_ident`
-2. **Unload**: Items arrivent à `aircraft.current_airport_ident`
-3. **Cargo capacity**: Poids total ne peut pas dépasser capacité avion
-
-### Flux Production V0.7
-
-```
-[Factory T1+] ─complete_batch()─→ [company_inventory @ factory.airport_ident]
-```
-
-La fonction `complete_batch()` dans `production_service.py` écrit **directement** dans `company_inventory` au lieu de `factory_storage`.
-
-### Flux Transport Complet
-
-```
-[company_inventory LFPG] ──load──→ [aircraft_inventory] ──vol──→ [player_inventory KJFK]
-                               ↑                              ↑
-                          même aéroport                 même aéroport
-```
-
----
-
-## V0.7 LEGACY - Unified Inventory System (anciennes tables)
-
-> **Note:** Cette section décrit les anciennes tables toujours utilisées pour T0/NPC et le marché HV.
-
-### Principes Anti-Cheat
-
-1. **Localisation physique** - Tous les items sont physiquement à un aéroport
-2. **Transferts locaux** - Mouvements uniquement au même aéroport
-3. **Transport = Vol** - Inter-aéroport nécessite un avion
-
-### Types de Containers
-
-| Type | Description | Owner |
-|------|-------------|-------|
-| `player_warehouse` | Entrepôt personnel | Player |
-| `company_warehouse` | Entrepôt company | Company |
-| `factory_storage` | Stockage usine | Company |
-| `aircraft` | Cargo avion | Company/Player |
-
-### Ownership Polymorphe
-
-```sql
--- inventory_locations
-owner_type VARCHAR(20)  -- 'company' ou 'player'
-owner_id   UUID         -- company_id ou user_id
-```
-
-### Permissions V0.7
-
-| Permission | Description |
-|------------|-------------|
-| `can_withdraw_warehouse` | Retirer du warehouse company |
-| `can_deposit_warehouse` | Déposer au warehouse company |
-| `can_withdraw_factory` | Retirer du factory storage |
-| `can_deposit_factory` | Déposer au factory storage |
-| `can_manage_aircraft` | Gérer les avions (acheter, vendre) |
-| `can_use_aircraft` | Utiliser les avions (load/unload cargo) |
-| `can_sell_market` | Mettre en vente sur le marché |
-| `can_buy_market` | Acheter sur le marché |
-| `can_manage_workers` | Gérer les workers |
-| `can_manage_members` | Gérer les permissions membres |
-| `can_manage_factories` | Gérer les usines |
-| `is_founder` | Tous les droits (non modifiable) |
-
-### Endpoints V0.7
-
-| Méthode | Endpoint | Description |
-|---------|----------|-------------|
-| GET | `/inventory/overview` | Vue globale (player + company) |
-| GET | `/inventory/my-locations` | Locations du joueur |
-| GET | `/inventory/airport/{icao}` | Inventaire à un aéroport |
-| POST | `/inventory/warehouse/player` | Créer warehouse personnel |
-| POST | `/inventory/transfer` | Transfert même aéroport |
-
-### Fleet Cargo V0.7
-
-| Méthode | Endpoint | Description |
-|---------|----------|-------------|
-| GET | `/fleet/{id}/cargo` | Contenu cargo avion |
-| POST | `/fleet/{id}/load` | Charger (validation poids) |
-| POST | `/fleet/{id}/unload` | Décharger (même aéroport) |
-| PATCH | `/fleet/{id}/location` | Update position après vol |
-
-### Exemple: Transport LFPG → EGLL
-
-```bash
-# 1. Charger à LFPG
-POST /fleet/{aircraft_id}/load
-{"from_location_id": "warehouse-lfpg", "item_id": "uuid", "qty": 100}
-
-# 2. Vol (simulateur MSFS)
-
-# 3. Update position
-PATCH /fleet/{aircraft_id}/location
-{"airport_ident": "EGLL"}
-
-# 4. Décharger à EGLL
-POST /fleet/{aircraft_id}/unload
-{"to_location_id": "warehouse-egll", "item_id": "uuid", "qty": 100}
-```
-
-### Validation Cross-Airport
-
-```bash
-# ❌ BLOQUÉ - Transfert direct entre aéroports
-POST /inventory/transfer
-{"from_location_id": "lfpg-uuid", "to_location_id": "egll-uuid", ...}
-# → 400: "Transfer between airports not allowed. Use aircraft for transport."
-
-# ❌ BLOQUÉ - Décharger vers autre aéroport
-POST /fleet/{id}/unload (aircraft à EGLL, destination à LFPG)
-# → 400: "Destination (LFPG) must be at same airport as aircraft (EGLL)"
-```
-
----
-
-## Tables SQL
-
-### `game.inventory_locations`
-
-Emplacements de stockage (ownership polymorphe V0.7).
-
-| Colonne | Type | Description |
-|---------|------|-------------|
-| `id` | UUID | Clé primaire |
-| `company_id` | UUID | FK → companies (nullable V0.7) |
-| `owner_type` | VARCHAR(20) | **V0.7** 'company' ou 'player' |
-| `owner_id` | UUID | **V0.7** company_id ou user_id |
-| `aircraft_id` | UUID | **V0.7** FK → company_aircraft (si kind=aircraft) |
-| `kind` | VARCHAR | player_warehouse, company_warehouse, factory_storage, aircraft |
-| `airport_ident` | VARCHAR(8) | Code ICAO |
-| `name` | VARCHAR | Nom de l'emplacement |
-| `created_at` | TIMESTAMPTZ | Date de création |
-
-**Types de locations V0.7:**
-
-| Kind | Owner Type | Description |
-|------|------------|-------------|
-| `player_warehouse` | player | Entrepôt personnel |
-| `company_warehouse` | company | Entrepôt company |
-| `factory_storage` | company | Stockage usine |
-| `aircraft` | company/player | Cargo avion |
-
-### `game.company_permissions` (V0.7)
-
-Permissions granulaires par membre de company.
-
-| Colonne | Type | Description |
-|---------|------|-------------|
-| `id` | UUID | Clé primaire |
-| `company_id` | UUID | FK → companies |
-| `user_id` | UUID | FK → users |
-| `can_withdraw_warehouse` | BOOLEAN | Retirer du warehouse |
-| `can_deposit_warehouse` | BOOLEAN | Déposer au warehouse |
-| `can_withdraw_factory` | BOOLEAN | Retirer de factory |
-| `can_deposit_factory` | BOOLEAN | Déposer à factory |
-| `can_manage_aircraft` | BOOLEAN | Gérer avions |
-| `can_use_aircraft` | BOOLEAN | Utiliser avions |
-| `can_sell_market` | BOOLEAN | Vendre sur marché |
-| `can_buy_market` | BOOLEAN | Acheter sur marché |
-| `can_manage_workers` | BOOLEAN | Gérer workers |
-| `can_manage_members` | BOOLEAN | Gérer permissions |
-| `can_manage_factories` | BOOLEAN | Gérer factories |
-| `is_founder` | BOOLEAN | Fondateur (tous droits) |
-
-**Permissions par défaut:**
-
-| Rôle | Permissions |
-|------|-------------|
-| Founder | Toutes (is_founder=true) |
-| Admin | withdraw_*, manage_aircraft, sell_market, manage_workers, manage_factories |
-| Member | deposit_*, use_aircraft, buy_market |
-
-### `game.inventory_items`
-
-Items stockés dans une location.
-
-| Colonne | Type | Description |
-|---------|------|-------------|
-| `id` | UUID | Clé primaire |
-| `location_id` | UUID | FK → inventory_locations |
-| `item_id` | UUID | FK → items |
-| `qty` | INT | Quantité totale |
-| `for_sale` | BOOLEAN | En vente sur le marché |
-| `sale_price` | DECIMAL(12,2) | Prix unitaire de vente |
-| `sale_qty` | BIGINT | Quantité mise en vente (≤ qty) |
-| `updated_at` | TIMESTAMPTZ | Dernière modification |
-
-**Contrainte unique:** `(location_id, item_id)` - Un seul enregistrement par item/location.
-
-### `game.inventory_audits`
-
-Historique des mouvements d'inventaire.
-
-| Colonne | Type | Description |
-|---------|------|-------------|
-| `id` | UUID | Clé primaire |
-| `location_id` | UUID | FK → inventory_locations |
-| `item_id` | UUID | ID de l'item |
-| `quantity_delta` | INT | +/- quantité (positif=ajout) |
-| `action` | VARCHAR(50) | Type d'action |
-| `user_id` | UUID | FK → users (nullable) |
-| `notes` | TEXT | Notes additionnelles |
-| `created_at` | TIMESTAMPTZ | Date de l'action |
-
-**Actions auditées:**
-
-| Action | Description |
+| Filtre | Description |
 |--------|-------------|
-| `deposit` | Ajout manuel d'items |
-| `withdraw` | Retrait manuel d'items |
-| `move_out` | Transfert sortant |
-| `move_in` | Transfert entrant |
-| `set_for_sale` | Mise en vente |
-| `remove_from_sale` | Retrait de la vente |
-| `market_buy` | Achat sur le marché |
-| `market_sell` | Vente sur le marché |
+| Tous | Tous les items |
+| Perso | player_inventory uniquement |
+| Company | company_inventory uniquement |
+| Avions | aircraft_inventory uniquement |
+| **En Vente** | Items avec `for_sale=true` |
 
 ---
 
-## API Endpoints
+## Flux de Transport
 
-### Locations
+### Transport entre aéroports
 
-| Méthode | Endpoint | Description |
-|---------|----------|-------------|
-| GET | `/inventory/locations` | Liste mes emplacements |
-| POST | `/inventory/locations/warehouse` | Créer/récupérer warehouse |
-| GET | `/inventory/location/{id}` | Inventaire d'un emplacement |
+```
+[player/company_inventory LFPG] ──load──→ [aircraft_inventory] ──vol──→ [player/company_inventory KJFK]
+                                    ↑                              ↑
+                               même aéroport                 même aéroport
+```
 
-### Opérations
+### Exemple complet
 
-| Méthode | Endpoint | Description |
-|---------|----------|-------------|
-| POST | `/inventory/deposit` | Déposer des items |
-| POST | `/inventory/withdraw` | Retirer des items |
-| POST | `/inventory/move` | Transférer entre locations |
+```typescript
+// 1. Charger à LFPG
+await InventoryService.loadCargo({
+  aircraft_id: "uuid",
+  item_id: "uuid",
+  qty: 100,
+  from_inventory: "company"
+});
 
-### Marché
+// 2. Vol MSFS (le joueur vole)
 
-| Méthode | Endpoint | Description |
-|---------|----------|-------------|
-| POST | `/inventory/set-for-sale` | Mettre en vente |
-| GET | `/inventory/market/{airport}` | Items en vente (public) |
-| POST | `/inventory/market/buy` | Acheter sur le marché |
+// 3. Update position après atterrissage
+await FleetService.updateAircraftLocation("uuid", "KJFK");
+
+// 4. Décharger à KJFK
+await InventoryService.unloadCargo({
+  aircraft_id: "uuid",
+  item_id: "uuid",
+  qty: 100,
+  to_inventory: "player"
+});
+```
 
 ---
 
-## Gestion des Locations
+## Flux Production → Inventaire
 
-### Vault (Stockage Global)
+Les factories T1+ écrivent directement dans `company_inventory`:
 
-Le vault est créé **automatiquement** au premier accès à `/inventory/locations`.
-
-```json
-{
-    "id": "uuid",
-    "company_id": "uuid",
-    "kind": "vault",
-    "airport_ident": "",
-    "name": "company-slug vault"
-}
+```
+[Factory T1+] ─completeBatch()─→ [company_inventory @ factory.airport_ident]
 ```
 
-**Caractéristiques:**
-- Un seul vault par company
-- `airport_ident` = "" (vide)
-- Ne peut pas vendre (vente uniquement depuis warehouse)
-
-### Warehouse (Entrepôt Aéroport)
-
-Créé manuellement ou automatiquement lors d'un `withdraw` depuis une factory.
-
-**Endpoint:** `POST /inventory/locations/warehouse`
-
-**Body:**
-```json
-{
-    "airport_ident": "LFPG"
-}
-```
-
-**Réponse:**
-```json
-{
-    "id": "uuid",
-    "company_id": "uuid",
-    "kind": "warehouse",
-    "airport_ident": "LFPG",
-    "name": "Warehouse LFPG"
-}
-```
-
-**Note:** Si le warehouse existe déjà, retourne l'existant (idempotent).
+Pas de stockage intermédiaire - les produits arrivent directement dans l'inventaire company.
 
 ---
 
-## Opérations d'Inventaire
+## Sync P2P
 
-### Déposer: `POST /inventory/deposit`
+### Données synchronisées
 
-Ajoute des items à un emplacement.
+| Donnée | Direction | Fréquence |
+|--------|-----------|-----------|
+| Inventaires par aéroport | Bidirectionnel | 5 sec |
+| Items en vente | Bidirectionnel | 5 sec |
+| Cargo avions | Local uniquement | - |
 
-**Body:**
-```json
-{
-    "location_id": "uuid",
-    "item_code": "Iron Ore",
-    "qty": 100
-}
-```
+### Données locales uniquement
 
-**Validations:**
-- `qty` > 0
-- L'item existe dans le catalogue
-- La location appartient à ma company
-
-### Retirer: `POST /inventory/withdraw`
-
-Retire des items d'un emplacement.
-
-**Body:**
-```json
-{
-    "location_id": "uuid",
-    "item_code": "Iron Ore",
-    "qty": 50
-}
-```
-
-**Validations:**
-- `qty` > 0
-- Stock suffisant (`qty` disponible)
-
-### Transférer: `POST /inventory/move`
-
-Déplace des items entre deux emplacements de la même company.
-
-**Body:**
-```json
-{
-    "from_location_id": "uuid",
-    "to_location_id": "uuid",
-    "item_code": "Iron Ore",
-    "qty": 25
-}
-```
-
-**Actions:**
-1. Retire de la source
-2. Ajoute à la destination
-3. Crée 2 audits (move_out + move_in)
+- Position exacte de l'avion (cargo suit)
+- Mission en cours
+- Préférences UI
 
 ---
 
-## Système de Marché
-
-### Mettre en vente: `POST /inventory/set-for-sale` (V0.8)
-
-**Prérequis:** Item dans un **warehouse** (player_warehouse ou company_warehouse)
-
-**Body (mise en vente):**
-```json
-{
-    "location_id": "uuid",
-    "item_code": "Steel Ingot",
-    "for_sale": true,
-    "sale_price": 150.00,
-    "sale_qty": 50
-}
-```
-
-**Actions V0.8:**
-1. Déduit `sale_qty` du stock normal (`qty -= sale_qty`)
-2. Crée l'annonce avec `for_sale=true`, `sale_price`, `sale_qty`
-3. L'item apparaît dans le filtre "En Vente" et sur le marché
-
-**Body (annulation - V0.8):**
-```json
-{
-    "location_id": "uuid",
-    "item_code": "Steel Ingot",
-    "for_sale": false
-}
-```
-
-**Actions annulation V0.8:**
-1. Retourne `sale_qty` au stock normal (`qty += sale_qty`)
-2. Retire l'annonce (`for_sale=false`, `sale_qty=0`, `sale_price=null`)
-
-**Validations:**
-- `sale_price` > 0 (obligatoire si `for_sale` = true)
-- `sale_qty` ≤ `qty` disponible (si 0, utilise tout le stock)
-
-### Voir le marché: `GET /inventory/market/{airport}`
-
-Liste tous les items en vente à un aéroport (endpoint **public**).
-
-**Exemple:** `GET /inventory/market/LFPG`
-
-**Réponse:**
-```json
-[
-    {
-        "location_id": "uuid",
-        "airport_ident": "LFPG",
-        "company_id": "uuid",
-        "company_name": "Air Cargo Express",
-        "item_id": "uuid",
-        "item_code": "Steel Ingot",
-        "item_name": "Steel Ingot",
-        "sale_price": 150.00,
-        "sale_qty": 50
-    }
-]
-```
-
-### Acheter: `POST /inventory/market/buy` (V0.8)
-
-**Body:**
-```json
-{
-    "seller_location_id": "uuid",
-    "item_code": "Steel Ingot",
-    "qty": 10,
-    "buyer_type": "company"
-}
-```
-
-| Champ | Type | Description |
-|-------|------|-------------|
-| `seller_location_id` | UUID | Location du vendeur |
-| `item_code` | string | Nom de l'item |
-| `qty` | int | Quantité à acheter |
-| `buyer_type` | string | `"player"` (wallet perso) ou `"company"` (wallet company, défaut) |
-
-**Validations:**
-1. Acheteur n'est pas le vendeur
-2. Stock en vente suffisant (`sale_qty` ≥ qty demandé)
-3. Balance suffisante (wallet perso ou company selon `buyer_type`)
-
-**Actions automatiques:**
-1. Retrait du vendeur (`sale_qty` diminué)
-2. Création warehouse acheteur si inexistant (même aéroport, type selon `buyer_type`)
-3. Ajout à l'inventaire acheteur (player_warehouse ou company_warehouse)
-4. Transfert d'argent (user.wallet ou company.balance selon `buyer_type`)
-5. Audits côté vendeur (market_sell) et acheteur (market_buy)
-
-**Si `sale_qty` tombe à 0:**
-- `for_sale` → false
-- `sale_price` → null
-- `sale_qty` → 0
-
----
-
-## Interaction avec Factory System
-
-### V0.7 Simplifié: Production directe
-
-Les factories T1+ écrivent **directement** dans `company_inventory`:
-
-```
-[Factory T1+] ─complete_batch()─→ [company_inventory @ airport]
-```
-
-**Pas de `factory_storage` intermédiaire** pour les factories T1+.
-
-### Legacy: Factory Storage (T0/NPC uniquement)
-
-Les factories T0 (NPC) utilisent encore le système legacy:
-
-```
-[Factory T0] ──auto_produce──→ [inventory_items via inventory_locations]
-```
-
-Pour transférer depuis `factory_storage` vers warehouse (legacy):
-
-**Endpoint:** `POST /factories/{id}/storage/withdraw`
-
-**Actions:**
-1. Retire de `factory_storage`
-2. Crée warehouse si inexistant (même aéroport que la factory)
-3. Ajoute à `inventory_items` du warehouse
-4. Audit dans `factory_transactions` (type: output)
-
----
-
-## Flux Typiques
-
-### V0.8.1: Production et Transport
-
-```bash
-# 1. Produire dans une factory T1+ (V0.8.1 - multi-batch)
-POST /factories/{id}/production
-{"recipe_id": "uuid", "quantity": 10}
-# → Consomme ingrédients × 10 depuis company_inventory
-
-# 2. Batch terminé automatiquement (scheduler 1min)
-# → Items dans company_inventory @ factory.airport_ident
-
-# 3. Voir l'inventaire (V0.8.1 - inclut production)
-GET /inventory/overview
-# → Container "Production" avec items de company_inventory
-
-# 4. Charger dans un avion
-POST /inventory/load
-{"aircraft_id": "uuid", "item_id": "uuid", "qty": 50, "from_inventory": "company"}
-
-# 5. Vol (simulateur MSFS) + update position
-PATCH /fleet/{aircraft_id}/location
-{"airport_ident": "KJFK"}
-
-# 6. Décharger à destination
-POST /inventory/unload
-{"aircraft_id": "uuid", "item_id": "uuid", "qty": 50, "to_inventory": "player"}
-```
-
-### Legacy: Production et vente HV
-
-```bash
-# 1. Produire (T0 NPC uniquement via scheduler)
-# → Automatiquement dans inventory_items
-
-# 2. Mettre en vente
-POST /inventory/set-for-sale
-{"location_id": "warehouse-uuid", "item_code": "Raw Wheat", "for_sale": true, "sale_price": 10, "sale_qty": 100}
-
-# 3. Un autre joueur achète
-POST /inventory/market/buy
-{"seller_location_id": "warehouse-uuid", "item_code": "Raw Wheat", "qty": 50}
-```
-
-### Transport entre aéroports (V0.7 Simplifié)
-
-```
-[company_inventory LFPG] ──load──→ [aircraft_inventory] ──flight──→ [player_inventory KJFK]
-```
-
-**Endpoints V0.7 Simplifié:**
-- `POST /inventory/load` - Charge depuis player/company inventory (même aéroport que l'avion)
-- `PATCH /fleet/{id}/location` - Update position après vol
-- `POST /inventory/unload` - Décharge vers player/company inventory (à l'aéroport de l'avion)
-
----
-
-## Sécurité et Validations
+## Sécurité et Transactions
 
 ### Isolation des données
 
-- Toutes les requêtes filtrent par `company_id` de l'utilisateur
-- Impossible d'accéder aux locations d'autres companies
-- Seul le marché expose des données inter-companies
+- Toutes les requêtes filtrent par `player_id` ou `company_id`
+- Impossible d'accéder aux inventaires d'autres joueurs
+- Seul le marché expose des données publiques
 
 ### Transactions
 
-- Toutes les opérations sont **transactionnelles** (rollback en cas d'erreur)
-- Vérification du stock **avant** modification
-- Double audit pour les mouvements (source + destination)
+- Toutes les opérations sont atomiques
+- Rollback en cas d'erreur
+- Vérification du stock avant modification
 
 ### Contraintes
 
 - `qty` ne peut pas devenir négatif
-- `sale_qty` ≤ `qty` (protégé par validation)
+- `sale_qty` ≤ `qty` disponible
 - Un item/location = un seul enregistrement (UNIQUE constraint)
 
 ---
 
 ## Évolutions futures
 
-- [x] ~~`in_transit` - Cargo aircraft system~~ **V0.7 Complété**
-- [x] ~~Player warehouses~~ **V0.7 Complété**
-- [x] ~~Permissions granulaires~~ **V0.7 Complété**
-- [x] ~~Anti-cheat cross-airport~~ **V0.7 Complété**
-- [x] ~~Inventaire simplifié (3 tables dédiées)~~ **V0.7 Simplifié Complété**
-- [x] ~~Production directe dans company_inventory~~ **V0.7 Simplifié Complété**
-- [x] ~~UI groupée par aéroport avec recherche/filtres~~ **V0.7.1 Complété**
-- [x] ~~Déduction items lors de la mise en vente~~ **V0.8 Complété**
-- [x] ~~Filtre "En Vente" dans l'inventaire~~ **V0.8 Complété**
-- [x] ~~Annulation de vente (retour au stock)~~ **V0.8 Complété**
-- [x] ~~Sélection wallet (perso/company) à l'achat~~ **V0.8 Complété**
-- [x] ~~Affichage wallets dans header Inventaire~~ **V0.8 Complété**
-- [x] ~~Production visible dans /inventory/overview~~ **V0.8.1 Complété**
-- [ ] Migration HV vers nouvelles tables
 - [ ] Capacités de stockage par location
 - [ ] Frais de stockage (warehouse rent)
 - [ ] Historique des prix du marché
 - [ ] Ordres d'achat (buy orders)
-- [ ] Enchères / prix dynamiques
-- [ ] Missions (transport, supply chain)

@@ -1,426 +1,569 @@
-# Mfs Carrier+ (MSFS 2024)
+# MFS Carrier+ (MSFS 2024) — Architecture P2P
 
-Backend modulaire pour **Microsoft Flight Simulator 2024** : Auth, Company, Inventory, Fleet, Market, **Factory System (V0.5)**, **Workers System (V0.6)**, **Unified Inventory System (V0.7)**.
-Stack Docker avec **FastAPI + PostgreSQL + Directus + Nginx + APScheduler**.
-
-> Repo : https://github.com/Tinouan/mfs24-carrier-plus
-
----
-
-## Objectif
-
-Mfs Carrier+ fournit un socle "game backend" utilisable par :
-- une **tablette in-game** (UI intégrée MSFS)
-- un **admin panel web**
-- des services gameplay (marché, usines de production, workers, missions, logs)
-
-Le backend est **source de vérité** : inventaires, flotte, économie, production, workers, règles, audit.
+> **Version**: 0.9+ (P2P)  
+> **Repo**: https://github.com/Tinouan/mfs24-carrier-plus  
+> **Stack**: EFB TypeScript/React + SQLite local + P2P Sync
 
 ---
 
-## Architecture
+## Vue d'ensemble
 
-### Services Docker
+MFS Carrier+ est un mod de gestion de compagnie cargo pour **Microsoft Flight Simulator 2024**. L'architecture P2P permet de jouer en solo ou en multijoueur **sans serveur centralisé**.
+
+### Principes clés
+
+| Aspect | Implémentation |
+|--------|----------------|
+| **Stockage** | SQLite local (sql.js) |
+| **UI** | EFB intégré MSFS 2024 |
+| **Multijoueur** | P2P via shards (sync HTTP) |
+| **Données monde** | Un seul monde partagé entre tous les joueurs |
+| **Offline** | 100% jouable sans connexion |
+
+---
+
+## Architecture technique
+
+### Vue globale
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                      Nginx (8080)                        │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
-│  │ /api/        │  │ /directus/   │  │ /map/        │  │
-│  └──────┬───────┘  └──────┬───────┘  └──────────────┘  │
-└─────────┼──────────────────┼──────────────────────────┘
-          │                  │
-          ▼                  ▼
-  ┌───────────────┐  ┌───────────────┐
-  │  FastAPI      │  │   Directus    │
-  │  (game-api)   │  │   (8055)      │
-  │  Port 8000    │  │               │
-  │  + Scheduler  │  │               │
-  └───────┬───────┘  └───────┬───────┘
-          │                  │
-          └──────────┬───────┘
-                     ▼
-            ┌────────────────┐
-            │  PostgreSQL 16 │
-            │  Port 5432     │
-            └────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                         EFB CARRIER+                             │
+│                                                                  │
+│   ┌─────────────┐    ┌──────────────┐    ┌─────────────┐       │
+│   │   States    │◄──►│ Persistence  │◄──►│  SQLite     │       │
+│   │ (Subject<T>)│    │   Manager    │    │  (sql.js)   │       │
+│   └─────────────┘    └──────────────┘    └─────────────┘       │
+│         │                   │                                    │
+│         │                   ▼                                    │
+│         │            ┌──────────────┐                           │
+│         │            │   Network    │◄────► Autres joueurs      │
+│         │            │   Manager    │       (P2P Sync)          │
+│         │            └──────────────┘                           │
+│         │                                                        │
+│         ▼                                                        │
+│   ┌─────────────┐                                               │
+│   │     UI      │ ◄── OpenLayers Map, Hangar, Market, etc.     │
+│   └─────────────┘                                               │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-### Base de données PostgreSQL
+### Flux de données
 
-**2 schémas distincts**:
+```
+1. DÉMARRAGE
+   SQLite → PersistenceManager → States → UI
 
-1. **`public`** - Données monde (Directus)
-   - `airports` - **84,000+ aéroports** MSFS (OurAirports data)
-     - Champs: ident (ICAO), type, name, lat/long, country, etc.
-     - **Factory slots**: `max_factory_slots`, `occupied_slots`
-     - Trigger PostgreSQL auto-calcule slots par type d'aéroport
+2. ACTION UTILISATEUR  
+   UI → Service → State.set() → PersistenceManager → SQLite
+                              → NetworkManager → Sync vers peers
 
-2. **`game`** - Données gameplay (FastAPI) — **22 tables**
-
-   **Core** (7 tables):
-   - `users` - Comptes joueurs
-   - `companies` - Compagnies de transport
-   - `company_members` - Membres d'une compagnie
-   - `company_permissions` - **V0.7** Permissions granulaires par membre
-   - `inventory_locations` - Emplacements de stockage (polymorphe: player/company)
-   - `inventory_items` - Inventaire par emplacement
-   - `inventory_audits` - Historique des mouvements
-
-   **Fleet & Market** (2 tables):
-   - `company_aircraft` - Flotte aérienne (cargo_capacity_kg, owner_type)
-   - `market_orders` - Ordres d'achat/vente
-
-   **World Data** (3 tables):
-   - `items` - **94 items** T0-T2 (matières premières + produits)
-   - `recipes` - **60 recettes** T1-T2 (production)
-   - `recipe_ingredients` - Ingrédients requis par recette
-
-   **Factory System V0.5** (4 tables):
-   - `factories` - Usines de production (liées à company_id + airport_ident)
-   - `factory_storage` - Stockage local d'usine (ingrédients + produits)
-   - `production_batches` - Lots de production (status, workers, temps)
-   - `factory_transactions` - Audit usine (consumed, input, output)
-
-   **Workers System V0.6** (4 tables):
-   - `workers` - Table **unifiée** workers + engineers (18 colonnes)
-   - `country_worker_stats` - **42 pays** avec stats de base
-   - `worker_xp_thresholds` - 5 tiers (Novice → Maître)
-   - `airport_worker_pools` - **5,201 pools** de recrutement
-
-   **Profiles** (2 tables):
-   - `player_profiles` - Profil pilote
-   - `company_profiles` - Profil company
+3. RÉCEPTION SYNC RÉSEAU
+   Peer → NetworkManager → States → UI
+                        → SQLite (backup)
+```
 
 ---
 
-## FastAPI Routes
+## Structure des fichiers
 
-### Système (2 endpoints)
-- `GET /health` - Santé de l'API
-- `POST /sql/execute` - Exécution SQL (DEV ONLY)
-
-### Auth (3 endpoints)
-- `POST /auth/register` - Inscription
-- `POST /auth/login` - Connexion (retourne JWT)
-- `GET /auth/me` - Info user actuel
-
-### Companies (CRUD compagnie)
-- `POST /company` - Créer compagnie
-- `GET /company` - Liste compagnies
-- `GET /company/{id}` - Détails
-- `PATCH /company/{id}` - Modifier
-- `GET /company/{id}/members` - Membres
-
-### Inventory (CRUD inventaire)
-- `GET /inventory` - Liste items
-- `POST /inventory/transfer` - Transférer items (même aéroport)
-
-### Inventory V0.7 (Système unifié)
-- `GET /inventory/overview` - Vue globale inventaire (player + company)
-- `GET /inventory/my-locations` - Locations du joueur
-- `GET /inventory/airport/{icao}` - Inventaire à un aéroport
-- `POST /inventory/warehouse/player` - Créer warehouse personnel
-- `POST /inventory/transfer` - Transfert même aéroport (anti-cheat)
-
-### Fleet (Flotte aérienne)
-- `GET /fleet` - Liste avions
-- `GET /fleet/{id}` - Détails avion
-- `POST /fleet` - Acheter avion
-- `PATCH /fleet/{id}` - Modifier avion
-
-### Fleet Cargo V0.7
-- `GET /fleet/{id}/cargo` - Contenu cargo avion
-- `POST /fleet/{id}/load` - Charger cargo (avec validation poids)
-- `POST /fleet/{id}/unload` - Décharger cargo (même aéroport)
-- `PATCH /fleet/{id}/location` - Mise à jour position après vol
-
-### Company Permissions V0.7
-- `GET /company/permissions` - Liste permissions membres
-- `GET /company/permissions/{user_id}` - Permissions d'un membre
-- `PATCH /company/permissions/{user_id}` - Modifier permissions
-
-### Market (Marché)
-- `GET /market/orders` - Liste ordres
-- `POST /market/orders` - Créer ordre
-- `DELETE /market/orders/{id}` - Annuler ordre
-
-### World (Données publiques)
-- `GET /world/items` - Liste items (filtres: tier, tag, is_raw)
-- `GET /world/items/{id}` - Détails item
-- `GET /world/items/search/{name}` - Recherche item
-- `GET /world/recipes` - Liste recettes
-- `GET /world/recipes/{id}` - Détails recette + ingrédients
-- `GET /world/airports/{ident}/slots` - Slots disponibles
-- `GET /world/stats/items` - Stats items
-- `GET /world/stats/recipes` - Stats recettes
-
-### Factories (Système d'usines)
-- `GET /factories` - Liste mes usines
-- `POST /factories` - Créer usine
-- `GET /factories/{id}` - Détails usine
-- `PATCH /factories/{id}` - Modifier usine
-- `DELETE /factories/{id}` - Détruire usine
-- `GET /factories/{id}/storage` - Inventaire usine
-- `POST /factories/{id}/storage/deposit` - Déposer items
-- `POST /factories/{id}/storage/withdraw` - Retirer items
-- `POST /factories/{id}/production/start` - Lancer production
-- `GET /factories/{id}/batches` - Liste batches
-- `POST /factories/{id}/food` - Ajouter nourriture
-- `GET /factories/{id}/food/status` - Status nourriture
-
-### Workers V0.6 (15+ endpoints)
-- `GET /workers/pools` - Liste pools recrutement
-- `GET /workers/pool/{airport}` - Workers disponibles
-- `POST /workers/hire/{company_id}` - Embaucher un worker
-- `POST /workers/hire-bulk/{company_id}` - Embaucher plusieurs (max 10)
-- `POST /workers/{id}/assign` - Assigner à factory
-- `POST /workers/{id}/unassign` - Retirer de factory
-- `DELETE /workers/{id}` - Licencier (retour au pool)
-- `GET /workers/{id}` - Détails worker
-- `GET /workers/company/{id}` - Workers d'une company
-- `GET /workers/factory/{id}` - Workers d'une factory
-- `GET /workers/countries` - Stats par pays (42 pays)
-- `GET /workers/country/{code}` - Stats d'un pays
-- `POST /workers/admin/generate-pool/{airport}` - [DEV] Générer pool
+```
+tablette ingame/PackageSources/CarrierPlus/src/
+├── CarrierPlus.tsx              # Point d'entrée principal
+│
+├── types/
+│   └── index.ts                 # Interfaces TypeScript
+│
+├── constants/
+│   └── index.ts                 # URLs, intervalles, prix
+│
+├── state/                       # 17 modules State réactifs
+│   ├── index.ts
+│   ├── AuthState.ts             # Mode P2P, first launch
+│   ├── NavigationState.ts       # Tabs actifs
+│   ├── SettingsState.ts         # Langue, unités
+│   ├── SimVarState.ts           # Position, fuel, vitesse
+│   ├── MapState.ts              # Layers, sélection
+│   ├── MissionState.ts          # Mission active
+│   ├── MissionCreationState.ts  # Création mission
+│   ├── TrackingState.ts         # Progression vol
+│   ├── CheckpointState.ts       # Waypoints
+│   ├── CargoState.ts            # Transfert cargo
+│   ├── HangarState.ts           # Flotte, réparations
+│   ├── CompanyState.ts          # Company data
+│   ├── MarketState.ts           # Ordres marché
+│   ├── PopupState.ts            # Modals
+│   ├── InventoryState.ts        # Items
+│   └── FreeFlightState.ts       # Vol libre
+│
+├── managers/
+│   ├── TrackingManager.ts       # Tracking missions
+│   ├── MapManager.ts            # OpenLayers
+│   ├── MissionCreationManager.ts
+│   ├── FreeFlightManager.ts
+│   ├── DatabaseManager.ts       # SQLite (sql.js)
+│   ├── PersistenceManager.ts    # States ↔ SQLite
+│   └── NetworkManager.ts        # P2P state machine
+│
+├── services/
+│   ├── DataLayer.ts             # Abstraction local/réseau
+│   ├── FleetService.ts          # Gestion flotte
+│   ├── MissionService.ts        # Missions
+│   ├── WorldService.ts          # Aéroports, items
+│   ├── MarketService.ts         # Marché
+│   ├── InitService.ts           # Premier lancement
+│   ├── AIEconomyService.ts      # Économie solo (ordres IA)
+│   ├── PeerClient.ts            # Client P2P
+│   ├── PeerHost.ts              # Serveur P2P (PC only)
+│   └── DiscoveryService.ts      # Trouver le monde
+│
+├── components/                  # Composants UI
+├── helpers/                     # Fonctions utilitaires
+├── views/                       # Vues par onglet
+│
+├── data/
+│   ├── seed.json                # Items, recipes initiaux
+│   └── airports.json            # Cache aéroports (5000+)
+│
+├── locales/                     # i18n (fr, en, de, es, ru)
+│
+└── lib/
+    └── sql.js                   # SQLite pour browser
+```
 
 ---
 
-## APScheduler — 7 Jobs Automatiques
+## Base de données SQLite
 
-| Job | Intervalle | Description |
-|-----|------------|-------------|
-| `batch_completion` | 1 min | Complète batches de production terminés |
-| `t0_auto_production` | 5 min | Production automatique usines NPC T0 |
-| `food_and_injuries` | 1h | Consommation food + check blessures |
-| `salary_payments` | 1h | Paiement salaires workers |
-| `injury_processing` | 1h | Traitement blessures (mort >10 jours) |
-| `pool_reset` | 6h | Régénération pools workers aéroports |
-| `dead_workers_cleanup` | 24h | Nettoyage workers morts (>30 jours) |
+### Schéma (15 tables)
+
+**Core (5 tables)**
+| Table | Description |
+|-------|-------------|
+| `player` | Profil joueur (id, name, money, xp, home_airport) |
+| `company` | Company du joueur (si achetée) |
+| `aircraft` | Flotte (personal + company) |
+| `inventory_locations` | Emplacements stockage |
+| `inventory_items` | Items par emplacement |
+
+**World Data (3 tables)**
+| Table | Description |
+|-------|-------------|
+| `items` | 94 items (T0-T2) |
+| `recipes` | 60 recettes |
+| `airports` | Cache aéroports MSFS |
+
+**Factories (3 tables)**
+| Table | Description |
+|-------|-------------|
+| `factories` | Usines de production |
+| `factory_storage` | Stockage local usine |
+| `production_batches` | Lots en cours |
+
+**Workers (2 tables)**
+| Table | Description |
+|-------|-------------|
+| `workers` | Workers + Engineers |
+| `country_stats` | Stats par pays (42 pays) |
+
+**Market & Missions (2 tables)**
+| Table | Description |
+|-------|-------------|
+| `market_orders` | Ordres achat/vente |
+| `missions` | Historique missions |
 
 ---
 
-## État actuel du développement
+## Modes de jeu
 
-### V0.5 Factory System (Complété)
+### Mode Solo (offline)
 
-**Phase 1**: Items + Recipes
-- 94 items (T0: 34, T1: 30, T2: 30)
-- 60 recettes (T1: 30, T2: 30)
-- Endpoints world data fonctionnels
+```
+┌─────────────────────────────────────────┐
+│              JOUEUR SOLO                 │
+│                                          │
+│   SQLite local ◄──► EFB                 │
+│        │                                 │
+│        ▼                                 │
+│   AIEconomyService                       │
+│   (génère ordres marché IA)             │
+└─────────────────────────────────────────┘
+```
 
-**Phase 2**: Factories
-- 4 tables factories créées
-- Airport slots system (10/5/2/1 selon type)
-- Factory CRUD avec validations
-- Production avec vérification ingredients/workers
-- Factory storage ↔ Company warehouse transfers
-- 31 usines T0 NPC en France
+- Toutes les données en local
+- Économie simulée par IA
+- Aucune connexion requise
 
-### V0.6 Workers System (Complété)
+### Mode Multijoueur (P2P)
 
-**Tables SQL**:
-- `workers` - Table unifiée (workers + engineers via `worker_type`)
-- `country_worker_stats` - 42 pays avec stats de base
-- `worker_xp_thresholds` - 5 tiers progression XP
-- `airport_worker_pools` - 5,201 pools recrutement
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     1 SEUL MONDE CARRIER+                        │
+│                                                                  │
+│   SHARD EU         SHARD US         SHARD ASIA        SEED      │
+│   (max 100)        (max 100)        (max 100)      (NAS 24/7)   │
+│       │                │                │              │         │
+│       └────────────────┴────────────────┴──────────────┘         │
+│                              │                                   │
+│                    SYNC TEMPS RÉEL (2-5 sec)                     │
+│                                                                  │
+│   Données SYNC: market, inventaires, usines, classements        │
+│   Données LOCAL: position avion, mission en cours               │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-**Fonctionnalités**:
-- Génération workers par nationalité (stats basées sur `iso_country`)
-- Variation ±20% (speed, resistance), ±10% (salaire)
-- Capacités: 200/20 (large), 100/10 (medium)
-- Système de blessures (>10 jours = mort, -10,000 crédits)
-- Consommation food (1 unit/worker/heure)
-- Paiement salaires horaires
-- Bonus engineer (+10% output par engineer, max 50%)
+**Données synchronisées** (monde partagé) :
+- Ordres marché
+- Inventaires par aéroport
+- Usines et production
+- Classements joueurs
 
-**Documentation**: [workers.md](workers.md) | [factories.md](factories.md) | [items-recipes.md](items-recipes.md) | [inventory.md](inventory.md)
+**Données locales** (par joueur) :
+- Position avion temps réel
+- Mission en cours
+- Préférences UI
 
-### V0.7 Unified Inventory System (Complété)
+---
 
-**Anti-cheat par localisation physique**:
-- Items physiquement localisés par aéroport
-- Transferts locaux uniquement (même aéroport)
-- Transport inter-aéroport = vol obligatoire
+## First Launch Flow
 
-**Tables modifiées/créées**:
-- `inventory_locations` - owner_type polymorphe (player/company)
-- `company_aircraft` - cargo_capacity_kg, owner_type flexible
-- `company_permissions` - 12 permissions granulaires
+```
+[MSFS démarre]
+       │
+       ▼
+[EFB s'ouvre] → InitService.initialize()
+       │
+       ├── Player existe dans SQLite?
+       │         │
+       │    Non  │  Oui
+       │         │
+       │         ▼
+       │   [Load existing data]
+       │
+       ▼
+[First Launch Popup]
+       │
+       │ Saisie: Nom, Nationalité, Aéroport de base
+       │
+       ▼
+[completeFirstLaunch()]
+       │
+       ├── Créer Player (100,000 CR)
+       ├── Créer Aircraft personnel (C172)
+       ├── Initialiser seed data (items, recipes)
+       └── Générer market orders IA
+       │
+       ▼
+[Jeu prêt]
+```
 
-**4 types de containers**:
-1. `player_warehouse` - Entrepôt personnel par aéroport
-2. `company_warehouse` - Entrepôt company par aéroport
-3. `factory_storage` - Stockage local usine
-4. `aircraft` - Cargo avion (avec limite poids)
+---
 
-**Permissions V0.7**:
-- `can_withdraw_warehouse` / `can_deposit_warehouse`
-- `can_withdraw_factory` / `can_deposit_factory`
-- `can_manage_aircraft` / `can_use_aircraft`
-- `can_sell_market` / `can_buy_market`
-- `can_manage_workers` / `can_manage_members` / `can_manage_factories`
-- `is_founder` (tous les droits, non modifiable)
+## Company System
 
-### En cours / À venir
+### Sans Company (début de jeu)
 
-- **V0.8**: Missions / Logistics (transport, supply chain)
-- **V0.9**: Admin Panel MVP
-- **V1.0**: Intégration MSFS 2024
+Le joueur démarre avec :
+- 100,000 CR
+- 1 avion personnel (C172)
+- Accès au marché (achat/vente)
+- Missions disponibles
+
+### Achat Company (50,000 CR)
+
+```
+[Tab Company] → "Créer une compagnie"
+       │
+       │ Saisie: Nom de la company
+       │ Coût: 50,000 CR
+       │
+       ▼
+[InitService.purchaseCompany()]
+       │
+       ├── Vérifier fonds (≥50,000)
+       ├── Déduire 50,000 du wallet
+       └── Créer Company
+       │
+       ▼
+[Company active - Accès à:]
+  - Usines (factories)
+  - Workers
+  - Flotte company
+  - Warehouses company
+```
+
+### Ownership Model
+
+| Type | Description |
+|------|-------------|
+| **Personal** | Avion/warehouse du joueur |
+| **Company** | Avion/warehouse/factory de la company |
 
 ---
 
 ## Gameplay Core Loop
 
-### Mécanique principale: Transport aérien
+### Mécanique principale
 
-**Concept de base:**
-Le joueur est propriétaire d'une compagnie de transport aérien. Le gameplay central consiste à:
-1. **Recruter des workers** dans les pools d'aéroports
-2. **Produire des items** dans des usines (factories)
-3. **Transporter ces items** en avion entre aéroports
-4. **Vendre sur le marché** pour générer des profits
+1. **Recruter** des workers dans les pools d'aéroports
+2. **Produire** des items dans des usines
+3. **Transporter** ces items en avion entre aéroports
+4. **Vendre** sur le marché pour générer des profits
 
-### Système d'inventaires V0.7
+### Système d'inventaires
 
-**4 types de containers (physiquement localisés par aéroport):**
+**4 types de containers** (localisés par aéroport) :
 
-1. **Player Warehouse** (entrepôt personnel)
-   - Créé par le joueur à n'importe quel aéroport
-   - Propriété exclusive du joueur
-   - Pas de restrictions de permissions
+| Container | Description |
+|-----------|-------------|
+| `player_warehouse` | Entrepôt personnel |
+| `company_warehouse` | Entrepôt company |
+| `factory_storage` | Stockage local usine |
+| `aircraft` | Cargo avion (limite poids) |
 
-2. **Company Warehouse** (entrepôt company)
-   - Un par aéroport pour chaque company
-   - Accès contrôlé par permissions
-   - Créé automatiquement au siège (home_airport)
+**Anti-cheat** : Transport inter-aéroport = vol obligatoire
+- ❌ Transfert direct LFPG → EGLL bloqué
+- ✅ Charger avion → Voler → Décharger
 
-3. **Factory Storage** (stockage usine)
-   - Local à chaque usine
-   - Contient ingrédients + produits
-   - Permissions: `can_withdraw_factory` / `can_deposit_factory`
+---
 
-4. **Aircraft Cargo** (cargo avion) ✅ **V0.7**
-   - Capacité limitée (cargo_capacity_kg)
-   - Position = airport_ident de l'avion
-   - Load/Unload au même aéroport uniquement
+## Items & Recipes
 
-**Anti-cheat V0.7:**
-- ❌ Transfert LFPG → EGLL bloqué
-- ✅ Transport = charger avion, voler, décharger
+### Items (94 total)
 
-### Workers et Engineers (V0.6)
+| Tier | Quantité | Type |
+|------|----------|------|
+| T0 | 34 | Matières premières (auto-produites) |
+| T1 | 30 | Produits transformés |
+| T2 | 30 | Produits avancés |
 
-**Workers:**
-- Recrutés dans les pools d'aéroports (par nationalité)
-- Stats: speed, resistance, tier, xp, hourly_salary
-- XP gagnée pendant production (+10 XP × recipe.tier)
-- Max workers par factory selon tier (T1=10, T5=50)
-- Consomment 1 food/heure
+**Tags** : `food`, `construction`, `electronics`, `medical`, `fuel`
 
-**Engineers:**
-- Type spécial de worker (`worker_type = 'engineer'`)
-- Salaire x2, XP x2
-- Bonus production: +10% output par engineer (max 50%)
-- Max engineers par factory selon tier (T1=2, T5=10)
+### Recipes (60 total)
 
-**Système de blessures:**
-- Risque base: 0.5%/heure (x2 sans food)
-- Resistance réduit le risque
+| Tier | Quantité | Ingrédients |
+|------|----------|-------------|
+| T1 | 30 | 2-3 items T0 |
+| T2 | 30 | 2-4 items T0/T1 |
+
+---
+
+## Factory System
+
+### Slots par type d'aéroport
+
+| Type | Slots |
+|------|-------|
+| large_airport | 12 |
+| medium_airport | 6 |
+| small_airport | 3 |
+| seaplane_base | 1 |
+| heliport | 1 |
+| closed | 0 |
+
+### Tiers d'usines
+
+| Tier | Ingrédients | Workers max | Engineers max |
+|------|-------------|-------------|---------------|
+| T1 | 2 | 10 | 0 |
+| T2 | 2 | 20 | 1 |
+| T3 | 3 | 30 | 1 |
+| T4 | 3 | 40 | 2 |
+| T5 | 4 | 50 | 2 |
+| T6 | 4 | 60 | 3 |
+| T7 | 5 | 70 | 3 |
+| T8 | 5 | 80 | 4 |
+| T9 | 5 | 90 | 4 |
+| T10 | 5 | 100 | 5 |
+
+### Production
+
+```
+Temps = base_time × (200 / sum(worker.speed))
+```
+
+- Sans food : -50% vitesse
+- Bonus engineer : +10% output par engineer (max 50%)
+
+---
+
+## Workers System
+
+### Recrutement
+
+- Workers disponibles dans les pools d'aéroports
+- Stats basées sur nationalité (42 pays)
+- Variation ±20% (speed, resistance), ±10% (salaire)
+
+### Capacités pools
+
+| Type aéroport | Workers | Engineers |
+|---------------|---------|-----------|
+| large_airport | 200 | 20 |
+| medium_airport | 100 | 10 |
+| small_airport | 50 | 5 |
+
+### Progression XP
+
+| Tier | XP requis | Bonus |
+|------|-----------|-------|
+| Novice | 0 | - |
+| Apprenti | 1,000 | +5% speed |
+| Compagnon | 5,000 | +10% speed |
+| Expert | 15,000 | +15% speed |
+| Maître | 50,000 | +20% speed |
+
+### Système de blessures
+
+- Risque base : 0.5%/heure
+- Sans food : risque x2
 - Blessure >10 jours → mort
-- Pénalité mort: -10,000 crédits
+- Pénalité mort : -10,000 CR
 
-### Factory System
+### Consommation
 
-**Slots d'usines par aéroport:**
-- large_airport: **10 slots**
-- medium_airport: **5 slots**
-- small_airport: **2 slots**
-- seaplane_base/heliport: **1 slot**
-- closed/autres: **0 slots**
-
-**Production:**
-- Temps = `base_time × (200 / sum(worker.speed))`
-- Sans food: -50% vitesse
-- Bonus engineer: +10% output par engineer
+- 1 food/worker/heure
+- Sans food : 30% efficacité + risque blessures x2
 
 ---
 
-## URLs
+## Mission System
 
-**Développement local**:
-- API docs : `http://localhost:8080/api/docs`
-- API health : `http://localhost:8080/api/health`
-- Directus : `http://localhost:8055`
-- PostgreSQL : `localhost:5432`
+### Création mission
 
-**Production (NAS)**:
-- API docs : `http://192.168.1.15:8080/api/docs`
-- Directus : `http://192.168.1.15:8055`
+1. Sélectionner avion (au sol, systèmes OK)
+2. Configurer cargo
+3. Entrer destination ICAO
+4. Valider et décoller
 
----
+### Tracking
 
-## Démarrage rapide
+- Progression basée sur distance parcourue
+- Détection waypoints via GPS MSFS
+- Scoring : landing, fuel, time, events
 
-### Prérequis
-- Docker Desktop
-- DBeaver (recommandé pour gestion DB)
-- Git
+### Scoring
 
-### Installation
-
-1. **Cloner le repo**
-```bash
-git clone https://github.com/Tinouan/mfs24-carrier-plus.git
-cd mfs24-carrier-plus
-```
-
-2. **Créer le fichier .env**
-```bash
-cp .env.example .env
-# Éditer .env si besoin (ports, passwords)
-```
-
-3. **Démarrer les services**
-```bash
-docker compose up -d
-```
-
-4. **Vérifier que l'API est démarrée**
-```bash
-curl http://localhost:8080/api/health
-```
-
-### Connexion à la base de données (DBeaver)
-
-- Host: `localhost`
-- Port: `5432`
-- Database: `msfs`
-- Username: `msfs` (voir .env)
-- Password: (voir .env)
+| Catégorie | Critères |
+|-----------|----------|
+| Landing | Vertical speed, centerline |
+| Fuel | Consommation vs estimée |
+| Time | Durée vs estimée |
+| Events | Incidents en vol |
+| Bonus | Night, no-autopilot, etc. |
 
 ---
 
-## Documentation technique
+## P2P Network
 
-- [company.md](company.md) - Système Company & Membres
-- [profile.md](profile.md) - Auth & Player Profile
-- [inventory.md](inventory.md) - Système Inventory & Marché
-- [workers.md](workers.md) - Système Workers V0.6
-- [factories.md](factories.md) - Système Factories V0.5
-- [items-recipes.md](items-recipes.md) - Items et Recettes (94 items, 60 recipes)
+### États NetworkManager
+
+```
+┌─────────┐     ┌─────────┐     ┌─────────┐
+│  SOLO   │────►│ JOINING │────►│ CLIENT  │
+└─────────┘     └─────────┘     └─────────┘
+     │               │               │
+     │               ▼               │
+     │         ┌─────────┐          │
+     └────────►│  HOST   │◄─────────┘
+               └─────────┘
+```
+
+| État | Description |
+|------|-------------|
+| `solo` | Mode offline, données locales uniquement |
+| `joining` | Connexion à un shard en cours |
+| `client` | Connecté, reçoit les sync |
+| `host` | Héberge un shard (PC uniquement) |
+
+### peers.json
+
+```json
+{
+  "version": 1,
+  "shards": [
+    {
+      "id": "seed",
+      "name": "SEED (Backup)",
+      "host": "ton-nas.synology.me",
+      "port": 7777,
+      "region": "EU",
+      "permanent": true
+    },
+    {
+      "id": "eu-1",
+      "name": "Europe 1",
+      "host": "dynamic",
+      "port": 7777,
+      "region": "EU",
+      "permanent": false
+    }
+  ]
+}
+```
 
 ---
 
 ## Stack technique
 
-- **Backend**: Python 3.11 + FastAPI + SQLAlchemy + Pydantic
-- **Database**: PostgreSQL 16
-- **Scheduler**: APScheduler (BackgroundScheduler)
-- **CMS**: Directus
-- **Proxy**: Nginx
-- **Container**: Docker + Docker Compose
-- **Auth**: JWT (via python-jose)
+### EFB (Frontend)
+
+| Composant | Technologie |
+|-----------|-------------|
+| Framework | TypeScript + FSComponent (MSFS SDK) |
+| Build | esbuild + SASS |
+| State | MSFS Subject<T> (réactif) |
+| Map | OpenLayers 10 |
+| Storage | SQLite (sql.js) |
+| i18n | 5 langues (fr, en, de, es, ru) |
+
+### Contraintes Coherent GT
+
+- Pas de CSS classes dynamiques → styles inline
+- Pas de `onClick` → `Button` avec `callback`
+- Pas de `.map()` JSX → `ref` + `innerHTML`
+- Debug : `localhost:19999` + `Ctrl+Shift+R`
+
+---
+
+## Documentation associée
+
+| Fichier | Description |
+|---------|-------------|
+| [efb-tablet.md](efb-tablet.md) | UI et composants EFB |
+| [items-recipes.md](items-recipes.md) | Liste items et recettes |
+| [factories.md](factories.md) | Système d'usines |
+| [workers.md](workers.md) | Système de workers |
+| [inventory.md](inventory.md) | Gestion inventaires |
+| [market.md](market.md) | Système de marché |
+| [missions.md](missions.md) | Système de missions |
+
+---
+
+## Roadmap
+
+### V0.9 — Mode P2P (En cours)
+
+- [x] Architecture P2P définie
+- [ ] DatabaseManager (SQLite)
+- [ ] PersistenceManager
+- [ ] DataLayer
+- [ ] Mode solo complet
+- [ ] NetworkManager
+- [ ] Sync multi-shards
+
+### V1.0 — Release
+
+- [ ] Polish UI
+- [ ] Tests complets
+- [ ] Documentation utilisateur
+
+### V1.1+ — Futures évolutions
+
+- [ ] Licences pilote (PPL, IFR, CPL, ATPL)
+- [ ] Examens de licence
+- [ ] Contrats NPC
+- [ ] Classements mondiaux
 
 ---
 

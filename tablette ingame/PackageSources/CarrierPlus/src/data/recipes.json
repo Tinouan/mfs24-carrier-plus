@@ -1,0 +1,1220 @@
+{
+  "recipes": [
+    {
+      "id": "dried-fish",
+      "name": "Dried Fish",
+      "tier": 1,
+      "resultItemId": "dried-fish",
+      "resultQuantity": 10,
+      "productionTimeHours": 2,
+      "baseWorkers": 10,
+      "description": "Preserve fish with salt for long storage",
+      "ingredients": [
+        {
+          "itemId": "raw-fish",
+          "quantity": 2
+        },
+        {
+          "itemId": "raw-salt",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "bread",
+      "name": "Bread",
+      "tier": 1,
+      "resultItemId": "bread",
+      "resultQuantity": 20,
+      "productionTimeHours": 1.5,
+      "baseWorkers": 10,
+      "description": "Simple bread from wheat flour",
+      "ingredients": [
+        {
+          "itemId": "raw-wheat",
+          "quantity": 2
+        },
+        {
+          "itemId": "water",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "salted-meat",
+      "name": "Salted Meat",
+      "tier": 1,
+      "resultItemId": "salted-meat",
+      "resultQuantity": 8,
+      "productionTimeHours": 3,
+      "baseWorkers": 10,
+      "description": "Preserved meat with salt",
+      "ingredients": [
+        {
+          "itemId": "raw-meat",
+          "quantity": 2
+        },
+        {
+          "itemId": "raw-salt",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "vegetable-stew",
+      "name": "Vegetable Stew",
+      "tier": 1,
+      "resultItemId": "vegetable-stew",
+      "resultQuantity": 15,
+      "productionTimeHours": 2,
+      "baseWorkers": 10,
+      "description": "Basic vegetable stew",
+      "ingredients": [
+        {
+          "itemId": "raw-vegetables",
+          "quantity": 3
+        },
+        {
+          "itemId": "water",
+          "quantity": 2
+        }
+      ]
+    },
+    {
+      "id": "fruit-jam",
+      "name": "Fruit Jam",
+      "tier": 1,
+      "resultItemId": "fruit-jam",
+      "resultQuantity": 12,
+      "productionTimeHours": 3,
+      "baseWorkers": 10,
+      "description": "Sweet fruit preserve",
+      "ingredients": [
+        {
+          "itemId": "raw-fruits",
+          "quantity": 3
+        },
+        {
+          "itemId": "raw-sugar",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "sugar-syrup",
+      "name": "Sugar Syrup",
+      "tier": 1,
+      "resultItemId": "sugar-syrup",
+      "resultQuantity": 10,
+      "productionTimeHours": 1,
+      "baseWorkers": 10,
+      "description": "Refined sugar solution",
+      "ingredients": [
+        {
+          "itemId": "raw-sugar",
+          "quantity": 2
+        },
+        {
+          "itemId": "water",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "butter",
+      "name": "Butter",
+      "tier": 1,
+      "resultItemId": "butter",
+      "resultQuantity": 5,
+      "productionTimeHours": 2,
+      "baseWorkers": 10,
+      "description": "Churned butter from milk",
+      "ingredients": [
+        {
+          "itemId": "raw-milk",
+          "quantity": 4
+        },
+        {
+          "itemId": "raw-salt",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "flour",
+      "name": "Flour",
+      "tier": 1,
+      "resultItemId": "flour",
+      "resultQuantity": 25,
+      "productionTimeHours": 1,
+      "baseWorkers": 10,
+      "description": "Milled wheat flour",
+      "ingredients": [
+        {
+          "itemId": "raw-wheat",
+          "quantity": 3
+        },
+        {
+          "itemId": "water",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "cocoa-powder",
+      "name": "Cocoa Powder",
+      "tier": 1,
+      "resultItemId": "cocoa-powder",
+      "resultQuantity": 8,
+      "productionTimeHours": 2,
+      "baseWorkers": 10,
+      "description": "Ground cocoa beans",
+      "ingredients": [
+        {
+          "itemId": "raw-cocoa",
+          "quantity": 3
+        },
+        {
+          "itemId": "raw-sugar",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "vanilla-extract",
+      "name": "Vanilla Extract",
+      "tier": 1,
+      "resultItemId": "vanilla-extract",
+      "resultQuantity": 3,
+      "productionTimeHours": 4,
+      "baseWorkers": 10,
+      "description": "Concentrated vanilla essence",
+      "ingredients": [
+        {
+          "itemId": "raw-vanilla",
+          "quantity": 2
+        },
+        {
+          "itemId": "water",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "steel-ingot",
+      "name": "Steel Ingot",
+      "tier": 1,
+      "resultItemId": "steel-ingot",
+      "resultQuantity": 5,
+      "productionTimeHours": 4,
+      "baseWorkers": 10,
+      "description": "Refined steel from iron ore",
+      "ingredients": [
+        {
+          "itemId": "iron-ore",
+          "quantity": 2
+        },
+        {
+          "itemId": "coal",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "copper-ingot",
+      "name": "Copper Ingot",
+      "tier": 1,
+      "resultItemId": "copper-ingot",
+      "resultQuantity": 5,
+      "productionTimeHours": 3,
+      "baseWorkers": 10,
+      "description": "Pure copper ingots",
+      "ingredients": [
+        {
+          "itemId": "copper-ore",
+          "quantity": 2
+        },
+        {
+          "itemId": "coal",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "planks",
+      "name": "Planks",
+      "tier": 1,
+      "resultItemId": "planks",
+      "resultQuantity": 10,
+      "productionTimeHours": 1,
+      "baseWorkers": 10,
+      "description": "Processed wooden planks",
+      "ingredients": [
+        {
+          "itemId": "raw-wood",
+          "quantity": 2
+        },
+        {
+          "itemId": "water",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "stone-bricks",
+      "name": "Stone Bricks",
+      "tier": 1,
+      "resultItemId": "stone-bricks",
+      "resultQuantity": 8,
+      "productionTimeHours": 2,
+      "baseWorkers": 10,
+      "description": "Cut stone blocks",
+      "ingredients": [
+        {
+          "itemId": "raw-stone",
+          "quantity": 3
+        },
+        {
+          "itemId": "water",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "glass",
+      "name": "Glass",
+      "tier": 1,
+      "resultItemId": "glass",
+      "resultQuantity": 6,
+      "productionTimeHours": 3,
+      "baseWorkers": 10,
+      "description": "Melted sand into glass",
+      "ingredients": [
+        {
+          "itemId": "sand",
+          "quantity": 4
+        },
+        {
+          "itemId": "coal",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "bricks",
+      "name": "Bricks",
+      "tier": 1,
+      "resultItemId": "bricks",
+      "resultQuantity": 12,
+      "productionTimeHours": 2,
+      "baseWorkers": 10,
+      "description": "Fired clay bricks",
+      "ingredients": [
+        {
+          "itemId": "clay",
+          "quantity": 3
+        },
+        {
+          "itemId": "coal",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "cement",
+      "name": "Cement",
+      "tier": 1,
+      "resultItemId": "cement",
+      "resultQuantity": 10,
+      "productionTimeHours": 2.5,
+      "baseWorkers": 10,
+      "description": "Processed limestone cement",
+      "ingredients": [
+        {
+          "itemId": "limestone",
+          "quantity": 2
+        },
+        {
+          "itemId": "water",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "aluminum-ingot",
+      "name": "Aluminum Ingot",
+      "tier": 1,
+      "resultItemId": "aluminum-ingot",
+      "resultQuantity": 4,
+      "productionTimeHours": 5,
+      "baseWorkers": 10,
+      "description": "Refined aluminum from ore",
+      "ingredients": [
+        {
+          "itemId": "aluminum-ore",
+          "quantity": 2
+        },
+        {
+          "itemId": "coal",
+          "quantity": 2
+        }
+      ]
+    },
+    {
+      "id": "titanium-ingot",
+      "name": "Titanium Ingot",
+      "tier": 1,
+      "resultItemId": "titanium-ingot",
+      "resultQuantity": 2,
+      "productionTimeHours": 8,
+      "baseWorkers": 10,
+      "description": "High-grade titanium ingots",
+      "ingredients": [
+        {
+          "itemId": "titanium-ore",
+          "quantity": 3
+        },
+        {
+          "itemId": "coal",
+          "quantity": 2
+        }
+      ]
+    },
+    {
+      "id": "marble-slabs",
+      "name": "Marble Slabs",
+      "tier": 1,
+      "resultItemId": "marble-slabs",
+      "resultQuantity": 4,
+      "productionTimeHours": 3,
+      "baseWorkers": 10,
+      "description": "Polished marble slabs",
+      "ingredients": [
+        {
+          "itemId": "granite",
+          "quantity": 2
+        },
+        {
+          "itemId": "water",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "diesel",
+      "name": "Diesel",
+      "tier": 1,
+      "resultItemId": "diesel",
+      "resultQuantity": 8,
+      "productionTimeHours": 3,
+      "baseWorkers": 10,
+      "description": "Refined diesel fuel",
+      "ingredients": [
+        {
+          "itemId": "crude-oil",
+          "quantity": 3
+        },
+        {
+          "itemId": "coal",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "charcoal",
+      "name": "Charcoal",
+      "tier": 1,
+      "resultItemId": "charcoal",
+      "resultQuantity": 6,
+      "productionTimeHours": 4,
+      "baseWorkers": 10,
+      "description": "Processed coal for heating",
+      "ingredients": [
+        {
+          "itemId": "coal",
+          "quantity": 2
+        },
+        {
+          "itemId": "raw-wood",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "compressed-gas",
+      "name": "Compressed Gas",
+      "tier": 1,
+      "resultItemId": "compressed-gas",
+      "resultQuantity": 5,
+      "productionTimeHours": 2,
+      "baseWorkers": 10,
+      "description": "Liquefied natural gas",
+      "ingredients": [
+        {
+          "itemId": "natural-gas",
+          "quantity": 3
+        },
+        {
+          "itemId": "coal",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "biofuel",
+      "name": "Biofuel",
+      "tier": 1,
+      "resultItemId": "biofuel",
+      "resultQuantity": 7,
+      "productionTimeHours": 6,
+      "baseWorkers": 10,
+      "description": "Organic fuel from biomass",
+      "ingredients": [
+        {
+          "itemId": "biomass",
+          "quantity": 4
+        },
+        {
+          "itemId": "water",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "uranium-pellets",
+      "name": "Uranium Pellets",
+      "tier": 1,
+      "resultItemId": "uranium-pellets",
+      "resultQuantity": 1,
+      "productionTimeHours": 12,
+      "baseWorkers": 10,
+      "description": "Enriched uranium for reactors",
+      "ingredients": [
+        {
+          "itemId": "uranium-ore",
+          "quantity": 2
+        },
+        {
+          "itemId": "water",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "rubber-sheets",
+      "name": "Rubber Sheets",
+      "tier": 1,
+      "resultItemId": "rubber-sheets",
+      "resultQuantity": 8,
+      "productionTimeHours": 2,
+      "baseWorkers": 10,
+      "description": "Vulcanized rubber sheets",
+      "ingredients": [
+        {
+          "itemId": "raw-rubber",
+          "quantity": 3
+        },
+        {
+          "itemId": "sulfur",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "fabric",
+      "name": "Fabric",
+      "tier": 1,
+      "resultItemId": "fabric",
+      "resultQuantity": 12,
+      "productionTimeHours": 1.5,
+      "baseWorkers": 10,
+      "description": "Woven cotton fabric",
+      "ingredients": [
+        {
+          "itemId": "cotton",
+          "quantity": 4
+        },
+        {
+          "itemId": "water",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "silicon-wafers",
+      "name": "Silicon Wafers",
+      "tier": 1,
+      "resultItemId": "silicon-wafers",
+      "resultQuantity": 4,
+      "productionTimeHours": 6,
+      "baseWorkers": 10,
+      "description": "Purified silicon for electronics",
+      "ingredients": [
+        {
+          "itemId": "raw-silicon",
+          "quantity": 2
+        },
+        {
+          "itemId": "coal",
+          "quantity": 2
+        }
+      ]
+    },
+    {
+      "id": "sulfuric-acid",
+      "name": "Sulfuric Acid",
+      "tier": 1,
+      "resultItemId": "sulfuric-acid",
+      "resultQuantity": 6,
+      "productionTimeHours": 3,
+      "baseWorkers": 10,
+      "description": "Industrial grade acid",
+      "ingredients": [
+        {
+          "itemId": "sulfur",
+          "quantity": 3
+        },
+        {
+          "itemId": "water",
+          "quantity": 2
+        }
+      ]
+    },
+    {
+      "id": "fertilizer",
+      "name": "Fertilizer",
+      "tier": 1,
+      "resultItemId": "fertilizer",
+      "resultQuantity": 10,
+      "productionTimeHours": 2,
+      "baseWorkers": 10,
+      "description": "Phosphate-based fertilizer",
+      "ingredients": [
+        {
+          "itemId": "phosphate",
+          "quantity": 3
+        },
+        {
+          "itemId": "water",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "quality-bread",
+      "name": "Quality Bread",
+      "tier": 2,
+      "resultItemId": "quality-bread",
+      "resultQuantity": 15,
+      "productionTimeHours": 2.5,
+      "baseWorkers": 10,
+      "description": "High-quality artisan bread",
+      "ingredients": [
+        {
+          "itemId": "flour",
+          "quantity": 3
+        },
+        {
+          "itemId": "butter",
+          "quantity": 1
+        },
+        {
+          "itemId": "water",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "smoked-fish",
+      "name": "Smoked Fish",
+      "tier": 2,
+      "resultItemId": "smoked-fish",
+      "resultQuantity": 8,
+      "productionTimeHours": 4,
+      "baseWorkers": 10,
+      "description": "Premium smoked fish",
+      "ingredients": [
+        {
+          "itemId": "dried-fish",
+          "quantity": 2
+        },
+        {
+          "itemId": "raw-wood",
+          "quantity": 1
+        },
+        {
+          "itemId": "raw-salt",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "chocolate-bar",
+      "name": "Chocolate Bar",
+      "tier": 2,
+      "resultItemId": "chocolate-bar",
+      "resultQuantity": 6,
+      "productionTimeHours": 3,
+      "baseWorkers": 10,
+      "description": "Rich chocolate bar",
+      "ingredients": [
+        {
+          "itemId": "cocoa-powder",
+          "quantity": 2
+        },
+        {
+          "itemId": "sugar-syrup",
+          "quantity": 1
+        },
+        {
+          "itemId": "butter",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "fruit-cake",
+      "name": "Fruit Cake",
+      "tier": 2,
+      "resultItemId": "fruit-cake",
+      "resultQuantity": 5,
+      "productionTimeHours": 4,
+      "baseWorkers": 10,
+      "description": "Dense fruit cake",
+      "ingredients": [
+        {
+          "itemId": "flour",
+          "quantity": 2
+        },
+        {
+          "itemId": "fruit-jam",
+          "quantity": 2
+        },
+        {
+          "itemId": "sugar-syrup",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "cheese",
+      "name": "Cheese",
+      "tier": 2,
+      "resultItemId": "cheese",
+      "resultQuantity": 4,
+      "productionTimeHours": 8,
+      "baseWorkers": 10,
+      "description": "Aged cheese",
+      "ingredients": [
+        {
+          "itemId": "raw-milk",
+          "quantity": 5
+        },
+        {
+          "itemId": "raw-salt",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "sausage",
+      "name": "Sausage",
+      "tier": 2,
+      "resultItemId": "sausage",
+      "resultQuantity": 10,
+      "productionTimeHours": 3,
+      "baseWorkers": 10,
+      "description": "Cured meat sausage",
+      "ingredients": [
+        {
+          "itemId": "salted-meat",
+          "quantity": 3
+        },
+        {
+          "itemId": "raw-salt",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "vegetable-soup",
+      "name": "Vegetable Soup",
+      "tier": 2,
+      "resultItemId": "vegetable-soup",
+      "resultQuantity": 12,
+      "productionTimeHours": 2,
+      "baseWorkers": 10,
+      "description": "Rich vegetable soup with bread",
+      "ingredients": [
+        {
+          "itemId": "vegetable-stew",
+          "quantity": 2
+        },
+        {
+          "itemId": "bread",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "pastry",
+      "name": "Pastry",
+      "tier": 2,
+      "resultItemId": "pastry",
+      "resultQuantity": 8,
+      "productionTimeHours": 2,
+      "baseWorkers": 10,
+      "description": "Buttery pastries",
+      "ingredients": [
+        {
+          "itemId": "flour",
+          "quantity": 2
+        },
+        {
+          "itemId": "butter",
+          "quantity": 2
+        },
+        {
+          "itemId": "sugar-syrup",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "dried-fruit",
+      "name": "Dried Fruit",
+      "tier": 2,
+      "resultItemId": "dried-fruit",
+      "resultQuantity": 10,
+      "productionTimeHours": 6,
+      "baseWorkers": 10,
+      "description": "Sun-dried fruits",
+      "ingredients": [
+        {
+          "itemId": "raw-fruits",
+          "quantity": 4
+        },
+        {
+          "itemId": "raw-sugar",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "honey-bread",
+      "name": "Honey Bread",
+      "tier": 2,
+      "resultItemId": "honey-bread",
+      "resultQuantity": 8,
+      "productionTimeHours": 3,
+      "baseWorkers": 10,
+      "description": "Sweet honey bread",
+      "ingredients": [
+        {
+          "itemId": "bread",
+          "quantity": 2
+        },
+        {
+          "itemId": "sugar-syrup",
+          "quantity": 2
+        },
+        {
+          "itemId": "vanilla-extract",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "reinforced-steel",
+      "name": "Reinforced Steel",
+      "tier": 2,
+      "resultItemId": "reinforced-steel",
+      "resultQuantity": 4,
+      "productionTimeHours": 6,
+      "baseWorkers": 10,
+      "description": "High-strength steel beams",
+      "ingredients": [
+        {
+          "itemId": "steel-ingot",
+          "quantity": 3
+        },
+        {
+          "itemId": "aluminum-ingot",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "wire-cable",
+      "name": "Wire Cable",
+      "tier": 2,
+      "resultItemId": "wire-cable",
+      "resultQuantity": 12,
+      "productionTimeHours": 2,
+      "baseWorkers": 10,
+      "description": "Copper wire cables",
+      "ingredients": [
+        {
+          "itemId": "copper-ingot",
+          "quantity": 2
+        },
+        {
+          "itemId": "rubber-sheets",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "wooden-beams",
+      "name": "Wooden Beams",
+      "tier": 2,
+      "resultItemId": "wooden-beams",
+      "resultQuantity": 6,
+      "productionTimeHours": 3,
+      "baseWorkers": 10,
+      "description": "Large structural beams",
+      "ingredients": [
+        {
+          "itemId": "planks",
+          "quantity": 4
+        }
+      ]
+    },
+    {
+      "id": "concrete-blocks",
+      "name": "Concrete Blocks",
+      "tier": 2,
+      "resultItemId": "concrete-blocks",
+      "resultQuantity": 8,
+      "productionTimeHours": 4,
+      "baseWorkers": 10,
+      "description": "Heavy concrete blocks",
+      "ingredients": [
+        {
+          "itemId": "cement",
+          "quantity": 2
+        },
+        {
+          "itemId": "stone-bricks",
+          "quantity": 2
+        },
+        {
+          "itemId": "water",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "window-panes",
+      "name": "Window Panes",
+      "tier": 2,
+      "resultItemId": "window-panes",
+      "resultQuantity": 5,
+      "productionTimeHours": 3,
+      "baseWorkers": 10,
+      "description": "Glass window frames",
+      "ingredients": [
+        {
+          "itemId": "glass",
+          "quantity": 3
+        },
+        {
+          "itemId": "aluminum-ingot",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "insulation",
+      "name": "Insulation",
+      "tier": 2,
+      "resultItemId": "insulation",
+      "resultQuantity": 10,
+      "productionTimeHours": 2,
+      "baseWorkers": 10,
+      "description": "Rubber insulation material",
+      "ingredients": [
+        {
+          "itemId": "rubber-sheets",
+          "quantity": 2
+        },
+        {
+          "itemId": "fabric",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "steel-pipes",
+      "name": "Steel Pipes",
+      "tier": 2,
+      "resultItemId": "steel-pipes",
+      "resultQuantity": 6,
+      "productionTimeHours": 4,
+      "baseWorkers": 10,
+      "description": "Steel piping",
+      "ingredients": [
+        {
+          "itemId": "steel-ingot",
+          "quantity": 3
+        }
+      ]
+    },
+    {
+      "id": "aluminum-frame",
+      "name": "Aluminum Frame",
+      "tier": 2,
+      "resultItemId": "aluminum-frame",
+      "resultQuantity": 4,
+      "productionTimeHours": 5,
+      "baseWorkers": 10,
+      "description": "Lightweight aluminum frames",
+      "ingredients": [
+        {
+          "itemId": "aluminum-ingot",
+          "quantity": 3
+        }
+      ]
+    },
+    {
+      "id": "circuit-board",
+      "name": "Circuit Board",
+      "tier": 2,
+      "resultItemId": "circuit-board",
+      "resultQuantity": 3,
+      "productionTimeHours": 8,
+      "baseWorkers": 10,
+      "description": "Basic circuit boards",
+      "ingredients": [
+        {
+          "itemId": "silicon-wafers",
+          "quantity": 2
+        },
+        {
+          "itemId": "copper-ingot",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "titanium-plates",
+      "name": "Titanium Plates",
+      "tier": 2,
+      "resultItemId": "titanium-plates",
+      "resultQuantity": 2,
+      "productionTimeHours": 10,
+      "baseWorkers": 10,
+      "description": "Armor-grade titanium",
+      "ingredients": [
+        {
+          "itemId": "titanium-ingot",
+          "quantity": 2
+        }
+      ]
+    },
+    {
+      "id": "jet-fuel",
+      "name": "Jet Fuel",
+      "tier": 2,
+      "resultItemId": "jet-fuel",
+      "resultQuantity": 6,
+      "productionTimeHours": 4,
+      "baseWorkers": 10,
+      "description": "High-grade aviation fuel",
+      "ingredients": [
+        {
+          "itemId": "diesel",
+          "quantity": 2
+        },
+        {
+          "itemId": "crude-oil",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "heating-oil",
+      "name": "Heating Oil",
+      "tier": 2,
+      "resultItemId": "heating-oil",
+      "resultQuantity": 8,
+      "productionTimeHours": 3,
+      "baseWorkers": 10,
+      "description": "Refined heating oil",
+      "ingredients": [
+        {
+          "itemId": "diesel",
+          "quantity": 2
+        },
+        {
+          "itemId": "coal",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "premium-biofuel",
+      "name": "Premium Biofuel",
+      "tier": 2,
+      "resultItemId": "premium-biofuel",
+      "resultQuantity": 5,
+      "productionTimeHours": 8,
+      "baseWorkers": 10,
+      "description": "High-efficiency biofuel",
+      "ingredients": [
+        {
+          "itemId": "biofuel",
+          "quantity": 3
+        },
+        {
+          "itemId": "sulfuric-acid",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "rocket-propellant",
+      "name": "Rocket Propellant",
+      "tier": 2,
+      "resultItemId": "rocket-propellant",
+      "resultQuantity": 2,
+      "productionTimeHours": 10,
+      "baseWorkers": 10,
+      "description": "Specialized rocket fuel",
+      "ingredients": [
+        {
+          "itemId": "jet-fuel",
+          "quantity": 2
+        },
+        {
+          "itemId": "sulfuric-acid",
+          "quantity": 2
+        }
+      ]
+    },
+    {
+      "id": "nuclear-fuel-rod",
+      "name": "Nuclear Fuel Rod",
+      "tier": 2,
+      "resultItemId": "nuclear-fuel-rod",
+      "resultQuantity": 1,
+      "productionTimeHours": 24,
+      "baseWorkers": 10,
+      "description": "Enriched nuclear fuel",
+      "ingredients": [
+        {
+          "itemId": "uranium-pellets",
+          "quantity": 3
+        },
+        {
+          "itemId": "steel-ingot",
+          "quantity": 2
+        }
+      ]
+    },
+    {
+      "id": "plastic-sheets",
+      "name": "Plastic Sheets",
+      "tier": 2,
+      "resultItemId": "plastic-sheets",
+      "resultQuantity": 8,
+      "productionTimeHours": 3,
+      "baseWorkers": 10,
+      "description": "Industrial plastic sheets",
+      "ingredients": [
+        {
+          "itemId": "crude-oil",
+          "quantity": 2
+        },
+        {
+          "itemId": "sulfuric-acid",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "medical-bandages",
+      "name": "Medical Bandages",
+      "tier": 2,
+      "resultItemId": "medical-bandages",
+      "resultQuantity": 15,
+      "productionTimeHours": 2,
+      "baseWorkers": 10,
+      "description": "Sterilized fabric bandages",
+      "ingredients": [
+        {
+          "itemId": "fabric",
+          "quantity": 3
+        },
+        {
+          "itemId": "water",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "cleaning-solution",
+      "name": "Cleaning Solution",
+      "tier": 2,
+      "resultItemId": "cleaning-solution",
+      "resultQuantity": 10,
+      "productionTimeHours": 2,
+      "baseWorkers": 10,
+      "description": "Industrial cleaner",
+      "ingredients": [
+        {
+          "itemId": "sulfuric-acid",
+          "quantity": 1
+        },
+        {
+          "itemId": "water",
+          "quantity": 3
+        }
+      ]
+    },
+    {
+      "id": "paint",
+      "name": "Paint",
+      "tier": 2,
+      "resultItemId": "paint",
+      "resultQuantity": 8,
+      "productionTimeHours": 2.5,
+      "baseWorkers": 10,
+      "description": "Colored paint",
+      "ingredients": [
+        {
+          "itemId": "crude-oil",
+          "quantity": 1
+        },
+        {
+          "itemId": "sulfuric-acid",
+          "quantity": 1
+        },
+        {
+          "itemId": "water",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "adhesive",
+      "name": "Adhesive",
+      "tier": 2,
+      "resultItemId": "adhesive",
+      "resultQuantity": 6,
+      "productionTimeHours": 3,
+      "baseWorkers": 10,
+      "description": "Strong industrial glue",
+      "ingredients": [
+        {
+          "itemId": "raw-rubber",
+          "quantity": 2
+        },
+        {
+          "itemId": "sulfuric-acid",
+          "quantity": 1
+        }
+      ]
+    }
+  ]
+}

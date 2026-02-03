@@ -1,329 +1,282 @@
-# Profile System - Documentation Technique
+# Profile System - Documentation Technique (P2P)
 
 ## Vue d'ensemble
 
-Le système de profils gère deux types de profils:
-1. **Player Profile** - Profil personnel du joueur/pilote
-2. **Company Profile** - Profil de la compagnie (voir [company.md](company.md))
+Le système de profils gère les données du joueur en mode P2P (local-first).
+
+**Architecture** : SQLite local via `DatabaseManager`
 
 ---
 
-## Tables SQL
+## Table SQLite
 
-### `game.users`
+### `player`
 
-Table des comptes utilisateurs (authentification).
+Table du profil joueur (stockée localement).
 
 | Colonne | Type | Description |
 |---------|------|-------------|
-| `id` | UUID | Clé primaire |
-| `email` | VARCHAR | Email unique (login) |
-| `username` | VARCHAR | Nom d'utilisateur unique |
-| `password_hash` | VARCHAR | Hash Argon2 du mot de passe |
-| `is_active` | BOOLEAN | Compte actif (défaut: true) |
-| `is_admin` | BOOLEAN | Administrateur (défaut: false) |
-| `created_at` | TIMESTAMPTZ | Date d'inscription |
-
-### `game.player_profiles`
-
-Table des profils joueurs (données publiques).
-
-| Colonne | Type | Description |
-|---------|------|-------------|
-| `id` | UUID | Clé primaire |
-| `user_id` | UUID | FK → users (unique) |
-| `display_name` | VARCHAR(32) | Nom d'affichage public |
-| `created_at` | TIMESTAMPTZ | Date de création |
-| `updated_at` | TIMESTAMPTZ | Dernière modification |
-
-**Note:** Le profil est créé automatiquement à la première lecture.
+| `id` | TEXT | UUID unique |
+| `name` | TEXT | Nom du joueur |
+| `nationality` | TEXT | Code pays (ex: "FR") |
+| `home_airport` | TEXT | Aéroport de base (ICAO) |
+| `money` | REAL | Crédits (CR) |
+| `xp` | INTEGER | Points d'expérience |
+| `created_at` | TEXT | Date de création (ISO) |
+| `updated_at` | TEXT | Dernière modification |
 
 ---
 
-## API Endpoints
+## Services TypeScript
 
-### Authentification
+### InitService
 
-| Méthode | Endpoint | Description |
-|---------|----------|-------------|
-| POST | `/auth/register` | Créer un compte |
-| POST | `/auth/login` | Se connecter (retourne JWT) |
+Gère la création du profil au premier lancement.
 
-### Player Profile
+```typescript
+// services/InitService.ts
 
-| Méthode | Endpoint | Description |
-|---------|----------|-------------|
-| GET | `/profile/me` | Mon profil joueur |
-| PATCH | `/profile/me` | Modifier mon profil |
-
----
-
-## Authentification
-
-### Inscription: `POST /auth/register`
-
-**Body:**
-```json
-{
-    "email": "pilote@example.com",
-    "username": "pilote123",
-    "password": "motdepasse123"
+class InitService {
+  // Vérifier si un joueur existe
+  async hasPlayer(): Promise<boolean>
+  
+  // Créer le joueur (first launch)
+  async createPlayer(data: {
+    name: string;
+    nationality: string;
+    homeAirport: string;
+  }): Promise<Player>
+  
+  // Récupérer le joueur actuel
+  async getPlayer(): Promise<Player | null>
+  
+  // Mettre à jour le profil
+  async updatePlayer(updates: Partial<Player>): Promise<Player>
 }
 ```
 
-**Validations:**
-- Email unique et valide
-- Username unique
-- Password: 6-200 caractères
+### PlayerRouter
 
-**Réponse:**
-```json
-{
-    "id": "uuid",
-    "email": "pilote@example.com",
-    "username": "pilote123",
-    "is_admin": false
-}
-```
+Abstraction pour accéder aux données joueur.
 
-### Connexion: `POST /auth/login`
+```typescript
+// services/PlayerRouter.ts
 
-**Body:**
-```json
-{
-    "email": "pilote@example.com",
-    "password": "motdepasse123"
-}
-```
-
-**Réponse:**
-```json
-{
-    "access_token": "eyJhbGciOiJIUzI1NiIs...",
-    "user": {
-        "id": "uuid",
-        "email": "pilote@example.com",
-        "username": "pilote123",
-        "is_admin": false
-    }
-}
-```
-
-**Utilisation du token:**
-```
-Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
-```
-
----
-
-## Player Profile
-
-### Lecture: `GET /profile/me`
-
-Le profil est **créé automatiquement** s'il n'existe pas.
-
-**Réponse:**
-```json
-{
-    "id": "uuid",
-    "user_id": "uuid",
-    "display_name": null,
-    "created_at": "2026-01-22T...",
-    "updated_at": "2026-01-22T..."
-}
-```
-
-### Modification: `PATCH /profile/me`
-
-**Body:**
-```json
-{
-    "display_name": "Captain Sky"
-}
-```
-
-**Validations display_name:**
-- 3 à 24 caractères
-- Caractères autorisés: lettres, chiffres, espace, underscore, tiret
-- Regex: `^[a-zA-Z0-9 _\-]{3,24}$`
-
-**Réponse:**
-```json
-{
-    "id": "uuid",
-    "user_id": "uuid",
-    "display_name": "Captain Sky",
-    "created_at": "2026-01-22T...",
-    "updated_at": "2026-01-22T..."
+class PlayerRouter {
+  // Récupérer le profil
+  async getProfile(): Promise<Player>
+  
+  // Mettre à jour le profil
+  async updateProfile(updates: Partial<Player>): Promise<Player>
+  
+  // Récupérer le solde
+  async getBalance(): Promise<number>
+  
+  // Modifier le solde (après mission, achat, etc.)
+  async updateBalance(amount: number): Promise<number>
 }
 ```
 
 ---
 
-## Sécurité
-
-### Hashage des mots de passe
-
-- Algorithme: **Argon2** (via `argon2-cffi`)
-- Salt automatique
-- Paramètres sécurisés par défaut
-
-### JWT Tokens
-
-- Algorithme: HS256
-- Expiration: configurable (défaut: 24h)
-- Payload: `{"sub": "user_id"}`
-
-### Validation des entrées
-
-- Pydantic pour validation des schemas
-- Email normalisé en lowercase
-- Username et display_name sanitizés
-
----
-
-## Flux d'authentification
+## First Launch Flow
 
 ```
-[Utilisateur]
-      │
-      │ POST /auth/register
-      ▼
-[Compte créé]
-      │
-      │ POST /auth/login
-      ▼
-[JWT Token reçu]
-      │
-      │ GET /profile/me (avec Bearer token)
-      ▼
-[Profil créé automatiquement]
-      │
-      │ PATCH /profile/me
-      ▼
-[Profil personnalisé]
-      │
-      │ POST /company (avec Bearer token)
-      ▼
-[Company créée]
+[MSFS démarre]
+       │
+       ▼
+[EFB s'ouvre] → InitService.hasPlayer()
+       │
+       ├── Player existe?
+       │         │
+       │    Non  │  Oui
+       │         │
+       │         ▼
+       │   [Charger profil existant]
+       │   authState.isP2PMode.set(true)
+       │
+       ▼
+[Welcome Popup]
+       │
+       │ Saisie:
+       │ - Nom du pilote
+       │ - Nationalité
+       │ - Aéroport de base
+       │
+       ▼
+[InitService.createPlayer()]
+       │
+       ├── Créer profil (100,000 CR)
+       ├── Créer avion personnel (C172)
+       └── Générer ordres marché IA
+       │
+       ▼
+[Jeu prêt - Mode P2P actif]
 ```
 
 ---
 
-## Différence User vs Profile
+## Données initiales
 
-| Aspect | User | Player Profile |
-|--------|------|----------------|
-| Table | `users` | `player_profiles` |
-| But | Authentification | Données publiques |
-| Champs | email, password, username | display_name |
-| Création | À l'inscription | Automatique (lazy) |
-| Visibilité | Privé | Public |
+### Nouveau joueur
 
-**Pourquoi séparer?**
-- User contient des données sensibles (password, email)
-- Profile contient des données affichables publiquement
-- Permet d'étendre le profil sans toucher à l'auth
+```typescript
+const newPlayer = {
+  id: generateUUID(),
+  name: "Nom saisi",
+  nationality: "FR",
+  home_airport: "LFPG",
+  money: 100000,  // 100,000 CR de départ
+  xp: 0,
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+};
+```
+
+### Avion personnel initial
+
+```typescript
+const starterAircraft = {
+  id: generateUUID(),
+  owner_id: player.id,
+  owner_type: "player",  // Personnel, pas company
+  aircraft_type: "C172",
+  registration: "F-" + randomLetters(4),
+  current_airport_ident: player.home_airport,
+  fuel_gallons: 40,
+  fuel_capacity_gallons: 53,
+  cargo_capacity_kg: 150,
+  status: "available",
+};
+```
 
 ---
 
-## Évolutions futures (Player Profile)
+## State Management
 
-Le profil joueur est actuellement minimaliste. Extensions prévues:
+### AuthState (state/AuthState.ts)
+
+```typescript
+export const authState = {
+  // Mode P2P actif (toujours true en P2P)
+  isP2PMode: Subject.create<boolean>(false),
+  
+  // Premier lancement (affiche welcome popup)
+  isFirstLaunch: Subject.create<boolean>(false),
+  
+  // Joueur connecté localement
+  isLoggedIn: Subject.create<boolean>(false),
+  
+  // Infos joueur
+  currentUser: Subject.create<UserInfo | null>(null),
+};
+```
+
+---
+
+## Différence avec l'ancien système
+
+| Aspect | Ancien (Serveur) | Nouveau (P2P) |
+|--------|------------------|---------------|
+| Authentification | Email + password | Nom seulement |
+| Stockage | PostgreSQL distant | SQLite local |
+| Token | JWT Bearer | Aucun |
+| Création compte | `/auth/register` | `InitService.createPlayer()` |
+| Lecture profil | `GET /profile/me` | `PlayerRouter.getProfile()` |
+| Sécurité | Hash Argon2 | Données locales |
+
+---
+
+## Évolutions futures
 
 ### Statistiques pilote
 - [ ] `total_flight_hours` - Heures de vol
 - [ ] `total_flights` - Nombre de vols
 - [ ] `total_distance_nm` - Distance parcourue
-- [ ] `favorite_aircraft` - Avion préféré
+- [ ] `total_cargo_kg` - Cargo transporté
 
 ### Progression
-- [ ] `pilot_xp` - Points d'expérience
-- [ ] `pilot_level` - Niveau (1-100)
-- [ ] `achievements` - Badges/accomplissements
+- [ ] `pilot_level` - Niveau calculé depuis XP
+- [ ] `achievements` - Badges/accomplissements (JSON)
 
 ### Licences
-- [ ] `licenses` - JSONB avec types de licences
-  - PPL, CPL, ATPL
-  - Single/Multi engine
-  - IFR rating
+- [ ] `licenses` - JSON avec types de licences
+  - PPL (défaut)
+  - IFR (à débloquer)
+  - CPL (à débloquer)
+  - ATPL (à débloquer)
 
-### Social
-- [ ] `bio` - Biographie (max 500 chars)
-- [ ] `country` - Pays
-- [ ] `avatar_url` - URL avatar
-
-### Préférences
-- [ ] `preferences` - JSONB
-  - Unités (métrique/impérial)
-  - Langue
-  - Notifications
+### Préférences (dans SettingsState)
+- [x] Langue (fr, en, de, es, ru)
+- [x] Unités (métrique/impérial)
+- [ ] Thème UI
 
 ---
 
-## Exemples de Flux
+## Sync P2P (futur)
 
-### Inscription et configuration
+En mode multijoueur, le profil sera synchronisé :
 
-```bash
-# 1. Créer un compte
-POST /auth/register
-{
-    "email": "pilote@test.com",
-    "username": "captain_sky",
-    "password": "secure123"
-}
-
-# 2. Se connecter
-POST /auth/login
-{
-    "email": "pilote@test.com",
-    "password": "secure123"
-}
-# → Récupérer le token
-
-# 3. Voir mon profil (avec Authorization header)
-GET /profile/me
-
-# 4. Personnaliser mon profil
-PATCH /profile/me
-{
-    "display_name": "Captain Sky"
-}
-
-# 5. Créer ma company
-POST /company
-{
-    "name": "Sky Express",
-    "home_airport_ident": "LFPG"
-}
 ```
+┌─────────────────────────────────────────┐
+│            SYNC PROFIL P2P               │
+│                                          │
+│   SQLite local                           │
+│        │                                 │
+│        ▼                                 │
+│   NetworkManager.syncProfile()           │
+│        │                                 │
+│        ▼                                 │
+│   Shard (autre joueur HOST)             │
+│        │                                 │
+│        ▼                                 │
+│   Classements mondiaux                   │
+│   (XP, heures de vol, cargo)            │
+└─────────────────────────────────────────┘
+```
+
+**Données synchronisées** :
+- Nom, XP, statistiques (pour classements)
+
+**Données locales uniquement** :
+- Money (anti-cheat)
+- Position actuelle
 
 ---
 
-## Notes techniques
+## Exemple d'utilisation
 
-### Auto-création du profil
+### Vérifier si premier lancement
 
-Le profil est créé automatiquement via `_get_or_create_profile()`:
-```python
-def _get_or_create_profile(db: Session, user_id) -> PlayerProfile:
-    profile = db.query(PlayerProfile).filter(
-        PlayerProfile.user_id == user_id
-    ).one_or_none()
-
-    if profile:
-        return profile
-
-    profile = PlayerProfile(user_id=user_id)
-    db.add(profile)
-    db.commit()
-    db.refresh(profile)
-    return profile
+```typescript
+const hasPlayer = await InitService.hasPlayer();
+if (!hasPlayer) {
+  authState.isFirstLaunch.set(true);
+  // Afficher welcome popup
+}
 ```
 
-### Relation 1:1
+### Créer le profil
 
-- Un User a exactement un PlayerProfile
-- Contrainte `UNIQUE` sur `user_id` dans `player_profiles`
-- Le profil n'existe pas tant qu'il n'est pas lu/modifié
+```typescript
+const player = await InitService.createPlayer({
+  name: welcomeNameInput.value,
+  nationality: selectedCountry,
+  homeAirport: selectedAirport,
+});
+
+authState.currentUser.set({
+  id: player.id,
+  username: player.name,
+  email: "", // Pas d'email en P2P
+});
+authState.isLoggedIn.set(true);
+authState.isP2PMode.set(true);
+```
+
+### Récupérer le solde
+
+```typescript
+const balance = await PlayerRouter.getBalance();
+marketState.walletPersonal.set(balance);
+```

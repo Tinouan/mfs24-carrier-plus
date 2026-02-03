@@ -1,0 +1,204 @@
+/**
+ * RenderHelpers - DOM rendering helper functions
+ * Pure functions that generate HTML strings for dynamic UI updates
+ */
+
+// ═══════════════════════════════════════════════════════════
+// TYPES
+// ═══════════════════════════════════════════════════════════
+
+export interface NearbyAirportItem {
+  icao: string;
+  name: string;
+  distance_nm: number;
+}
+
+export interface InventoryItemDisplay {
+  item_type: string;
+  airport_icao: string;
+  quantity: number;
+}
+
+export interface AircraftListItem {
+  id: string;
+  registration: string | null;
+  aircraft_type: string;
+  cargo_capacity_kg: number;
+  aircraft_model?: string | null;
+}
+
+export interface MarketListingItem {
+  location_id: string;
+  airport_ident: string;
+  company_name: string;
+  item_id: string;
+  item_code: string;
+  item_name: string;
+  item_tier: number;
+  sale_price: number;
+  sale_qty: number;
+}
+
+export interface CompanyMemberItem {
+  username: string;
+  role: string;
+}
+
+export interface CompanyFleetItem {
+  registration: string | null;
+  aircraft_type: string;
+  current_airport_ident: string | null;
+  status: string;
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER FUNCTIONS
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Render airports list HTML
+ */
+export function renderAirportsListHtml(
+  airports: NearbyAirportItem[],
+  emptyMessage: string
+): string {
+  if (airports.length === 0) {
+    return `<div style="color: #9ca3af; font-size: 10px; text-align: center; padding: 8px;">${emptyMessage}</div>`;
+  }
+
+  return airports.map(airport => `
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid #374151;">
+      <div style="display: flex; flex-direction: column; overflow: hidden;">
+        <span style="font-family: monospace; color: #60a5fa; font-weight: 600; font-size: 11px;">${airport.icao}</span>
+        <span style="color: #6b7280; font-size: 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100px;">${airport.name}</span>
+      </div>
+      <div style="text-align: right; flex-shrink: 0;">
+        <span style="font-family: monospace; color: #f59e0b; font-size: 10px;">${airport.distance_nm.toFixed(1)}</span>
+        <span style="color: #6b7280; font-size: 8px;">nm</span>
+      </div>
+    </div>
+  `).join("");
+}
+
+/**
+ * Render inventory list HTML
+ */
+export function renderInventoryListHtml(
+  items: InventoryItemDisplay[],
+  emptyMessage: string,
+  storedAtLabel: string,
+  unitsLabel: string
+): string {
+  if (items.length === 0) {
+    return `<div style="color: #9ca3af; font-size: 12px; text-align: center; padding: 16px;">${emptyMessage}</div>`;
+  }
+
+  return items.map(item => `
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #374151;">
+      <div style="display: flex; flex-direction: column;">
+        <span style="color: white; font-weight: 500; font-size: 13px;">${item.item_type}</span>
+        <span style="color: #6b7280; font-size: 10px;">
+          ${storedAtLabel}: <span style="font-family: monospace; color: #60a5fa;">${item.airport_icao}</span>
+        </span>
+      </div>
+      <div style="text-align: right;">
+        <span style="font-family: monospace; color: #22c55e; font-size: 16px; font-weight: 600;">${item.quantity}</span>
+        <span style="color: #6b7280; font-size: 10px; margin-left: 4px;">${unitsLabel}</span>
+      </div>
+    </div>
+  `).join("");
+}
+
+/**
+ * Render market listings HTML
+ */
+export function renderMarketListingsHtml(
+  listings: MarketListingItem[],
+  emptyMessage: string,
+  availableLabel: string
+): string {
+  if (listings.length === 0) {
+    return `
+      <div style="background: #252532; border-radius: 12px; padding: 24px; text-align: center;">
+        <svg style="width: 40px; height: 40px; margin-bottom: 12px; opacity: 0.4;" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="1.5">
+          <path d="M12 2v20"/>
+          <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
+        </svg>
+        <div style="color: #6b7280; font-size: 12px;">${emptyMessage}</div>
+      </div>
+    `;
+  }
+
+  const tierColors: Record<number, string> = {
+    0: "#6b7280", 1: "#22c55e", 2: "#3b82f6", 3: "#a855f7", 4: "#f59e0b", 5: "#ef4444"
+  };
+
+  return listings.map(item => {
+    const tierColor = tierColors[item.item_tier] || "#6b7280";
+    return `
+      <div class="market-listing-item" data-location-id="${item.location_id}" data-item-id="${item.item_id}"
+           style="background: #252532; border-radius: 8px; padding: 12px; margin-bottom: 8px; cursor: pointer; transition: background 0.2s;"
+           onmouseover="this.style.background='#2d2d3d'" onmouseout="this.style.background='#252532'">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+          <div style="flex: 1;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+              <span style="font-size: 9px; padding: 2px 6px; border-radius: 4px; background: ${tierColor}20; color: ${tierColor}; font-weight: 600;">T${item.item_tier}</span>
+              <span style="font-size: 13px; font-weight: 600; color: white;">${item.item_name}</span>
+            </div>
+            <div style="font-size: 10px; color: #6b7280;">
+              @ <span style="color: #60a5fa;">${item.airport_ident}</span> • ${item.company_name}
+            </div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 14px; font-weight: 700; color: #22c55e;">${item.sale_price.toLocaleString()} CR</div>
+            <div style="font-size: 10px; color: #6b7280;">${item.sale_qty} ${availableLabel}</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+/**
+ * Render company members list HTML
+ */
+export function renderCompanyMembersHtml(
+  members: CompanyMemberItem[],
+  emptyMessage: string
+): string {
+  if (members.length === 0) {
+    return `<div style="color: #6b7280; font-size: 11px; text-align: center; padding: 16px;">${emptyMessage}</div>`;
+  }
+
+  return members.map(m => `
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: #1a1a24; border-radius: 6px; margin-bottom: 6px;">
+      <span style="font-size: 12px; color: white;">${m.username}</span>
+      <span style="font-size: 10px; color: ${m.role === "owner" ? "#f59e0b" : "#6b7280"}; text-transform: uppercase;">${m.role}</span>
+    </div>
+  `).join("");
+}
+
+/**
+ * Render company fleet list HTML
+ */
+export function renderCompanyFleetHtml(
+  fleet: CompanyFleetItem[],
+  emptyMessage: string
+): string {
+  if (fleet.length === 0) {
+    return `<div style="color: #6b7280; font-size: 11px; text-align: center; padding: 16px;">${emptyMessage}</div>`;
+  }
+
+  return fleet.map(a => `
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: #1a1a24; border-radius: 6px; margin-bottom: 6px;">
+      <div>
+        <div style="font-size: 12px; color: white; font-weight: 500;">${a.registration || "N/A"}</div>
+        <div style="font-size: 10px; color: #6b7280;">${a.aircraft_type}</div>
+      </div>
+      <div style="text-align: right;">
+        <div style="font-size: 11px; color: #60a5fa;">${a.current_airport_ident || "?"}</div>
+        <div style="font-size: 9px; color: ${a.status === "parked" ? "#22c55e" : a.status === "in_flight" ? "#f59e0b" : "#6b7280"};">${a.status}</div>
+      </div>
+    </div>
+  `).join("");
+}

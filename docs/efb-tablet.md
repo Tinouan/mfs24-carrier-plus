@@ -197,23 +197,36 @@ SimVars utiles:
 
 ---
 
-## Connectivite Backend
+## Architecture P2P (Mode Local-First)
 
-### fetch() fonctionne !
+### Stockage SQLite local
 
-Contrairement aux iframes (bloquees), les appels `fetch()` vers localhost fonctionnent:
+L'EFB utilise SQLite (sql.js) pour le stockage local:
 
 ```tsx
-const response = await fetch("http://localhost:8000/api/endpoint", {
-  method: "GET",
-  headers: { "Accept": "application/json" },
-});
-const data = await response.json();
+import { DatabaseManager } from './managers/DatabaseManager';
+
+// Lecture des données
+const aircraft = await DatabaseManager.query('SELECT * FROM aircraft WHERE id = ?', [id]);
+
+// Écriture des données
+await DatabaseManager.run('UPDATE aircraft SET fuel_gallons = ? WHERE id = ?', [fuel, id]);
 ```
 
-### iframes - BLOQUEES
+### Services via DataLayer
 
-Les iframes sont bloquees par le sandbox de l'EFB. Pas de solution connue.
+Tous les services passent par le DataLayer qui gère le mode local/réseau:
+
+```tsx
+// Mode solo → SQLite local
+DataLayer.setLocalMode();
+
+// Mode multi → Sync P2P
+DataLayer.setNetworkMode({ host: '192.168.1.10', port: 7777 });
+
+// Les services utilisent DataLayer automatiquement
+const fleet = await FleetService.getFleet();
+```
 
 ---
 
@@ -398,16 +411,9 @@ private setupManualMapDrag(container: HTMLElement): void {
 ```tsx
 private async fetchAvailableSlotsAtAirport(icaoCode: string): Promise<void> {
   try {
-    const response = await fetch(
-      `http://localhost:8000/api/world/airports/${icaoCode}/available-slots`,
-      { method: "GET" }
-    );
-
-    if (response.ok) {
-      const data = await response.json();
-      // data = { airport_ident, airport_type, max_slots, occupied_slots, available_slots }
-      this.availableSlotsAtAirport.set(data.available_slots ?? 0);
-    }
+    const data = await WorldService.getAirportSlots(icaoCode);
+    // data = { airport_ident, airport_type, max_slots, occupied_slots, available_slots }
+    this.availableSlotsAtAirport.set(data.available_slots ?? 0);
   } catch (error) {
     console.error("[CarrierPlus] Failed to fetch available slots:", error);
     this.availableSlotsAtAirport.set(null);
@@ -415,22 +421,9 @@ private async fetchAvailableSlotsAtAirport(icaoCode: string): Promise<void> {
 }
 ```
 
-### API Backend - Slots par type d'aeroport
+### Slots par type d'aeroport
 
-```
-GET /api/world/airports/{icao}/available-slots
-
-Response:
-{
-  "airport_ident": "LFPG",
-  "airport_type": "large_airport",
-  "max_slots": 12,
-  "occupied_slots": 2,
-  "available_slots": 10
-}
-```
-
-Limites de slots:
+Limites de slots (calculées localement):
 - `large_airport`: 12 slots
 - `medium_airport`: 6 slots
 - `small_airport`: 3 slots
@@ -463,11 +456,12 @@ Les erreurs 404 pour les fichiers `.map` sont normales (Asobo n'a pas inclus les
 |-----|-------------|
 | **Map** | Carte OpenLayers avec position avion, aeroports, factories, helipads |
 | **Profile** | Profil utilisateur (connexion/deconnexion) |
-| **Missions** | Liste des missions actives/historique |
+| **Missions** | Liste des missions actives/historique + tracking en vol |
 | **Create Mission** | Creation de mission: selection destination + avion + cargo |
 | **Company** | Infos company, membres, flotte |
 | **Market** | Hotel des Ventes - acheter des ressources |
 | **Inventory** | Inventaire personnel/company |
+| **Hangar** | V2.3 - Liste de tous les avions (perso + company) avec details |
 
 ### Cycle de vie
 
@@ -513,18 +507,6 @@ cp dist/CarrierPlus.js "C:/Users/tinou/AppData/Local/Packages/Microsoft.Limitles
 
 ## Troubleshooting
 
-### L'API retourne 500 Internal Server Error
-
-Le conteneur Docker utilise peut-etre une version cachee du code Python.
-
-```bash
-# Redemarrer le conteneur API
-docker restart msfs_game_api
-
-# Verifier les logs
-docker logs msfs_game_api --tail 30
-```
-
 ### Les changements EFB ne s'appliquent pas
 
 1. Verifier que le build a reussi
@@ -549,14 +531,14 @@ L'onglet Market permet d'acheter des ressources sur l'Hotel des Ventes (HV).
 - **Liste des offres**: Cards avec item, tier, prix, quantite, vendeur, aeroport
 - **Popup d'achat**: Selection quantite + wallet (perso/company) + confirmation
 
-### API utilisees
+### Services utilises
 
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/users/me` | Wallet personnel |
-| `GET /api/company/me` | Solde company |
-| `GET /api/inventory/market` | Listings du marche |
-| `POST /api/inventory/market/buy` | Acheter un item |
+| Service | Description |
+|---------|-------------|
+| `PlayerService.getPlayer()` | Wallet personnel |
+| `CompanyService.getMyCompany()` | Solde company |
+| `MarketService.getListings()` | Listings du marche |
+| `MarketService.buy()` | Acheter un item |
 
 ### Coherent GT Pattern (refs + innerHTML)
 
@@ -594,17 +576,13 @@ private renderMarketTab(): void {
 
 ---
 
-### 401 Unauthorized sur les appels API
+### Données non chargées
 
-Le token JWT est peut-etre expire. Le code gere ca automatiquement:
+En mode P2P, les données sont stockées localement. Si elles ne chargent pas:
 
-```tsx
-if (response.status === 401) {
-  this.authToken.set(null);
-  this.isLoggedIn.set(false);
-  localStorage.removeItem("carrierplus_token");
-}
-```
+1. Vérifier que l'initialisation SQLite a réussi
+2. Vérifier la console pour les erreurs DatabaseManager
+3. Essayer de recharger l'EFB (Ctrl+Shift+R)
 
 ### Les logs n'apparaissent pas dans la console
 
@@ -617,3 +595,522 @@ Verifier que le bon fichier est charge:
 
 C'est normal dans Coherent GT. Ne pas utiliser `forEachFeatureAtPixel` d'OpenLayers.
 Utiliser la detection manuelle par distance (voir section OpenLayers).
+
+---
+
+## Map Tab - Fonctionnalites avancees
+
+### Recherche ICAO
+
+Barre de recherche sous les controles de la map pour centrer sur un aeroport par code ICAO.
+
+```tsx
+// Input ref avec keyboard blocking
+private icaoSearchInputRef = FSComponent.createRef<HTMLInputElement>();
+
+// Fonction de recherche
+private async searchAirportByIcao(): Promise<void> {
+  const icao = this.icaoSearchInputRef.getOrDefault()?.value.trim().toUpperCase();
+  if (!icao || icao.length < 2) return;
+
+  const airports = await WorldService.searchAirports({ ident: icao, limit: 1 });
+
+  if (airports.length > 0) {
+    const airport = airports[0];
+    this.olMap.getView().animate({
+      center: fromLonLat([airport.longitude_deg, airport.latitude_deg]),
+      zoom: 12,
+      duration: 800,
+    });
+  }
+}
+```
+
+**Service** - La recherche utilise `WorldService.searchAirports()` qui query la base SQLite locale.
+
+### Filtres d'aeroports
+
+Boutons toggle pour afficher/masquer les aeroports par taille:
+
+| Bouton | Type API | Description |
+|--------|----------|-------------|
+| Grands | `large_airport` | Grands aeroports internationaux |
+| Moyens | `medium_airport` | Aeroports regionaux |
+| Petits | `small_airport` | Petits aerodromes |
+| HELI | `heliport` | Helipads |
+| FAC | - | Factories (usines) |
+
+---
+
+## Keyboard Capture - Coherent GT
+
+### Probleme
+
+Dans Coherent GT, les inputs text peuvent declencher les raccourcis du simulateur (ex: "P" = pause).
+
+### Solution officielle MSFS
+
+Utiliser `Coherent.trigger()` pour capturer/relacher le clavier:
+
+```tsx
+private setupInputEventBlocker(input: HTMLInputElement | null): void {
+  if (!input) return;
+
+  // UUID unique pour ce champ
+  const uuid = `carrierplus-input-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+  input.addEventListener("focus", () => {
+    // Capture le clavier - le simulateur ignore les touches
+    // @ts-ignore
+    Coherent.trigger("FOCUS_INPUT_FIELD", { uuid, isPassword: input.type === "password" });
+  });
+
+  input.addEventListener("blur", () => {
+    // Relache le clavier - le simulateur reprend le controle
+    // @ts-ignore
+    Coherent.trigger("UNFOCUS_INPUT_FIELD", uuid);
+  });
+}
+```
+
+**Important**: Appeler `setupInputEventBlocker()` apres que l'input soit rendu dans le DOM.
+
+---
+
+## Map Lifecycle - Gestion du refresh GT
+
+### Probleme
+
+Quand le debugger GT rafraichit (Ctrl+Shift+R), le DOM est recree mais l'etat JavaScript persiste.
+L'objet `olMap` pointe alors vers un container DOM detruit = map noire.
+
+### Solution: disposeMap()
+
+Nettoyer la map a chaque ouverture de l'app:
+
+```tsx
+public onOpen(): void {
+  this.startSimVarUpdates();
+  this.loadAuthFromStorage();
+
+  // Force re-initialization (handles GT debugger refresh)
+  this.disposeMap();
+
+  // Si deja sur l'onglet map, initialiser immediatement
+  if (this.activeTab.get() === "map") {
+    setTimeout(() => this.initializeMap(), 100);
+  }
+
+  // Subscription pour changement d'onglet
+  this.activeTab.sub((tab) => {
+    if (tab === "map" && !this.mapInitialized) {
+      setTimeout(() => this.initializeMap(), 100);
+    }
+  });
+}
+
+private disposeMap(): void {
+  if (this.olMap) {
+    try {
+      this.olMap.setTarget(undefined); // Detache du DOM
+      this.olMap.dispose();            // Libere les ressources
+    } catch (e) {
+      console.log("[CarrierPlus] Map dispose error (normal after refresh)");
+    }
+    this.olMap = null;
+  }
+  this.mapInitialized = false;
+  this.aircraftFeature = null;
+  this.aircraftSource = null;
+  this.airportsSource = null;
+  this.airportsLayer = null;
+  this.factoriesSource = null;
+  this.factoriesLayer = null;
+  this.helipadsSource = null;
+  this.helipadsLayer = null;
+}
+```
+
+### onResume - Recalcul de taille
+
+Apres un resume (retour de pause), forcer OpenLayers a recalculer:
+
+```tsx
+public onResume(): void {
+  this.startSimVarUpdates();
+
+  if (this.activeTab.get() === "map" && this.olMap) {
+    setTimeout(() => {
+      this.olMap?.updateSize();
+    }, 100);
+  }
+}
+```
+
+---
+
+## Hangar Tab (V2.3)
+
+L'onglet Hangar affiche **tous** les avions accessibles par le joueur (personnels ET company) avec distinction visuelle.
+
+### Fonctionnalites
+
+- **Liste de la flotte**: Affiche tous les avions avec badge PERSO (vert) ou COMPANY (violet)
+- **Details avion**: Panel droit avec infos detaillees (carburant, cargo, systemes)
+- **Refresh**: Bouton pour recharger la liste depuis l'API
+
+### Services utilises
+
+| Service | Description |
+|---------|-------------|
+| `FleetService.getFleet()` | Liste tous les avions (personal + company) |
+| `FleetService.getAircraft(id)` | Details d'un avion specifique |
+
+### Format des donnees
+
+```typescript
+interface HangarAircraftItem {
+  id: string;
+  registration: string;
+  aircraft_type: string;
+  current_airport_ident: string;
+  status: string;
+  owner_type: "player" | "company";
+}
+```
+
+### Pattern FSComponent pour listes dynamiques
+
+Les listes dynamiques doivent utiliser le pattern refs + innerHTML:
+
+```tsx
+// 1. Declaration du ref
+private hangarListRef = FSComponent.createRef<HTMLDivElement>();
+
+// 2. JSX placeholder
+<div ref={this.hangarListRef}>
+  <div>Cliquez sur Refresh</div>
+</div>
+
+// 3. Fonction de rendu
+private renderHangarList(): void {
+  const listEl = this.hangarListRef.getOrDefault();
+  if (!listEl) return;
+
+  const aircraft = this.hangarAircraftList.get();
+
+  listEl.innerHTML = aircraft.map(ac => {
+    const isPersonal = ac.owner_type === "player";
+    const badgeStyle = isPersonal
+      ? "background: #10b981;"  // vert
+      : "background: #6366f1;"; // violet
+
+    return `
+      <div class="hangar-aircraft-item" data-aircraft-id="${ac.id}">
+        <span>${ac.registration}</span>
+        <span style="${badgeStyle}">${isPersonal ? "PERSO" : "COMPANY"}</span>
+      </div>
+    `;
+  }).join("");
+
+  // 4. Ajouter les event listeners
+  listEl.querySelectorAll(".hangar-aircraft-item").forEach(item => {
+    item.addEventListener("click", () => {
+      const id = item.getAttribute("data-aircraft-id");
+      if (id) void this.fetchAircraftDetails(id);
+    });
+  });
+}
+
+// 5. Appeler apres fetch
+this.hangarAircraftList.set(data);
+this.renderHangarList();
+```
+
+**Important**: Ne jamais utiliser `.map()` inline dans le JSX pour des listes - ca affiche `[object Object]`.
+
+---
+
+## Mission Tracking (V2.2)
+
+### 5 Phases de vol
+
+| Phase | ID | Couleur | Condition |
+|-------|-----|---------|-----------|
+| Roulage depart | `taxi_out` | Vert | Au sol, progress < 5% |
+| Montee | `climb` | Orange | En vol, VS > 200 fpm, progress < 80% |
+| Croisiere | `cruise` | Vert | En vol, VS stable |
+| Descente | `descent` | Orange | En vol, VS < -200 fpm, progress > 50% |
+| Roulage arrivee | `taxi_in` | Vert | Au sol, progress > 95% |
+
+### XP Bonus
+
+| Bonus | Description | Calcul |
+|-------|-------------|--------|
+| Nuit | Vol de nuit (20h-6h local) | +100 XP si heure locale < 6 ou >= 20 |
+| Eco | Carburant economise | % non consomme vs max autorise |
+| Cargo | Poids correct | 100% si payload = cargo attendu (±10% tolerance) |
+
+### SimVars utilisees pour le tracking
+
+```tsx
+// Position
+SimVar.GetSimVarValue("PLANE LATITUDE", "degrees");
+SimVar.GetSimVarValue("PLANE LONGITUDE", "degrees");
+
+// Heure locale (pour bonus nuit)
+SimVar.GetSimVarValue("E:LOCAL TIME", "seconds");
+const hour = Math.floor(localTimeSeconds / 3600) % 24;
+
+// Payload (pour bonus cargo)
+const stationCount = SimVar.GetSimVarValue("PAYLOAD STATION COUNT", "number");
+for (let i = 1; i <= stationCount; i++) {
+  const weight = SimVar.GetSimVarValue(`PAYLOAD STATION WEIGHT:${i}`, "pounds");
+  totalPayload += weight;
+}
+const cargoKg = totalPayload * 0.453592;
+```
+
+### Calcul de progression (Haversine)
+
+```tsx
+// Distance depuis l'origine (pas GPS WP DISTANCE qui est unreliable)
+private haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 3440.065; // Rayon Terre en nm
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
+// Progress = distance parcourue / distance totale
+const flownNm = this.haversineDistance(originLat, originLon, currentLat, currentLon);
+const progressPct = Math.min(100, (flownNm / totalDistanceNm) * 100);
+```
+
+---
+
+## Mode P2P Local-First (V0.9)
+
+### Concept
+
+L'app supporte deux modes de fonctionnement:
+- **Mode P2P**: Données stockées localement dans localStorage, joueur solo
+- **Mode Network**: Backend FastAPI centralisé, multijoueur synchronisé
+
+### Service Router Pattern
+
+Architecture dual-mode pour basculer automatiquement entre P2P et Network:
+
+```tsx
+// Dans ServiceRouter.ts
+const isP2P = (): boolean => authState.isP2PMode.get();
+
+export const FleetRouter = {
+  async getFleet(token?: string | null): Promise<HangarAircraftItem[]> {
+    if (isP2P()) {
+      return Services.fleet.getFleet();  // Local service
+    }
+    return fleetService.getFleet(token!); // Network API
+  },
+  // ...
+};
+```
+
+### Routers disponibles
+
+| Router | P2P Service | Network Service |
+|--------|-------------|-----------------|
+| `FleetRouter` | `localFleetService` | `fleetService` |
+| `MissionRouter` | `localMissionService` | `missionService` |
+| `MarketRouter` | `localMarketService` | `marketService` |
+| `WorldRouter` | `localWorldService` | `worldService` |
+| `PlayerRouter` | `Services.player` | - |
+| `CompanyRouter` | `Services.company` | - |
+| `FreeFlightRouter` | `Services.freeFlight` | - |
+
+### Stockage P2P (localStorage)
+
+```
+carrierplus_
+├── player           # Profil joueur (id, name, money, xp)
+├── company          # Company (si achetée)
+├── aircraft         # Flotte (personal + company)
+├── missions         # Historique missions
+├── inventory        # Items par location
+├── market_orders    # Ordres marché
+├── items            # Catalogue items (94 items)
+├── recipes          # Recettes (60 recipes)
+├── aircraft_catalog # Types avions supportés
+└── airports         # Cache aéroports (en mémoire)
+```
+
+### First Launch Setup
+
+Au premier lancement (pas de player en localStorage):
+
+```tsx
+// InitService.ts
+async initialize(callbacks: InitCallbacks): Promise<void> {
+  // Check if first launch
+  const playerCount = await DatabaseManager.count("player");
+
+  if (playerCount === 0) {
+    // First launch - show welcome popup
+    callbacks.onFirstLaunch?.();
+    return;
+  }
+
+  // Existing player - load data
+  callbacks.onComplete?.();
+}
+
+// Après saisie du formulaire welcome
+async completeFirstLaunch(pilotName, nationality, startingAirport): Promise<void> {
+  // 1. Créer player avec 100,000 CR
+  const playerId = await this.createCustomPlayer(pilotName, nationality);
+
+  // 2. Créer avion personnel (C172) - PAS de company
+  await this.createPersonalStarterAircraft(playerId, startingAirport);
+
+  // 3. Générer ordres marché IA
+  await this.generateInitialMarket();
+}
+```
+
+### Achat de Company (P2P)
+
+Le joueur démarre **sans company** avec un avion personnel:
+
+```tsx
+// InitService.ts
+async purchaseCompany(companyName: string): Promise<Company> {
+  const COMPANY_COST = 50000;
+
+  const player = await DatabaseManager.getPlayer();
+  if (!player) throw new Error("No player found");
+
+  // Check existing company
+  const existingCompany = await DatabaseManager.getCompanyByOwner(player.id);
+  if (existingCompany) throw new Error("Already has company");
+
+  // Check funds
+  if (player.money < COMPANY_COST) {
+    throw new Error(`Insufficient funds. Need ${COMPANY_COST}`);
+  }
+
+  // Deduct and create
+  player.money -= COMPANY_COST;
+  await DatabaseManager.savePlayer(player);
+
+  const company: Company = {
+    id: generateUUID(),
+    name: companyName,
+    balance: 0,
+    owner_id: player.id,
+    created_at: new Date().toISOString(),
+  };
+
+  await DatabaseManager.put("company", company);
+  return company;
+}
+```
+
+### Ownership Model (Avions)
+
+Deux types de propriété d'avion:
+
+| Type | Champs | Description |
+|------|--------|-------------|
+| **Personal** | `owner_id = player_id`, `company_id = null` | Avion personnel |
+| **Company** | `owner_id = null`, `company_id = company_id` | Avion de company |
+
+Le hangar affiche les deux types avec badge distinctif.
+
+### State Management
+
+L'état P2P est géré dans `AuthState`:
+
+```tsx
+// state/AuthState.ts
+export const authState = {
+  // ...
+  isP2PMode: Subject.create(true), // Par défaut en P2P
+  showFirstLaunchPopup: Subject.create(false),
+  firstLaunchPilotName: Subject.create(""),
+  firstLaunchNationality: Subject.create("FR"),
+  firstLaunchAirport: Subject.create("LFPG"),
+};
+```
+
+### Token Checks Adaptés
+
+Toutes les fonctions fetch doivent supporter le mode P2P:
+
+```tsx
+// Pattern standard
+private async fetchSomething(): Promise<void> {
+  const token = authState.authToken.get();
+  // P2P mode doesn't require token
+  if (!authState.isP2PMode.get() && !token) return;
+
+  // ... fetch logic using Router
+}
+```
+
+### Data Files (JSON)
+
+Les données statiques sont chargées depuis des fichiers JSON bundlés:
+
+| Fichier | Contenu | Taille |
+|---------|---------|--------|
+| `airports-main.json` | ~5000 aéroports | 1.5 MB |
+| `items.json` | 94 items catalogue | 50 KB |
+| `recipes.json` | 60 recettes | 30 KB |
+| `aircraft.json` | Types d'avions supportés | 20 KB |
+| `seed.json` | Config démarrage (starter money, etc.) | 2 KB |
+
+---
+
+## Structure des modules State (V0.9)
+
+### 15 modules dans `src/state/`
+
+| Module | Subjects | Description |
+|--------|----------|-------------|
+| `AuthState` | 10 | Login, token, P2P mode, first launch |
+| `NavigationState` | 5 | Tabs actifs, sub-tabs |
+| `SettingsState` | 8 | Langue, unités, thème |
+| `SimVarState` | 16 | Position, fuel, vitesse, altitude |
+| `MapState` | 15 | Layers, sélection, zoom |
+| `MissionState` | 17 | Mission active, status |
+| `MissionCreationState` | 12 | Flight plan, validation |
+| `TrackingState` | 20 | Bonus, progression, checkpoints |
+| `CheckpointState` | 12 | Next CP, lignes |
+| `CargoState` | 10 | Popup, transfert |
+| `HangarState` | 20 | Aircraft, systems, repair |
+| `CompanyState` | 11 | Data, membres, achat company |
+| `MarketState` | 15 | Listings, buy popup, wallet |
+| `PopupState` | 8 | Refuel, systems |
+| `InventoryState` | 5 | Items, status |
+
+### Import barrel
+
+```tsx
+// state/index.ts
+export { authState } from "./AuthState";
+export { navigationState } from "./NavigationState";
+export { settingsState } from "./SettingsState";
+// ... etc
+
+// Usage dans CarrierPlus.tsx
+import {
+  authState,
+  navigationState,
+  settingsState,
+  // ...
+} from "./state";
+```

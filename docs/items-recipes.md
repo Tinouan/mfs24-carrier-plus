@@ -9,48 +9,48 @@ Le mod MFS24 Carrier Plus utilise un système d'items avec:
 
 ---
 
-## Tables SQL
+## Tables SQLite (Architecture P2P)
 
-### `game.items`
-
-| Colonne | Type | Description |
-|---------|------|-------------|
-| `id` | UUID | Clé primaire |
-| `name` | VARCHAR(100) | Nom unique de l'item |
-| `tier` | INT | 0=raw, 1-5=processed |
-| `tags` | TEXT[] | Tags de catégorie |
-| `icon` | VARCHAR(10) | Emoji/icône |
-| `base_value` | DECIMAL(10,2) | Valeur de base en crédits |
-| `weight_kg` | DECIMAL(8,3) | Poids en kg |
-| `is_raw` | BOOLEAN | Matière première (T0) |
-| `stack_size` | INT | Taille de stack (défaut: 100) |
-| `description` | VARCHAR(500) | Description |
-| `created_at` | TIMESTAMPTZ | Date de création |
-
-### `game.recipes`
+### `items`
 
 | Colonne | Type | Description |
 |---------|------|-------------|
-| `id` | UUID | Clé primaire |
-| `name` | VARCHAR(100) | Nom unique de la recette |
-| `tier` | INT | 1-5 (tier de la recette) |
-| `result_item_id` | UUID | FK → items (produit final) |
-| `result_quantity` | INT | Quantité produite par batch |
-| `production_time_hours` | DECIMAL(5,2) | Temps de production de base |
-| `base_workers_required` | INT | Workers minimum (défaut: 10) |
-| `description` | VARCHAR(500) | Description |
-| `unlock_requirements` | JSONB | Conditions de déblocage |
-| `created_at` | TIMESTAMPTZ | Date de création |
+| `id` | TEXT (UUID) | Clé primaire |
+| `name` | TEXT | Nom unique de l'item |
+| `tier` | INTEGER | 0=raw, 1-5=processed |
+| `tags` | TEXT | Tags JSON array |
+| `icon` | TEXT | Emoji/icône |
+| `base_value` | REAL | Valeur de base en crédits |
+| `weight_kg` | REAL | Poids en kg |
+| `is_raw` | INTEGER | Matière première (0/1) |
+| `stack_size` | INTEGER | Taille de stack (défaut: 100) |
+| `description` | TEXT | Description |
+| `created_at` | TEXT | Date de création ISO |
 
-### `game.recipe_ingredients`
+### `recipes`
 
 | Colonne | Type | Description |
 |---------|------|-------------|
-| `id` | UUID | Clé primaire |
-| `recipe_id` | UUID | FK → recipes |
-| `item_id` | UUID | FK → items (ingrédient) |
-| `quantity` | INT | Quantité requise par batch |
-| `position` | INT | Ordre d'affichage (0-3) |
+| `id` | TEXT (UUID) | Clé primaire |
+| `name` | TEXT | Nom unique de la recette |
+| `tier` | INTEGER | 1-5 (tier de la recette) |
+| `result_item_id` | TEXT | FK → items (produit final) |
+| `result_quantity` | INTEGER | Quantité produite par batch |
+| `production_time_hours` | REAL | Temps de production de base |
+| `base_workers_required` | INTEGER | Workers minimum (défaut: 10) |
+| `description` | TEXT | Description |
+| `unlock_requirements` | TEXT | JSON conditions de déblocage |
+| `created_at` | TEXT | Date de création ISO |
+
+### `recipe_ingredients`
+
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `id` | TEXT (UUID) | Clé primaire |
+| `recipe_id` | TEXT | FK → recipes |
+| `item_id` | TEXT | FK → items (ingrédient) |
+| `quantity` | INTEGER | Quantité requise par batch |
+| `position` | INTEGER | Ordre d'affichage (0-3) |
 
 ---
 
@@ -410,24 +410,46 @@ Profit/h = Profit / Temps de Production
 
 ---
 
-## API Endpoints
+## Services TypeScript (Architecture P2P)
 
-### Items
+### ItemService
 
-| Méthode | Endpoint | Description |
-|---------|----------|-------------|
-| GET | `/api/world/items` | Liste tous les items |
-| GET | `/api/world/items/{id}` | Détails d'un item |
-| GET | `/api/world/items/search/{name}` | Recherche par nom |
-| GET | `/api/world/stats/items` | Statistiques items |
+```typescript
+// services/ItemService.ts
 
-### Recipes
+class ItemServiceClass {
+  // Liste tous les items
+  async getAllItems(): Promise<Item[]>;
 
-| Méthode | Endpoint | Description |
-|---------|----------|-------------|
-| GET | `/api/world/recipes` | Liste toutes les recettes |
-| GET | `/api/world/recipes/{id}` | Détails d'une recette |
-| GET | `/api/world/recipes/{id}/ingredients` | Ingrédients d'une recette |
+  // Détails d'un item par ID
+  async getItemById(id: string): Promise<Item | null>;
+
+  // Recherche par nom
+  async searchItems(query: string): Promise<Item[]>;
+
+  // Statistiques items
+  async getItemStats(): Promise<ItemStats>;
+}
+```
+
+### RecipeService
+
+```typescript
+// services/RecipeService.ts
+
+class RecipeServiceClass {
+  // Liste toutes les recettes
+  async getAllRecipes(): Promise<Recipe[]>;
+
+  // Détails d'une recette par ID
+  async getRecipeById(id: string): Promise<Recipe | null>;
+
+  // Ingrédients d'une recette
+  async getRecipeIngredients(recipeId: string): Promise<RecipeIngredient[]>;
+
+  // Recettes par tier
+  async getRecipesByTier(tier: number): Promise<Recipe[]>;
+}
 
 ---
 

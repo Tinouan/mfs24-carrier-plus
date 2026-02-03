@@ -1,281 +1,277 @@
 # Market System (HV) - Documentation Technique
 
+> **Version**: V0.9 (Architecture P2P)
+
 ## Vue d'ensemble
 
-L'Hôtel des Ventes (HV) est le système de marché global permettant aux joueurs d'acheter des ressources vendues par d'autres joueurs ou par les NPC (T0).
+L'Hôtel des Ventes (HV) est le système de marché global permettant aux joueurs d'acheter des ressources:
+- **Mode Solo**: Ordres générés automatiquement par `AIEconomyService`
+- **Mode Multi**: Ordres des autres joueurs synchronisés via P2P
+
+**Architecture P2P**: Les données sont stockées localement en SQLite et synchronisées avec les autres joueurs via le NetworkManager.
 
 ---
 
-## Architecture
+## Tables SQLite
 
-### Tables utilisées
-
-Le marché utilise les tables **legacy** du système d'inventaire:
-
-| Table | Usage |
-|-------|-------|
-| `game.inventory_locations` | Entrepôts des vendeurs |
-| `game.inventory_items` | Items en vente (`for_sale=true`) |
-| `game.items` | Référentiel des items (tier, icon, base_value) |
-| `game.companies` | Vendeurs (NPC ou joueurs) |
-
-### Champs clés pour la vente
-
-Dans `inventory_items`:
+### `market_orders`
 
 | Colonne | Type | Description |
 |---------|------|-------------|
-| `for_sale` | BOOLEAN | Item en vente sur le marché |
-| `sale_price` | DECIMAL | Prix unitaire de vente |
-| `sale_qty` | INT | Quantité proposée à la vente |
+| `id` | TEXT (UUID) | Clé primaire |
+| `type` | TEXT | 'sell' ou 'buy' |
+| `item_id` | TEXT | FK → items |
+| `quantity` | INTEGER | Quantité proposée |
+| `price_per_unit` | REAL | Prix unitaire |
+| `airport_ident` | TEXT | Code ICAO |
+| `seller_id` | TEXT | FK → player ou 'AI' |
+| `seller_type` | TEXT | 'player', 'company', 'ai' |
+| `is_active` | INTEGER | Ordre actif (0/1) |
+| `created_at` | TEXT | Date création |
+| `expires_at` | TEXT | Date expiration (optionnel) |
+
+### Dans `company_inventory`
+
+Les items en vente sont aussi stockés dans `company_inventory` avec:
+
+| Colonne | Description |
+|---------|-------------|
+| `for_sale` | En vente (0/1) |
+| `sale_price` | Prix unitaire |
+| `sale_qty` | Quantité en vente |
 
 ---
 
-## API Endpoints
+## Modes de fonctionnement
 
-### Liste globale du marché
+### Mode Solo (AIEconomyService)
 
-```http
-GET /api/inventory/market
-```
+En mode solo, `AIEconomyService` génère automatiquement des ordres de marché pour simuler une économie vivante:
 
-**Query Parameters:**
+```typescript
+// services/AIEconomyService.ts
 
-| Paramètre | Type | Description |
-|-----------|------|-------------|
-| `airport` | string | Filtrer par code ICAO (ex: LFPG) |
-| `item_name` | string | Recherche partielle sur le nom |
-| `tier` | int | Filtrer par tier (0-5) |
-| `min_price` | float | Prix minimum |
-| `max_price` | float | Prix maximum |
-| `limit` | int | Pagination - max 500 (défaut: 100) |
-| `offset` | int | Pagination - décalage |
+class AIEconomyServiceClass {
+  private lastPriceUpdate = 0;
+  private lastOrderGeneration = 0;
 
-**Réponse:**
-
-```json
-[
-    {
-        "location_id": "uuid",
-        "airport_ident": "LFPG",
-        "company_id": "uuid",
-        "company_name": "World Resources",
-        "item_id": "uuid",
-        "item_code": "Raw Wheat",
-        "item_name": "Raw Wheat",
-        "item_tier": 0,
-        "item_icon": "🌾",
-        "sale_price": "8.00",
-        "sale_qty": 1000
+  /**
+   * Appelé périodiquement (tick du scheduler)
+   */
+  tick(simTimeSeconds: number): void {
+    // Mise à jour des prix toutes les 10 minutes sim
+    if (simTimeSeconds - this.lastPriceUpdate > 600) {
+      this.updatePrices();
+      this.lastPriceUpdate = simTimeSeconds;
     }
-]
-```
 
-### Statistiques du marché
-
-```http
-GET /api/inventory/market/stats
-```
-
-**Réponse:**
-
-```json
-{
-    "total_listings": 51,
-    "total_airports": 16,
-    "total_items_for_sale": 50040,
-    "total_value": "448620.00",
-    "airports_with_listings": ["LFBD", "LFPG", "LFML", ...],
-    "tier_distribution": {
-        "T0": 51,
-        "T1": 0,
-        "T2": 0
+    // Génération d'ordres IA toutes les 30 minutes sim
+    if (simTimeSeconds - this.lastOrderGeneration > 1800) {
+      this.generateAIOrders();
+      this.lastOrderGeneration = simTimeSeconds;
     }
+  }
+
+  private updatePrices(): void {
+    // Fluctuation ±5% sur les prix de base
+    const items = DatabaseManager.query('SELECT * FROM items');
+    for (const item of items) {
+      const change = (Math.random() - 0.5) * 0.1;
+      const newPrice = item.base_price * (1 + change);
+      DatabaseManager.run(
+        'UPDATE items SET current_price = ? WHERE id = ?',
+        [newPrice, item.id]
+      );
+    }
+  }
+
+  private generateAIOrders(): void {
+    // Supprimer vieux ordres IA
+    DatabaseManager.run("DELETE FROM market_orders WHERE seller_id = 'AI'");
+
+    // Générer nouveaux ordres pour items T0-T1
+    const items = DatabaseManager.query(
+      'SELECT * FROM items WHERE tier <= 1'
+    );
+    const airports = ['LFPG', 'LFPO', 'LFBO', 'LFML', 'LFSB', 'LFLL'];
+
+    for (const item of items) {
+      if (Math.random() > 0.5) continue; // 50% chance
+
+      const airport = airports[Math.floor(Math.random() * airports.length)];
+      const quantity = Math.floor(Math.random() * 50) + 10;
+      const price = item.base_price * (0.9 + Math.random() * 0.2);
+
+      DatabaseManager.run(
+        `INSERT INTO market_orders
+         (id, type, item_id, quantity, price_per_unit, airport_ident, seller_id, seller_type, is_active)
+         VALUES (?, 'sell', ?, ?, ?, ?, 'AI', 'ai', 1)`,
+        [generateUUID(), item.id, quantity, price, airport]
+      );
+    }
+  }
 }
 ```
 
-### Marché par aéroport (Legacy)
+### Mode Multi (P2P Sync)
 
-```http
-GET /api/inventory/market/{airport_ident}
-```
+En mode multi, les ordres de marché sont synchronisés entre tous les joueurs connectés:
 
-Retourne uniquement les annonces d'un aéroport spécifique.
-
-### Acheter sur le marché
-
-```http
-POST /api/inventory/market/buy
-```
-
-**Body:**
-
-```json
-{
-    "seller_location_id": "uuid",
-    "item_code": "Steel Ingot",
-    "qty": 100,
-    "buyer_type": "company"
-}
-```
-
-| Champ | Type | Description |
-|-------|------|-------------|
-| `seller_location_id` | UUID | Location du vendeur |
-| `item_code` | string | Nom de l'item (ex: "Steel Ingot") |
-| `qty` | int | Quantité à acheter |
-| `buyer_type` | string | `"player"` (wallet perso) ou `"company"` (wallet company, défaut) |
-
-**Validations:**
-- Stock en vente suffisant (`sale_qty` ≥ qty demandé)
-- Balance suffisante (wallet perso ou company selon `buyer_type`)
-- Acheteur n'est pas le vendeur
-
-**Actions automatiques:**
-1. Déduction du stock vendeur (`sale_qty` diminué)
-2. Création warehouse acheteur si inexistant (même aéroport)
-3. Ajout à l'inventaire acheteur (company_warehouse ou player_warehouse selon `buyer_type`)
-4. Transfert d'argent (wallet perso ou company)
-5. Audits côté vendeur (market_sell) et acheteur (market_buy)
-
-**Réponse:** L'inventaire mis à jour du buyer.
-
-### Mes annonces en vente
-
-```http
-GET /api/inventory/my-listings
-```
-
-Retourne les items que je vends actuellement (pour affichage dans l'inventaire).
-
-**Réponse:** Liste de `MarketListingOut`
-
-### Annuler une vente (V0.8)
-
-```http
-POST /api/inventory/cancel-sale
-```
-
-**Body:**
-
-```json
-{
-    "location_id": "uuid",
-    "item_code": "Steel Ingot"
-}
-```
-
-**Actions:**
-1. Retourne les items au stock de l'inventaire
-2. Retire l'annonce du marché
-3. Audit (remove_from_sale)
-
----
-
-## Schémas Pydantic
-
-### MarketListingOut
-
-```python
-class MarketListingOut(BaseModel):
-    location_id: UUID
-    airport_ident: str
-    company_id: UUID
-    company_name: str
-    item_id: UUID
-    item_code: str
-    item_name: str
-    item_tier: int
-    item_icon: str | None
-    sale_price: Decimal
-    sale_qty: int
-```
-
-### MarketStatsOut
-
-```python
-class MarketStatsOut(BaseModel):
-    total_listings: int
-    total_airports: int
-    total_items_for_sale: int
-    total_value: Decimal
-    airports_with_listings: list[str]
-    tier_distribution: dict[str, int]
+```typescript
+// NetworkManager reçoit les ordres des autres joueurs
+NetworkManager.onSync((data) => {
+  if (data.market_orders) {
+    // Merger les ordres reçus avec les ordres locaux
+    for (const order of data.market_orders) {
+      if (order.seller_id !== currentPlayerId) {
+        DatabaseManager.upsertMarketOrder(order);
+      }
+    }
+    // Refresh le state
+    marketState.listings.set(await MarketService.getListings());
+  }
+});
 ```
 
 ---
 
-## Frontend (Webmap)
+## Services TypeScript
 
-### Vue Marché
+### MarketService
 
-Accessible via le menu latéral "Marché".
+```typescript
+// services/MarketService.ts
 
-**Composants:**
-- **Header** - Stats globales (annonces, aéroports, valeur totale) + **Wallets (V0.8)**
-- **Filtres** - Recherche, aéroport, tier, prix max
-- **Tier Chips** - Distribution visuelle par tier
-- **Grille** - Cards des annonces avec icon, tier, prix, quantité
-- **Pagination** - Navigation par pages de 50 items
+class MarketServiceClass {
+  // Liste globale du marché
+  async getListings(filters?: {
+    airport?: string;
+    item_name?: string;
+    tier?: number;
+    min_price?: number;
+    max_price?: number;
+  }): Promise<MarketListing[]>;
 
-### Affichage Wallets (V0.8)
+  // Statistiques du marché
+  async getStats(): Promise<MarketStats>;
 
-Le header affiche les deux wallets disponibles:
-- 👤 **Wallet Perso** - Solde personnel du joueur
-- 🏢 **Wallet Company** - Solde de la company
+  // Mes annonces en vente
+  async getMyListings(): Promise<MarketListing[]>;
 
-Ces wallets sont également affichés dans la vue Inventaire.
+  // Acheter sur le marché
+  async buy(params: {
+    order_id: string;
+    qty: number;
+    buyer_type: 'player' | 'company';
+  }): Promise<void>;
 
-### Modal d'achat (V0.8)
+  // Mettre en vente (via InventoryService)
+  async setForSale(params: SetForSaleParams): Promise<void>;
 
-Affiche:
-- Item (icon, nom, tier)
-- Vendeur et aéroport
-- Prix unitaire et quantité disponible
-- Input quantité avec bouton MAX
-- **Sélecteur wallet** (Perso/Company) - permet de choisir quel wallet utilise pour l'achat
-- Total calculé dynamiquement
-- Solde disponible du wallet sélectionné
-
----
-
-## Flux de vente (V0.8)
-
-```
-1. Seller sélectionne un item dans son inventaire
-2. Modal de vente s'ouvre
-3. Seller définit prix et quantité
-4. POST /inventory/set-for-sale
-5. Backend:
-   a. Déduit qty de l'inventaire normal (qty -= sale_qty)
-   b. Crée l'annonce (for_sale=true, sale_qty, sale_price)
-   c. Audit (set_for_sale)
-6. Item apparaît dans le filtre "En Vente" et sur le marché
+  // Annuler vente
+  async cancelSale(orderId: string): Promise<void>;
+}
 ```
 
-**Note V0.8:** Les items mis en vente sont **déduits** de l'inventaire normal et stockés séparément. Lors de l'annulation, ils sont retournés à l'inventaire.
+### DataLayer (Abstraction)
+
+```typescript
+// En mode solo → SQLite local + AIEconomyService
+DataLayer.setLocalMode();
+
+// En mode multi → SQLite local + sync P2P
+DataLayer.setNetworkMode({ host: '192.168.1.10', port: 7777 });
+
+// Les services utilisent DataLayer
+const listings = await DataLayer.getMarketListings(filters);
+```
 
 ---
 
 ## Flux d'achat
 
-```
-1. Buyer sélectionne une annonce
-2. Modal d'achat s'ouvre
-3. Buyer choisit la quantité et le wallet (perso/company)
-4. POST /inventory/market/buy
-5. Backend:
-   a. Vérifie stock disponible (sale_qty)
-   b. Vérifie solde buyer (wallet perso ou company)
-   c. Déduit sale_qty du seller
-   d. Ajoute qty au buyer (warehouse au même aéroport)
-   e. Transfert d'argent buyer → seller
-6. Frontend refresh
+```typescript
+// MarketService.buy()
+async buy(params: BuyParams): Promise<void> {
+  const order = await this.getOrder(params.order_id);
+  const buyer = params.buyer_type === 'player'
+    ? await DatabaseManager.getPlayer()
+    : await DatabaseManager.getCompany();
+
+  // 1. Vérifier stock disponible
+  if (order.quantity < params.qty) {
+    throw new Error("Insufficient stock");
+  }
+
+  // 2. Calculer le total
+  const total = order.price_per_unit * params.qty;
+
+  // 3. Vérifier solde acheteur
+  const balance = params.buyer_type === 'player'
+    ? buyer.money
+    : buyer.balance;
+  if (balance < total) {
+    throw new Error("Insufficient funds");
+  }
+
+  // 4. Déduire du vendeur
+  order.quantity -= params.qty;
+  if (order.quantity === 0) {
+    order.is_active = false;
+  }
+  await DatabaseManager.saveMarketOrder(order);
+
+  // 5. Ajouter à l'inventaire acheteur
+  const inventoryType = params.buyer_type === 'player'
+    ? 'player_inventory'
+    : 'company_inventory';
+  await InventoryService.addItem(
+    inventoryType,
+    order.item_id,
+    params.qty,
+    order.airport_ident
+  );
+
+  // 6. Transfert d'argent
+  if (params.buyer_type === 'player') {
+    buyer.money -= total;
+    await DatabaseManager.savePlayer(buyer);
+  } else {
+    buyer.balance -= total;
+    await DatabaseManager.saveCompany(buyer);
+  }
+
+  // 7. Créditer le vendeur (si pas IA)
+  if (order.seller_type !== 'ai') {
+    await this.creditSeller(order.seller_id, order.seller_type, total);
+  }
+
+  // 8. Sync P2P si connecté
+  if (NetworkManager.isConnected()) {
+    NetworkManager.broadcast({ market_update: order });
+  }
+}
 ```
 
 ---
 
-## NPC (T0) et marché
+## Flux de vente
+
+```
+1. Joueur sélectionne un item dans son inventaire
+2. Modal de vente s'ouvre
+3. Joueur définit prix et quantité
+4. InventoryService.setForSale()
+5. Actions:
+   a. Déduit qty de l'inventaire normal (qty -= sale_qty)
+   b. Crée l'annonce (for_sale=true, sale_qty, sale_price)
+6. Item apparaît dans le filtre "En Vente" et sur le marché
+7. Sync P2P si connecté
+```
+
+---
+
+## Prix de base NPC (T0)
 
 Les factories T0 (NPC) produisent automatiquement et mettent en vente:
 
@@ -289,54 +285,20 @@ Les factories T0 (NPC) produisent automatiquement et mettent en vente:
 | Iron Ore | 18$ |
 | Coal | 10$ |
 | Raw Wood | 6$ |
-| ... | ... |
+| Raw Vegetables | 8$ |
+| Raw Fruits | 10$ |
+| Natural Gas | 20$ |
+| Raw Stone | 5$ |
 
-**Cycle de production T0:**
-- Toutes les 5 minutes
-- +50 items par cycle
-- Stock max: 1000 items par produit
-- Mise en vente automatique au prix de base
-
----
-
-## Permissions
-
-Pour acheter/vendre, les membres d'une company doivent avoir:
-
-| Permission | Description |
-|------------|-------------|
-| `can_buy_market` | Acheter sur le marché |
-| `can_sell_market` | Mettre en vente des items |
+**Fluctuation des prix:**
+- ±5% toutes les 10 minutes (temps simulateur)
+- Basé sur offre/demande (futur)
 
 ---
 
-## Exemples d'utilisation
+## Interface EFB
 
-### Rechercher du blé pas cher
-
-```bash
-curl "http://localhost:8000/api/inventory/market?item_name=wheat&max_price=10"
-```
-
-### Voir les stats du marché
-
-```bash
-curl "http://localhost:8000/api/inventory/market/stats"
-```
-
-### Filtrer par tier T0 à Paris
-
-```bash
-curl "http://localhost:8000/api/inventory/market?airport=LFPG&tier=0"
-```
-
----
-
-## EFB Tablet (V0.8)
-
-L'onglet Market est également disponible dans l'EFB in-game.
-
-### Fonctionnalités EFB
+### Vue Marché
 
 | Élément | Description |
 |---------|-------------|
@@ -345,39 +307,111 @@ L'onglet Market est également disponible dans l'EFB in-game.
 | **Liste offres** | Cards avec tier coloré, nom, prix, qty, vendeur |
 | **Popup achat** | Slider quantité + choix wallet + total |
 
-### Particularités Coherent GT
+### Structure UI
 
-- Les listes sont rendues via **refs + innerHTML** (pas de `.map()` JSX)
-- Les clicks sont gérés via **addEventListener** après le rendu
-- Le total d'achat utilise un **Subject** reactif séparé
+```
+┌─────────────────────────────────────────────────────┐
+│ 🏪 MARCHÉ              👤 5,000$ | 🏢 25,000$       │
+│ 51 annonces | 16 aéroports                          │
+├─────────────────────────────────────────────────────┤
+│ 🔍 Rechercher...           [T0][T1][T2][T3]         │
+├─────────────────────────────────────────────────────┤
+│ ┌────────────────┐ ┌────────────────┐               │
+│ │ 🌾 Raw Wheat   │ │ 🥩 Raw Meat    │               │
+│ │ T0 | 8.50$/u   │ │ T0 | 12.20$/u  │               │
+│ │ x100 @ LFPG    │ │ x50 @ LFML     │               │
+│ │ [ACHETER]      │ │ [ACHETER]      │               │
+│ └────────────────┘ └────────────────┘               │
+└─────────────────────────────────────────────────────┘
+```
 
-### État React (Subjects)
+### Modal d'achat
+
+```
+┌─────────────────────────────────────────────────────┐
+│ Acheter: 🌾 Raw Wheat                               │
+├─────────────────────────────────────────────────────┤
+│ Prix unitaire: 8.50$                                │
+│ Quantité disponible: 100                            │
+│                                                     │
+│ Quantité: [====○======] 50                          │
+│                                                     │
+│ Payer avec:                                         │
+│ [● Wallet Perso (5,000$)]                          │
+│ [○ Wallet Company (25,000$)]                       │
+│                                                     │
+│ Total: 425.00$                                      │
+│                                                     │
+│           [Annuler]  [Confirmer]                    │
+└─────────────────────────────────────────────────────┘
+```
+
+---
+
+## Sync P2P
+
+### Données synchronisées
+
+| Donnée | Direction | Fréquence |
+|--------|-----------|-----------|
+| Ordres de marché | Bidirectionnel | 5 sec |
+| Achats/Ventes | Immédiat | Event-driven |
+| Prix actuels | Bidirectionnel | 10 min |
+
+### Monde partagé
+
+En mode multi, tous les joueurs voient le **même marché**:
+- Les ordres de vente sont visibles par tous
+- Les achats sont instantanément reflétés
+- L'économie est partagée entre tous les joueurs
+
+### Conflits d'achat
+
+Si deux joueurs tentent d'acheter le même item:
+1. Le premier arrivé est servi
+2. Le second reçoit une erreur "Stock insuffisant"
+3. Le state est rafraîchi automatiquement
+
+---
+
+## Scheduler Jobs (Local)
+
+| Job | Intervalle | Description |
+|-----|------------|-------------|
+| `ai_price_update` | 10 min | Mise à jour prix AIEconomyService |
+| `ai_order_generation` | 30 min | Génération ordres IA (mode solo) |
+| `expired_orders_cleanup` | 1 heure | Supprime ordres expirés |
+
+---
+
+## États React (Subjects)
 
 ```typescript
-// Données
-private marketListings = Subject.create<MarketListing[]>([]);
-private walletPersonal = Subject.create<number>(0);
+// Dans MarketState.ts
+export const marketState = {
+  // Données
+  listings: Subject.create<MarketListing[]>([]),
+  myListings: Subject.create<MarketListing[]>([]),
 
-// UI
-private marketLoading = Subject.create<boolean>(false);
-private marketTierFilter = Subject.create<number | null>(null);
+  // UI
+  loading: Subject.create<boolean>(false),
+  tierFilter: Subject.create<number | null>(null),
+  searchQuery: Subject.create<string>(''),
 
-// Popup achat
-private showMarketBuyPopup = Subject.create<boolean>(false);
-private marketBuyItem = Subject.create<MarketItem | null>(null);
-private marketBuyQty = Subject.create<number>(1);
-private marketBuyTotal = Subject.create<number>(0);
-private marketBuyWallet = Subject.create<"player" | "company">("company");
+  // Popup achat
+  showBuyPopup: Subject.create<boolean>(false),
+  buyItem: Subject.create<MarketListing | null>(null),
+  buyQty: Subject.create<number>(1),
+  buyWallet: Subject.create<'player' | 'company'>('company'),
+};
 ```
 
-### Flux d'achat EFB
+---
 
-```
-1. User clique sur une offre
-2. openMarketBuyPopup() - charge les infos item
-3. User ajuste quantité via slider
-4. updateMarketBuyQty() - met à jour total
-5. User choisit wallet (perso/company)
-6. confirmMarketBuy() - POST /inventory/market/buy
-7. Refresh listings + ferme popup
-```
+## Évolutions futures
+
+- [ ] Ordres d'achat (buy orders)
+- [ ] Historique des prix
+- [ ] Enchères / prix dynamiques offre/demande
+- [ ] Notifications de vente
+- [ ] Favoris / watchlist
