@@ -215,6 +215,7 @@ class CarrierPlusView extends AppView<RequiredProps<AppViewProps, "bus">> {
   private airportsSource: VectorSource<Feature<Point>> | null = null;
   private factoriesSource: VectorSource<Feature<Point>> | null = null;
   private helipadsSource: VectorSource<Feature<Point>> | null = null;
+  private lastLoadedZoom: number = 7;  // Track zoom for threshold-based reloading
 
   // V0.8 Mission state
   private availableAircraftList: Array<{
@@ -703,8 +704,17 @@ class CarrierPlusView extends AppView<RequiredProps<AppViewProps, "bus">> {
         const bounds = mapManager.getVisibleBounds();
         if (!bounds) return;
 
-        if (mapManager.shouldReloadAirports(bounds)) {
-          console.log("[CarrierPlus] Map moved - reloading airports for new area");
+        const map = mapManager.getMap();
+        const currentZoom = map?.getView().getZoom() || 7;
+
+        // Check if zoom crossed a threshold (7 or 9)
+        const zoomThresholds = [7, 9, 11];
+        const lastThreshold = zoomThresholds.filter(t => this.lastLoadedZoom >= t).length;
+        const currentThreshold = zoomThresholds.filter(t => currentZoom >= t).length;
+        const zoomCrossedThreshold = lastThreshold !== currentThreshold;
+
+        if (zoomCrossedThreshold || mapManager.shouldReloadAirports(bounds)) {
+          console.log(`[CarrierPlus] Map moved - reloading airports (zoom: ${this.lastLoadedZoom.toFixed(1)} → ${currentZoom.toFixed(1)}, threshold: ${zoomCrossedThreshold})`);
           void this.fetchAirportsForMap();
         }
       },
@@ -5108,6 +5118,12 @@ class CarrierPlusView extends AppView<RequiredProps<AppViewProps, "bus">> {
   private async fetchAirportsForMap(): Promise<void> {
     if (!mapManager.isInitialized()) return;
 
+    const map = mapManager.getMap();
+    if (!map) return;
+
+    // Get current zoom level
+    const zoom = map.getView().getZoom() || 7;
+
     // Get visible bounds from the map view (not aircraft position)
     let bounds = mapManager.getVisibleBounds();
 
@@ -5135,9 +5151,34 @@ class CarrierPlusView extends AppView<RequiredProps<AppViewProps, "bus">> {
     mapState.smallAirportsStatus.set("loading");
 
     try {
-      // V3.0: Use WorldRouter for P2P/network mode auto-switching
-      const airports = await WorldRouter.getAirportsInBounds(minLat, maxLat, minLon, maxLon, undefined, 2000);
-      console.log(`[CarrierPlus] Fetched ${airports.length} airports`);
+      // ZOOM-BASED LOADING STRATEGY
+      // Zoom < 7  : large only (500 max)
+      // Zoom 7-9  : large + medium (2000 max)
+      // Zoom 9-11 : large + medium + small (6000 max)
+      // Zoom > 11 : all types (7000 max)
+
+      const promises: Promise<Array<{ ident: string; name: string; type: string; latitude_deg: number; longitude_deg: number; elevation_ft?: number; municipality?: string; iso_country?: string }>>[] = [];
+
+      // Always load large airports
+      promises.push(WorldRouter.getAirportsInBounds(minLat, maxLat, minLon, maxLon, "large_airport", 500));
+
+      // Medium airports at zoom >= 7
+      if (zoom >= 7) {
+        promises.push(WorldRouter.getAirportsInBounds(minLat, maxLat, minLon, maxLon, "medium_airport", 1500));
+      }
+
+      // Small airports at zoom >= 9
+      if (zoom >= 9) {
+        promises.push(WorldRouter.getAirportsInBounds(minLat, maxLat, minLon, maxLon, "small_airport", 4000));
+      }
+
+      const results = await Promise.all(promises);
+      const airports = results.flat();
+
+      console.log(`[CarrierPlus] Zoom ${zoom.toFixed(1)} - Fetched ${airports.length} airports (L:${results[0]?.length || 0} M:${results[1]?.length || 0} S:${results[2]?.length || 0})`);
+
+      // Update last loaded zoom
+      this.lastLoadedZoom = zoom;
 
       // V2.1: Delegate feature creation to MapManager
       mapManager.loadAirports(airports);
@@ -5197,22 +5238,41 @@ class CarrierPlusView extends AppView<RequiredProps<AppViewProps, "bus">> {
   private async fetchHelipadsForMap(): Promise<void> {
     if (!mapManager.isInitialized()) return;
 
-    const lat = simVarState.latitude.get();
-    const lon = simVarState.longitude.get();
-    if (lat === 0 && lon === 0) return;
+    const map = mapManager.getMap();
+    const zoom = map?.getView().getZoom() || 7;
+
+    // Only load helipads at zoom > 10 (too many to show zoomed out)
+    if (zoom < 10) {
+      console.log(`[CarrierPlus] Zoom ${zoom.toFixed(1)} too low for helipads`);
+      mapManager.loadHelipads([]);
+      mapState.helipadsOnMapStatus.set("success");
+      return;
+    }
+
+    // Use visible bounds instead of aircraft position
+    let bounds = mapManager.getVisibleBounds();
+    if (!bounds) {
+      const lat = simVarState.latitude.get();
+      const lon = simVarState.longitude.get();
+      if (lat === 0 && lon === 0) return;
+      const delta = 4;
+      bounds = { minLat: lat - delta, maxLat: lat + delta, minLon: lon - delta, maxLon: lon + delta };
+    }
 
     mapState.helipadsOnMapStatus.set("loading");
 
-    const delta = 8;
-    const minLat = lat - delta;
-    const maxLat = lat + delta;
-    const minLon = lon - delta;
-    const maxLon = lon + delta;
+    // Add padding
+    const latPadding = (bounds.maxLat - bounds.minLat) * 0.2;
+    const lonPadding = (bounds.maxLon - bounds.minLon) * 0.2;
+    const minLat = bounds.minLat - latPadding;
+    const maxLat = bounds.maxLat + latPadding;
+    const minLon = bounds.minLon - lonPadding;
+    const maxLon = bounds.maxLon + lonPadding;
 
     try {
       // V3.0: Use WorldRouter for P2P/network mode auto-switching
-      const helipads = await WorldRouter.getAirportsInBounds(minLat, maxLat, minLon, maxLon, "heliport", 500);
-      console.log(`[CarrierPlus] Fetched ${helipads.length} helipads for map`);
+      const helipads = await WorldRouter.getAirportsInBounds(minLat, maxLat, minLon, maxLon, "heliport", 1000);
+      console.log(`[CarrierPlus] Zoom ${zoom.toFixed(1)} - Fetched ${helipads.length} helipads`);
 
       // V2.1: Delegate feature creation to MapManager
       mapManager.loadHelipads(helipads);

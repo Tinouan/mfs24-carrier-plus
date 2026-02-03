@@ -191,7 +191,7 @@ class ServiceAdapterClass {
           .sort((a, b) => a.distance_nm - b.distance_nm)
           .slice(0, limit);
       },
-      getAirportsInBounds: async (minLat: number, maxLat: number, minLon: number, maxLon: number, type?: string, limit = 2000) => {
+      getAirportsInBounds: async (minLat: number, maxLat: number, minLon: number, maxLon: number, type?: string, limit = 5000) => {
         const all = await DatabaseManager.getAll<Airport>("airports");
         let filtered = all.filter((a) =>
           a.latitude >= minLat &&
