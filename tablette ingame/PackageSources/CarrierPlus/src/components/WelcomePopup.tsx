@@ -276,6 +276,9 @@ export function renderWelcomePopup(props: WelcomePopupProps): VNode {
             type="text"
             placeholder="Pilote"
             style="width: 100%; background: #1a1a24; border: 1px solid #374151; border-radius: 6px; padding: 10px; color: white; font-size: 13px; outline: none; box-sizing: border-box;"
+            onkeydown={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+            onkeyup={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+            onkeypress={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
           />
         </div>
 
@@ -311,6 +314,9 @@ export function renderWelcomePopup(props: WelcomePopupProps): VNode {
             placeholder="LFPG"
             maxLength={4}
             style="width: 100%; background: #1a1a24; border: 1px solid #374151; border-radius: 6px; padding: 10px; color: white; font-size: 13px; font-family: monospace; text-transform: uppercase; outline: none; box-sizing: border-box; letter-spacing: 2px;"
+            onkeydown={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+            onkeyup={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+            onkeypress={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
           />
           <div style="font-size: 9px; color: #6b7280; margin-top: 4px;">
             {currentLanguage.map(l => l === "fr"

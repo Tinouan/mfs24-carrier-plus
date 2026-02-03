@@ -56,6 +56,69 @@ export interface RepairItemData {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
+ * Stop keyboard event propagation to prevent MSFS from capturing key presses
+ * Use on all input fields: onkeydown={stopKeyPropagation} onkeyup={stopKeyPropagation}
+ * Uses both stopPropagation() and stopImmediatePropagation() for maximum blocking
+ */
+export function stopKeyPropagation(e: KeyboardEvent): void {
+  e.stopPropagation();
+  e.stopImmediatePropagation();
+}
+
+/**
+ * Input props helper - returns props object to spread on input elements
+ * Prevents MSFS from capturing keyboard input
+ * Uses both stopPropagation() and stopImmediatePropagation() for maximum blocking
+ */
+export const inputStopPropagation = {
+  onkeydown: (e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); },
+  onkeyup: (e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); },
+  onkeypress: (e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); },
+};
+
+// Declare Coherent for MSFS keyboard capture API
+declare const Coherent: {
+  trigger: (event: string, data?: unknown) => void;
+  call: (name: string, ...args: unknown[]) => Promise<unknown>;
+};
+
+/**
+ * Setup Coherent keyboard capture for an input element
+ * This is the proper way to prevent MSFS from capturing keyboard input in Coherent GT
+ *
+ * When the input is focused, tells MSFS to stop capturing keyboard events
+ * When the input loses focus, releases keyboard back to the simulator
+ *
+ * @param input - The HTMLInputElement to setup keyboard capture for
+ * @example
+ * // After your input element is rendered:
+ * setupCoherentKeyboardCapture(myInputRef.instance);
+ */
+export function setupCoherentKeyboardCapture(input: HTMLInputElement | null): void {
+  if (!input) return;
+
+  // Generate a unique ID for this input
+  const uuid = `carrierplus-input-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+  // When input is focused, tell MSFS to capture keyboard for the EFB
+  input.addEventListener("focus", () => {
+    console.log("[PopupHelpers] Input focused - requesting keyboard capture via Coherent");
+    // Tell MSFS to capture keyboard input for this field
+    if (typeof Coherent !== "undefined") {
+      Coherent.trigger("FOCUS_INPUT_FIELD", { uuid, isPassword: input.type === "password" });
+    }
+  });
+
+  // When input loses focus, release keyboard back to simulator
+  input.addEventListener("blur", () => {
+    console.log("[PopupHelpers] Input blurred - releasing keyboard via Coherent");
+    if (typeof Coherent !== "undefined") {
+      Coherent.trigger("UNFOCUS_INPUT_FIELD", uuid);
+    }
+  });
+}
+
+/**
  * Get gauge color based on percentage value
  */
 export function getGaugeColor(value: number): string {

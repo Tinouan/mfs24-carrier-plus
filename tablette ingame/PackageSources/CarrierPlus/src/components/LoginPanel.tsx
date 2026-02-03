@@ -101,6 +101,9 @@ export function renderLoginPanel(props: LoginPanelProps): VNode {
             style="width: 100%; background: #1a1a24; border: 1px solid #374151; border-radius: 4px; padding: 8px 10px; color: white; font-size: 12px; box-sizing: border-box;"
             placeholder="email@exemple.com"
             ref={emailInputRef}
+            onkeydown={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+            onkeyup={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+            onkeypress={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
           />
         </div>
 
@@ -112,6 +115,9 @@ export function renderLoginPanel(props: LoginPanelProps): VNode {
             style="width: 100%; background: #1a1a24; border: 1px solid #374151; border-radius: 4px; padding: 8px 10px; color: white; font-size: 12px; box-sizing: border-box;"
             placeholder="********"
             ref={passwordInputRef}
+            onkeydown={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+            onkeyup={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+            onkeypress={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
           />
         </div>
 

@@ -56,10 +56,10 @@ export const mapState: MapStateType = {
 
   // Layer visibility toggles
   showFactoriesOnMap: Subject.create(false),
-  showHelipadsOnMap: Subject.create(false),
+  showHelipadsOnMap: Subject.create(true),
   showLargeAirports: Subject.create(true),
   showMediumAirports: Subject.create(true),
-  showSmallAirports: Subject.create(false),
+  showSmallAirports: Subject.create(true),
 
   // Layer loading status
   largeAirportsStatus: Subject.create<LoadingStatus>("idle"),

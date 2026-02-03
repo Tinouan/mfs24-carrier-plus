@@ -26,20 +26,18 @@ class LocalFleetServiceClass {
    * Returns both personal aircraft (owned by player) and company aircraft
    */
   async getFleet(): Promise<HangarAircraftItem[]> {
-    console.log("[LocalFleetService] getFleet() called");
-
     const player = await DatabaseManager.getPlayer();
-    console.log("[LocalFleetService] Player found:", player ? player.id : "NO PLAYER");
     if (!player) throw new Error("No player found");
 
     const catalog = await DatabaseManager.getAll<AircraftCatalog>("aircraft_catalog");
-    console.log("[LocalFleetService] Aircraft catalog count:", catalog.length);
 
     const result: HangarAircraftItem[] = [];
 
+    // 0. Repair orphaned aircraft (owner_id and company_id both undefined/null)
+    await this.repairOrphanedAircraft(player.id);
+
     // 1. Get personal aircraft (owned directly by player)
     const personalAircraft = await DatabaseManager.getAircraftByOwner(player.id);
-    console.log("[LocalFleetService] Personal aircraft found:", personalAircraft.length, personalAircraft);
     for (const ac of personalAircraft) {
       const catEntry = catalog.find((c) => c.icaoType === ac.type_code || c.id === ac.type_code);
       result.push({
@@ -50,7 +48,7 @@ class LocalFleetServiceClass {
         current_airport_ident: ac.location_icao,
         status: ac.condition > 50 ? "operational" : "needs_repair",
         required_license: catEntry?.requiredLicense || "PPL",
-        owner_type: "personal",
+        owner_type: "player",
         thumbnail_url: null,
       });
     }
@@ -76,6 +74,146 @@ class LocalFleetServiceClass {
     }
 
     return result;
+  }
+
+  /**
+   * Repair corrupted or incomplete aircraft data
+   * Fixes: owner_id, type_code, location_icao, systems, condition, etc.
+   */
+  private async repairOrphanedAircraft(playerId: string): Promise<void> {
+    const allAircraft = await DatabaseManager.getAll<Aircraft>("aircraft");
+    const player = await DatabaseManager.getPlayer();
+    const defaultLocation = player?.nationality === "FR" ? "LFPG" : "KJFK";
+
+    for (const ac of allAircraft) {
+      let needsRepair = false;
+
+      // 1. Fix owner_id if missing/invalid
+      const hasNoOwner = !ac.owner_id || ac.owner_id === "undefined" || ac.owner_id === "null";
+      const hasNoCompany = !ac.company_id || ac.company_id === "undefined" || ac.company_id === "null";
+      if (hasNoOwner && hasNoCompany) {
+        ac.owner_id = playerId;
+        ac.company_id = null;
+        needsRepair = true;
+      }
+
+      // 2. Fix type_code if missing
+      if (!ac.type_code || ac.type_code === "undefined") {
+        ac.type_code = "C172";
+        needsRepair = true;
+      }
+
+      // 3. Fix location_icao if missing
+      if (!ac.location_icao || ac.location_icao === "undefined" || ac.location_icao === "N/A") {
+        ac.location_icao = defaultLocation;
+        needsRepair = true;
+      }
+
+      // 4. Fix condition if invalid
+      if (ac.condition === undefined || ac.condition === null || ac.condition < 0) {
+        ac.condition = 100;
+        needsRepair = true;
+      }
+
+      // 5. Fix fuel_gallons if invalid
+      if (ac.fuel_gallons === undefined || ac.fuel_gallons === null || ac.fuel_gallons < 0) {
+        ac.fuel_gallons = 40;
+        needsRepair = true;
+      }
+
+      // 6. Fix flight_hours if invalid
+      if (ac.flight_hours === undefined || ac.flight_hours === null) {
+        ac.flight_hours = 0;
+        needsRepair = true;
+      }
+
+      // 7. Fix systems if missing or corrupted
+      if (!ac.systems || this.isSystemsCorrupted(ac.systems)) {
+        ac.systems = this.createDefaultSystems();
+        needsRepair = true;
+      }
+
+      // 8. Fix owner_type if missing (new field)
+      if (!ac.owner_type) {
+        ac.owner_type = ac.company_id ? "company" : "player";
+        needsRepair = true;
+      }
+
+      // 9. Fix status if missing (new field)
+      if (!ac.status) {
+        ac.status = "parked";
+        needsRepair = true;
+      }
+
+      // 10. Fix cargo_capacity_kg if missing (new field)
+      if (ac.cargo_capacity_kg === undefined || ac.cargo_capacity_kg === null) {
+        // Default based on type_code, fallback to 120 (C172)
+        const defaultCapacities: Record<string, number> = {
+          "C152": 50, "C172": 120, "DA40": 100, "PA28": 110, "SR22": 180,
+          "TBM9": 250, "BE36": 200, "DA62": 200, "BE58": 350, "PA18": 150,
+          "PC6T": 1100, "C208": 1500, "DHC6": 2000, "PC12": 700, "B350": 900
+        };
+        ac.cargo_capacity_kg = defaultCapacities[ac.type_code] || 120;
+        needsRepair = true;
+      }
+
+      // 11. Fix is_active if missing
+      if (ac.is_active === undefined) {
+        ac.is_active = true;
+        needsRepair = true;
+      }
+
+      // Save if any repairs were made
+      if (needsRepair) {
+        console.log(`[LocalFleetService] Repaired aircraft ${ac.registration}: type=${ac.type_code}, loc=${ac.location_icao}, status=${ac.status}`);
+        await DatabaseManager.put("aircraft", ac, false);
+      }
+    }
+  }
+
+  /**
+   * Check if aircraft systems are corrupted (all failed or all zero)
+   */
+  private isSystemsCorrupted(systems: any): boolean {
+    if (!systems) return true;
+
+    // Check if any condition is missing or zero
+    const conditions = [
+      systems.engine_condition,
+      systems.propeller_condition,
+      systems.landing_gear_condition,
+      systems.electrical_condition,
+      systems.avionics_condition,
+      systems.pitot_condition,
+    ];
+
+    const allZeroOrMissing = conditions.every(c => c === undefined || c === null || c === 0);
+    const anyFailed = systems.engine_failed || systems.propeller_failed ||
+                      systems.landing_gear_failed || systems.electrical_failed ||
+                      systems.avionics_failed || systems.pitot_failed;
+
+    return allZeroOrMissing || (anyFailed && conditions.every(c => c === 0));
+  }
+
+  /**
+   * Create default healthy systems for an aircraft
+   */
+  private createDefaultSystems(): Aircraft["systems"] {
+    return {
+      engine_condition: 100,
+      propeller_condition: 100,
+      landing_gear_condition: 100,
+      electrical_condition: 100,
+      avionics_condition: 100,
+      pitot_condition: 100,
+      engine_failed: false,
+      propeller_failed: false,
+      landing_gear_failed: false,
+      electrical_failed: false,
+      avionics_failed: false,
+      pitot_failed: false,
+      last_maintenance_at: new Date().toISOString(),
+    };
   }
 
   /**
@@ -150,7 +288,7 @@ class LocalFleetServiceClass {
     }
 
     // Determine owner type
-    const ownerType = ac.owner_id ? "personal" : "company";
+    const ownerType = ac.owner_id ? "player" : "company";
 
     return {
       id: ac.id,

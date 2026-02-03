@@ -41,6 +41,7 @@ export interface CompanyViewProps {
   buyCompanyName: Subject<string>;
   buyCompanyLoading: Subject<boolean>;
   buyCompanyError: Subject<string | null>;
+  buyCompanyNameInputRef: NodeReference<HTMLInputElement>;  // Ref for keyboard capture
   onBuyCompany: () => void;
   t: (category: string, key: string) => string;
 }
@@ -65,6 +66,7 @@ export function renderCompanyTab(props: CompanyViewProps): VNode {
     buyCompanyName,
     buyCompanyLoading,
     buyCompanyError,
+    buyCompanyNameInputRef,
     onBuyCompany,
     t,
   } = props;
@@ -178,11 +180,15 @@ export function renderCompanyTab(props: CompanyViewProps): VNode {
                   <div style="margin-bottom: 16px;">
                     <label style="display: block; color: #9ca3af; font-size: 11px; margin-bottom: 6px; text-transform: uppercase;">{currentLanguage.map(l => translations[l].company.companyName || "Company Name")}</label>
                     <input
+                      ref={buyCompanyNameInputRef}
                       type="text"
                       value={buyCompanyName}
                       oninput={(e: any) => buyCompanyName.set(e.target.value)}
                       placeholder={currentLanguage.map(l => translations[l].company.enterCompanyName || "My Aviation Company")}
                       style="width: 100%; padding: 10px 12px; background: #1a1a24; border: 1px solid #374151; border-radius: 8px; color: white; font-size: 13px; outline: none; box-sizing: border-box;"
+                      onkeydown={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+                      onkeyup={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+                      onkeypress={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
                     />
                   </div>
 

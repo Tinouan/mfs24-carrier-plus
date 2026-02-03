@@ -175,6 +175,9 @@ export function renderMapTab(props: MapViewProps): VNode {
           ref={icaoSearchInputRef}
           placeholder={t("map", "searchIcao")}
           style="flex: 1; background: #252532; border: 1px solid #374151; border-radius: 6px; padding: 6px 10px; color: white; font-size: 11px; text-transform: uppercase;"
+          onkeydown={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+          onkeyup={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+          onkeypress={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
         />
         <Button callback={(): void => { onSearchAirportByIcao(); }}>
           <div style={icaoSearchStatus.map(s => s === "loading"

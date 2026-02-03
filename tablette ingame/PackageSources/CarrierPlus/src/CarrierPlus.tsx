@@ -191,6 +191,9 @@ class CarrierPlusView extends AppView<RequiredProps<AppViewProps, "bus">> {
   // ICAO search
   private icaoSearchInputRef = FSComponent.createRef<HTMLInputElement>();
 
+  // Company name input (for keyboard capture)
+  private buyCompanyNameInputRef = FSComponent.createRef<HTMLInputElement>();
+
   // Landing detection
   private wasOnGround = true;
 
@@ -367,6 +370,20 @@ class CarrierPlusView extends AppView<RequiredProps<AppViewProps, "bus">> {
       // Auto-fetch company data when switching to company tab
       if (tab === "company" && (authState.isLoggedIn.get() || authState.isP2PMode.get())) {
         void this.fetchCompanyData();
+        // Setup keyboard capture AND input listener for company name input (after DOM renders)
+        // JSX oninput doesn't work reliably in Coherent GT, so we add manual listener
+        setTimeout(() => {
+          const companyInput = this.buyCompanyNameInputRef.getOrDefault();
+          if (companyInput) {
+            this.setupInputEventBlocker(companyInput);
+            // Add manual input listener since JSX oninput doesn't work in Coherent GT
+            companyInput.addEventListener("input", () => {
+              const value = companyInput.value;
+              console.log("[CarrierPlus] Company name input:", value);
+              companyState.buyCompanyName.set(value);
+            });
+          }
+        }, 150);
       }
       // Auto-fetch market data when switching to market tab
       if (tab === "market" && (authState.isLoggedIn.get() || authState.isP2PMode.get())) {
@@ -374,16 +391,12 @@ class CarrierPlusView extends AppView<RequiredProps<AppViewProps, "bus">> {
       }
       // V2.1: Auto-refresh active mission when switching to missions tab
       if (tab === "missions" && (authState.isLoggedIn.get() || authState.isP2PMode.get())) {
-        console.log("[CarrierPlus] Switched to missions tab, refreshing active mission...");
         void this.fetchActiveMission();
-        // V1.4: Auto-sync current aircraft fuel (anti-cheat)
         void this.autoSyncCurrentAircraft();
       }
       // V2.2: Auto-fetch hangar aircraft list when switching to hangar tab
       if (tab === "hangar" && (authState.isLoggedIn.get() || authState.isP2PMode.get())) {
-        console.log("[CarrierPlus] Switched to hangar tab, loading aircraft list...");
         void this.fetchHangarAircraftList();
-        // V1.2: Auto-sync current aircraft fuel (anti-cheat)
         void this.autoSyncCurrentAircraft();
       }
       // P2P: Settings tab no longer needs credentials setup
@@ -392,7 +405,6 @@ class CarrierPlusView extends AppView<RequiredProps<AppViewProps, "bus">> {
     // V1.1: Auto-refresh when switching to missions sub-tabs
     navigationState.missionsSubTab.sub((subTab) => {
       if (subTab === "creation" && (authState.isLoggedIn.get() || authState.isP2PMode.get())) {
-        console.log("[CarrierPlus] Switched to creation sub-tab, auto-refreshing...");
         void this.refreshMissionOrigin();
         // V1.4: Auto-sync current aircraft fuel (anti-cheat)
         void this.autoSyncCurrentAircraft();
@@ -447,12 +459,24 @@ class CarrierPlusView extends AppView<RequiredProps<AppViewProps, "bus">> {
         authState.showFirstLaunchPopup.set(true);
 
         // Add input listener for ICAO validation after popup renders
-        requestAnimationFrame(() => {
+        // Use setTimeout with longer delay to ensure DOM is fully rendered in Coherent GT
+        setTimeout(() => {
           const airportInput = this.welcomeAirportRef.instance;
+          const pilotNameInput = this.welcomePilotNameRef.instance;
+
+          console.log("[CarrierPlus] Setting up WelcomePopup inputs - pilotName:", !!pilotNameInput, "airport:", !!airportInput);
+
+          // Setup Coherent keyboard capture for WelcomePopup inputs
+          // This tells MSFS to stop capturing keyboard when input is focused
+          if (pilotNameInput) {
+            this.setupInputEventBlocker(pilotNameInput);
+          }
           if (airportInput) {
+            this.setupInputEventBlocker(airportInput);
             airportInput.addEventListener("input", () => {
               const value = airportInput.value.toUpperCase();
               const isValid = /^[A-Z]{4}$/.test(value);
+              console.log("[CarrierPlus] Airport ICAO validation:", value, "valid:", isValid);
               authState.firstLaunchAirportValid.set(isValid);
             });
           }
@@ -469,7 +493,7 @@ class CarrierPlusView extends AppView<RequiredProps<AppViewProps, "bus">> {
               }
             });
           }
-        });
+        }, 200);
       },
       onComplete: () => {
         console.log("[CarrierPlus] Local database initialized");
@@ -697,10 +721,6 @@ class CarrierPlusView extends AppView<RequiredProps<AppViewProps, "bus">> {
         console.log("[CarrierPlus] Helipads loaded:", count);
       },
       onMapMoveEnd: () => {
-        // Check if we need to reload airports
-        const anyAirportsVisible = mapState.showLargeAirports.get() || mapState.showMediumAirports.get() || mapState.showSmallAirports.get();
-        if (!anyAirportsVisible) return;
-
         const bounds = mapManager.getVisibleBounds();
         if (!bounds) return;
 
@@ -713,9 +733,16 @@ class CarrierPlusView extends AppView<RequiredProps<AppViewProps, "bus">> {
         const currentThreshold = zoomThresholds.filter(t => currentZoom >= t).length;
         const zoomCrossedThreshold = lastThreshold !== currentThreshold;
 
-        if (zoomCrossedThreshold || mapManager.shouldReloadAirports(bounds)) {
+        // Check if we need to reload airports
+        const anyAirportsVisible = mapState.showLargeAirports.get() || mapState.showMediumAirports.get() || mapState.showSmallAirports.get();
+        if (anyAirportsVisible && (zoomCrossedThreshold || mapManager.shouldReloadAirports(bounds))) {
           console.log(`[CarrierPlus] Map moved - reloading airports (zoom: ${this.lastLoadedZoom.toFixed(1)} → ${currentZoom.toFixed(1)}, threshold: ${zoomCrossedThreshold})`);
           void this.fetchAirportsForMap();
+        }
+
+        // Check if we need to reload helipads (only at zoom > 10)
+        if (mapState.showHelipadsOnMap.get() && (zoomCrossedThreshold || mapManager.shouldReloadAirports(bounds))) {
+          void this.fetchHelipadsForMap();
         }
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1240,6 +1267,50 @@ class CarrierPlusView extends AppView<RequiredProps<AppViewProps, "bus">> {
     this.clearAuthStorage();
   }
 
+  /**
+   * Reset all local data - for testing and troubleshooting
+   * Clears all localStorage with carrier_plus_ prefix
+   */
+  private resetAllData(): void {
+    const confirmReset = confirm("Are you sure you want to reset ALL data? This cannot be undone!");
+    if (!confirmReset) return;
+
+    console.log("[CarrierPlus] Resetting all local data...");
+
+    try {
+      // Clear all carrier_plus_ keys from localStorage
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith("carrier_plus_")) {
+          keysToRemove.push(key);
+        }
+      }
+
+      keysToRemove.forEach(key => {
+        localStorage.removeItem(key);
+        console.log(`[CarrierPlus] Removed: ${key}`);
+      });
+
+      console.log(`[CarrierPlus] Reset complete - removed ${keysToRemove.length} keys`);
+
+      // Reset auth state
+      authState.authToken.set(null);
+      authState.currentUser.set(null);
+      authState.isLoggedIn.set(false);
+      authState.isP2PMode.set(true);
+
+      // Show first launch popup for fresh start
+      authState.showFirstLaunchPopup.set(true);
+
+      alert("Data reset complete! The welcome screen will appear. Please restart the EFB.");
+
+    } catch (error) {
+      console.error("[CarrierPlus] Reset failed:", error);
+      alert("Reset failed: " + (error instanceof Error ? error.message : String(error)));
+    }
+  }
+
   // V1.5: Handle 401 Unauthorized errors - auto logout + notification
   private handleUnauthorized(): void {
     console.log("[CarrierPlus] Session expired or unauthorized");
@@ -1492,6 +1563,13 @@ class CarrierPlusView extends AppView<RequiredProps<AppViewProps, "bus">> {
       console.log("[CarrierPlus] Filters active on init, loading airports...");
       mapManager.setAirportsVisible(true);
       void this.fetchAirportsForMap();
+    }
+
+    // Load helipads on initial map load if filter is active
+    if (mapState.showHelipadsOnMap.get()) {
+      console.log("[CarrierPlus] Helipad filter active on init, loading helipads...");
+      mapManager.setHelipadsVisible(true);
+      void this.fetchHelipadsForMap();
     }
   }
 
@@ -1795,33 +1873,119 @@ class CarrierPlusView extends AppView<RequiredProps<AppViewProps, "bus">> {
     // V1.5: Always ensure status is idle at start to prevent stuck button
     missionState.missionStatus.set("idle");
 
-    // Use API to find closest airport from GPS coordinates
-    const lat = simVarState.latitude.get();
-    const lon = simVarState.longitude.get();
-
-    if (lat === 0 && lon === 0) {
-      console.log("[CarrierPlus] No GPS position available");
-      return;
-    }
-
-    console.log("[CarrierPlus] Finding closest airport to:", lat, lon);
+    // V2.6: Multiple detection methods with direct SimVar reads
+    console.log("[CarrierPlus] refreshMissionOrigin: Starting airport detection...");
     missionState.missionStatus.set("loading");
 
     try {
-      const airport = await WorldRouter.getClosestAirport(lat, lon);
-      if (!airport) throw new Error("No airport found");
-      console.log("[CarrierPlus] Closest airport:", airport.ident, airport.name);
+      let detectedAirport: string | null = null;
 
-      missionState.missionOriginIcao.set(airport.ident);
-      // V1.2: Auto-load current aircraft from SimVar instead of fetching list
-      void this.loadCurrentAircraftForMission();
-      // Also check for active mission
-      this.fetchActiveMission();
+      // Method 1: Read SimVar directly (bypass state caching issues)
+      if (typeof SimVar !== "undefined") {
+        // Try multiple SimVar names that might contain closest airport
+        const simVarNames = [
+          "GPS CLOSEST AIRPORT ID",
+          "GPS WP PREV ID",  // Previous waypoint might be current airport
+          "ATC AIRPORT IS TOWERED",  // Indicates we're at an airport
+        ];
 
-      // Reset status to idle so button is clickable
-      missionState.missionStatus.set("idle");
+        for (const varName of simVarNames) {
+          try {
+            const value = SimVar.GetSimVarValue(varName, "string") as string;
+            console.log(`[CarrierPlus] refreshMissionOrigin: ${varName} = "${value}"`);
+
+            if (value && typeof value === "string") {
+              // Clean up the value and check if it's a valid ICAO
+              const cleaned = value.trim().toUpperCase();
+              if (/^[A-Z]{3,4}$/.test(cleaned)) {
+                detectedAirport = cleaned;
+                console.log(`[CarrierPlus] refreshMissionOrigin: Found airport from ${varName}: ${detectedAirport}`);
+                break;
+              }
+            }
+          } catch (e) {
+            // SimVar not available, continue
+          }
+        }
+
+        // Also try the state value (might have been updated by readSimVars loop)
+        if (!detectedAirport) {
+          const stateAirport = simVarState.closestAirport.get();
+          console.log(`[CarrierPlus] refreshMissionOrigin: State closestAirport = "${stateAirport}"`);
+          if (stateAirport && stateAirport !== "----" && /^[A-Z]{3,4}$/i.test(stateAirport)) {
+            detectedAirport = stateAirport.toUpperCase();
+          }
+        }
+      }
+
+      // Method 2: Fallback to coordinate-based search
+      if (!detectedAirport) {
+        console.log("[CarrierPlus] refreshMissionOrigin: SimVar methods failed, trying coordinate search...");
+
+        // Check if airports cache is loaded
+        const airportsCacheCount = DatabaseManager.getAirportsCache().length;
+        console.log(`[CarrierPlus] refreshMissionOrigin: Airports cache has ${airportsCacheCount} airports`);
+
+        // If cache is empty, wait and retry (airports might still be loading)
+        if (airportsCacheCount === 0) {
+          console.log("[CarrierPlus] refreshMissionOrigin: Airports cache empty, waiting for load...");
+          for (let retry = 0; retry < 10 && DatabaseManager.getAirportsCache().length === 0; retry++) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+            console.log(`[CarrierPlus] refreshMissionOrigin: Waiting for airports... attempt ${retry + 1}/10`);
+          }
+          const newCount = DatabaseManager.getAirportsCache().length;
+          console.log(`[CarrierPlus] refreshMissionOrigin: After waiting, cache has ${newCount} airports`);
+        }
+
+        // Read coordinates directly from SimVar
+        let lat = 0, lon = 0;
+        if (typeof SimVar !== "undefined") {
+          lat = SimVar.GetSimVarValue("PLANE LATITUDE", "degrees") as number || 0;
+          lon = SimVar.GetSimVarValue("PLANE LONGITUDE", "degrees") as number || 0;
+        }
+
+        // Fallback to state
+        if (lat === 0 && lon === 0) {
+          lat = simVarState.latitude.get();
+          lon = simVarState.longitude.get();
+        }
+
+        console.log(`[CarrierPlus] refreshMissionOrigin: Coordinates lat=${lat}, lon=${lon}`);
+
+        if (lat === 0 && lon === 0) {
+          console.log("[CarrierPlus] refreshMissionOrigin: No GPS position available");
+          missionState.missionStatus.set("idle");
+          return;
+        }
+
+        // Search in our airport database
+        const airport = await WorldRouter.getClosestAirport(lat, lon);
+        if (airport) {
+          detectedAirport = airport.ident;
+          console.log(`[CarrierPlus] refreshMissionOrigin: Coordinate search found: ${airport.ident} (${airport.name}) at ${airport.distance_nm}nm`);
+        } else {
+          console.log("[CarrierPlus] refreshMissionOrigin: WorldRouter.getClosestAirport returned null");
+          // Debug: Log first few airports in cache to verify data
+          const cachePreview = DatabaseManager.getAirportsCache().slice(0, 3);
+          console.log("[CarrierPlus] refreshMissionOrigin: Cache preview:", cachePreview.map(a => `${a.ident}(${a.latitude},${a.longitude})`).join(", "));
+        }
+      }
+
+      // Set the detected airport
+      if (detectedAirport) {
+        console.log(`[CarrierPlus] refreshMissionOrigin: SUCCESS - Setting origin to: ${detectedAirport}`);
+        missionState.missionOriginIcao.set(detectedAirport);
+        // V1.2: Auto-load current aircraft from SimVar instead of fetching list
+        void this.loadCurrentAircraftForMission();
+        // Also check for active mission
+        this.fetchActiveMission();
+        missionState.missionStatus.set("idle");
+      } else {
+        throw new Error("No airport found from SimVar or coordinates");
+      }
+
     } catch (error) {
-      console.error("[CarrierPlus] Error finding closest airport:", error);
+      console.error("[CarrierPlus] refreshMissionOrigin: Error:", error);
       missionState.missionError.set(this.t("missions", "errorDetectingAirport"));
       missionState.missionStatus.set("error");
     }
@@ -2588,13 +2752,16 @@ class CarrierPlusView extends AppView<RequiredProps<AppViewProps, "bus">> {
     }
 
     const token = authState.authToken.get();
+    const isP2P = authState.isP2PMode.get();
     const origin = missionCreationState.fpOriginIcao.get() || missionState.missionOriginIcao.get();
     const destination = missionCreationState.fpDestinationIcao.get();
     const aircraftId = missionState.selectedAircraftId.get();
     const distance = missionCreationState.fpTotalDistance.get();
     const waypointCount = missionCreationState.fpWaypointCount.get();
 
-    if (!token || !origin || !destination || !aircraftId) {
+    // P2P mode doesn't require token
+    if ((!isP2P && !token) || !origin || !destination || !aircraftId) {
+      console.log("[CarrierPlus] createMissionV11: Missing data - isP2P:", isP2P, "token:", !!token, "origin:", origin, "destination:", destination, "aircraftId:", aircraftId);
       missionState.missionError.set(this.t("missions", "missingMissionData"));
       return;
     }
@@ -4205,16 +4372,14 @@ class CarrierPlusView extends AppView<RequiredProps<AppViewProps, "bus">> {
       const simIcaoType = this.extractIcaoType(rawAtcModel);
       let currentAirport = simVarState.closestAirport.get() !== "----" ? simVarState.closestAirport.get() : null;
 
-      // V1.6: Wait for airport detection if not yet available (max 5 retries)
+      // V1.6: Wait for airport detection if not yet available (max 5 retries, silent)
       if (!currentAirport) {
-        console.log("[CarrierPlus] Airport not yet detected, waiting...");
         for (let retry = 0; retry < 5 && !currentAirport; retry++) {
           await new Promise(resolve => setTimeout(resolve, 500));
           currentAirport = simVarState.closestAirport.get() !== "----" ? simVarState.closestAirport.get() : null;
-          console.log(`[CarrierPlus] Retry ${retry + 1}/5: Airport=${currentAirport || "not detected"}`);
         }
         if (!currentAirport) {
-          console.warn("[CarrierPlus] Airport still not detected after 5 retries, aborting sync");
+          // Silent abort - airport detection failing is normal when not at an airport
           return;
         }
       }
@@ -5173,7 +5338,8 @@ class CarrierPlusView extends AppView<RequiredProps<AppViewProps, "bus">> {
       }
 
       const results = await Promise.all(promises);
-      const airports = results.flat();
+      // Note: Array.flat() not supported in Coherent GT - use concat spread instead
+      const airports = ([] as typeof results[0]).concat(...results);
 
       console.log(`[CarrierPlus] Zoom ${zoom.toFixed(1)} - Fetched ${airports.length} airports (L:${results[0]?.length || 0} M:${results[1]?.length || 0} S:${results[2]?.length || 0})`);
 
@@ -5330,6 +5496,11 @@ class CarrierPlusView extends AppView<RequiredProps<AppViewProps, "bus">> {
     companyState.companyLoading.set(true);
 
     try {
+      // Always load player balance first (needed for buy company form)
+      const playerBalance = await MarketRouter.getPlayerBalance().catch(() => 0);
+      marketState.walletPersonal.set(playerBalance);
+      console.log("[CarrierPlus] Player balance loaded:", playerBalance);
+
       // Fetch company info
       const company = await MarketRouter.getCompanyInfo();
       if (!company) {
@@ -5440,13 +5611,13 @@ class CarrierPlusView extends AppView<RequiredProps<AppViewProps, "bus">> {
     try {
       // Fetch data in parallel
       const tierFilter = marketState.marketTierFilter.get();
-      const [walletBalance, company, listings] = await Promise.all([
-        MarketRouter.getCompanyInfo().then(c => c?.balance || 0).catch(() => 0),
+      const [playerBalance, company, listings] = await Promise.all([
+        MarketRouter.getPlayerBalance().catch(() => 0),  // Player personal wallet
         !companyState.companyData.get() ? MarketRouter.getCompanyInfo() : Promise.resolve(companyState.companyData.get()),
         MarketRouter.getMarketListings(tierFilter, 100),
       ]);
 
-      marketState.walletPersonal.set(walletBalance);
+      marketState.walletPersonal.set(playerBalance);
       if (company && !companyState.companyData.get()) {
         companyState.companyData.set(company);
       }
@@ -5781,6 +5952,7 @@ class CarrierPlusView extends AppView<RequiredProps<AppViewProps, "bus">> {
             buyCompanyName: companyState.buyCompanyName,
             buyCompanyLoading: companyState.buyCompanyLoading,
             buyCompanyError: companyState.buyCompanyError,
+            buyCompanyNameInputRef: this.buyCompanyNameInputRef,
             onBuyCompany: () => { void this.handleBuyCompany(); },
             t: (cat: string, key: string) => this.t(cat as keyof TranslationKeys, key),
           })}
@@ -5847,6 +6019,7 @@ class CarrierPlusView extends AppView<RequiredProps<AppViewProps, "bus">> {
             onSetLanguage: (lang: Language) => this.setLanguage(lang),
             onSaveCredentials: () => this.saveSettingsCredentials(),
             onLogout: () => this.askLogout(),
+            onResetData: () => this.resetAllData(),
           })}
 
           {/* Map Tab Content - V1.8: Extracted to MapView.tsx */}

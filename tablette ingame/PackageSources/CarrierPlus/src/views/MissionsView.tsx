@@ -620,6 +620,9 @@ export function renderMissionsTab(props: MissionsViewProps): VNode {
                         maxLength={4}
                         placeholder="ICAO"
                         style="width: 60px; background: #1f2937; border: 1px solid #374151; border-radius: 4px; color: #22c55e; font-family: monospace; font-size: 11px; padding: 4px 6px; text-align: center; text-transform: uppercase;"
+                        onkeydown={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+                        onkeyup={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+                        onkeypress={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
                       />
                     </div>
                   </div>

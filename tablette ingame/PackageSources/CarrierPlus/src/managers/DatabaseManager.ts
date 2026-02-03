@@ -107,18 +107,23 @@ export interface AircraftSystems {
 export interface Aircraft {
   id: string;
   registration: string;
-  type_code: string;             // References AircraftCatalog.icaoType
+  name?: string;                 // Optional nickname for the aircraft
+  type_code: string;             // References AircraftCatalog.icaoType (e.g., "C172")
   company_id: string | null;     // null for personal aircraft
   owner_id: string | null;       // player_id for personal aircraft
-  location_icao: string;
+  owner_type: "player" | "company";  // Explicit ownership type
+  location_icao: string;         // Current airport ICAO code
+  status: "parked" | "in_flight" | "maintenance" | "stored";  // Aircraft status
   fuel_gallons: number;
   condition: number;             // 0-100 overall condition
   flight_hours: number;          // Total flight hours
   cycles?: number;               // Number of flights (optional for backwards compat)
+  cargo_capacity_kg: number;     // Max cargo capacity from catalog
   last_flight_at?: string;
   purchase_price?: number;
   for_sale?: boolean;            // Optional for backwards compat
   sale_price?: number;
+  is_active?: boolean;           // Soft delete flag (default true)
   created_at: string;
   updated_at?: string;           // Optional for backwards compat
   // Inline systems (simplified for localStorage)
@@ -962,18 +967,7 @@ class DatabaseManagerClass {
   }
 
   async getAircraftByOwner(ownerId: string): Promise<Aircraft[]> {
-    console.log("[DatabaseManager] getAircraftByOwner called for:", ownerId);
-    // Also log all aircraft to debug
-    const allAircraft = this.loadStore<Aircraft>("aircraft");
-    console.log("[DatabaseManager] All aircraft in storage:", allAircraft.length, allAircraft.map(a => ({
-      id: a.id,
-      reg: a.registration,
-      owner_id: a.owner_id,
-      company_id: a.company_id,
-    })));
-    const result = await this.query<Aircraft>("aircraft", "owner_id", ownerId);
-    console.log("[DatabaseManager] Aircraft matching owner_id:", result.length);
-    return result;
+    return this.query<Aircraft>("aircraft", "owner_id", ownerId);
   }
 
   async getAircraftAtAirport(icao: string): Promise<Aircraft[]> {

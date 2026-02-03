@@ -13,20 +13,23 @@ Le système Company gère les compagnies de transport aérien des joueurs:
 
 ---
 
-## Tables SQLite
+## Collection localStorage
 
 ### `company`
 
-Table principale de la company (une seule par joueur).
+Company du joueur (une seule par joueur, stockée dans localStorage).
 
-| Colonne | Type | Description |
-|---------|------|-------------|
-| `id` | TEXT (UUID) | Clé primaire |
-| `name` | TEXT | Nom de la company |
-| `owner_id` | TEXT | FK → player |
-| `home_airport_ident` | TEXT | Code ICAO aéroport de base |
-| `balance` | REAL | Solde en crédits |
-| `created_at` | TEXT | Date de création |
+| Champ | Type | Description |
+|-------|------|-------------|
+| `id` | string (UUID) | Clé primaire |
+| `name` | string | Nom de la company |
+| `owner_id` | string | FK → player |
+| `headquarters_icao` | string? | Code ICAO siège social |
+| `balance` | number | Solde en crédits |
+| `reputation` | number | Score de réputation |
+| `founded_at` | string | Date de fondation |
+| `created_at` | string | Date de création |
+| `updated_at` | string | Dernière modification |
 
 ### `player`
 

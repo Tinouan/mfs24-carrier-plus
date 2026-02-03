@@ -41,29 +41,32 @@ Catalogue des types d'avions disponibles a l'achat.
 | `msfs_aircraft_id` | TEXT | ID MSFS (pour integration) |
 | `is_active` | INTEGER | Actif dans le catalogue (0/1) |
 
-### Table `aircraft`
+### Collection `aircraft`
 
 Avions possedes par les companies ou joueurs.
 
-| Colonne | Type | Description |
-|---------|------|-------------|
-| `id` | TEXT (UUID) | Identifiant unique |
-| `company_id` | TEXT | Company proprietaire (nullable si player-owned) |
-| `owner_id` | TEXT | Joueur proprietaire (nullable si company-owned) |
-| `owner_type` | TEXT | Type: "company" ou "player" |
-| `registration` | TEXT | Immatriculation unique (F-XXXX, N12345) |
-| `name` | TEXT | Surnom de l'avion |
-| `aircraft_type` | TEXT | Type d'avion |
-| `icao_type` | TEXT | Code ICAO |
-| `cargo_capacity_kg` | INTEGER | Capacite cargo |
-| `current_airport_ident` | TEXT | Position actuelle (ICAO) |
-| `status` | TEXT | Statut: stored, parked, in_flight, maintenance |
-| `condition` | REAL | Etat (0.0 - 1.0) |
-| `hours` | REAL | Heures de vol totales |
-| `purchase_price` | REAL | Prix d'achat |
-| `is_active` | INTEGER | Actif (0/1 soft delete) |
-| `created_at` | TEXT | Date creation ISO |
-| `updated_at` | TEXT | Date modification ISO |
+| Champ | Type | Description |
+|-------|------|-------------|
+| `id` | string (UUID) | Identifiant unique |
+| `registration` | string | Immatriculation unique (F-XXXX, N12345) |
+| `name` | string? | Surnom de l'avion (optionnel) |
+| `type_code` | string | Code ICAO du type (ex: "C172", "TBM9") |
+| `company_id` | string \| null | Company proprietaire (null si personnel) |
+| `owner_id` | string \| null | Joueur proprietaire (null si company) |
+| `owner_type` | "player" \| "company" | Type de proprietaire |
+| `location_icao` | string | Position actuelle (ICAO) |
+| `status` | string | Statut: parked, in_flight, maintenance, stored |
+| `fuel_gallons` | number | Carburant actuel en gallons |
+| `condition` | number | Etat global 0-100 |
+| `flight_hours` | number | Heures de vol totales |
+| `cycles` | number? | Nombre de vols (optionnel) |
+| `cargo_capacity_kg` | number | Capacite cargo en kg |
+| `purchase_price` | number? | Prix d'achat |
+| `for_sale` | boolean? | En vente ou non |
+| `is_active` | boolean? | Actif (soft delete) |
+| `created_at` | string | Date creation ISO |
+| `updated_at` | string? | Date modification ISO |
+| `systems` | object? | Systemes embarques (voir AircraftSystemsInline) |
 
 ---
 
@@ -214,21 +217,26 @@ interface PurchaseParams {
 ```typescript
 interface Aircraft {
   id: string;
-  company_id?: string;
-  owner_id?: string;
-  owner_type: string;         // "company" | "player"
-  registration?: string;
-  name?: string;
-  aircraft_type: string;
-  icao_type?: string;
-  status: string;
-  condition: number;
-  hours: number;
-  cargo_capacity_kg: number;
-  current_airport_ident?: string;
+  registration: string;
+  name?: string;                 // Surnom de l'avion (optionnel)
+  type_code: string;             // Code ICAO du type (ex: "C172", "TBM9")
+  company_id: string | null;     // null si avion personnel
+  owner_id: string | null;       // ID joueur si personnel, null si company
+  owner_type: "player" | "company";  // Type de proprietaire
+  location_icao: string;         // Position actuelle (code ICAO)
+  status: "parked" | "in_flight" | "maintenance" | "stored";
+  fuel_gallons: number;          // Carburant actuel en gallons
+  condition: number;             // Etat global 0-100
+  flight_hours: number;          // Heures de vol totales
+  cycles?: number;               // Nombre de vols
+  cargo_capacity_kg: number;     // Capacite cargo depuis catalogue
   purchase_price?: number;
-  is_active: boolean;
+  for_sale?: boolean;
+  sale_price?: number;
+  is_active?: boolean;           // Soft delete flag
   created_at: string;
+  updated_at?: string;
+  systems?: AircraftSystemsInline;  // Systemes embarques
 }
 ```
 
@@ -325,50 +333,57 @@ Cartes cliquables avec:
 
 ---
 
-## Schema SQLite
+## Stockage localStorage (Architecture P2P)
 
-Les tables sont creees automatiquement par DatabaseManager au premier lancement:
+Les donnees sont stockees dans localStorage avec le prefixe `carrier_plus_`.
 
-```sql
--- Creer la table aircraft_catalog
-CREATE TABLE IF NOT EXISTS aircraft_catalog (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  icao_type TEXT NOT NULL,
-  manufacturer TEXT,
-  category TEXT,
-  cargo_capacity_kg INTEGER,
-  cargo_capacity_m3 REAL,
-  max_range_nm INTEGER,
-  cruise_speed_kts INTEGER,
-  base_price REAL,
-  operating_cost_per_hour REAL,
-  min_runway_length_m INTEGER,
-  required_license TEXT,
-  msfs_aircraft_id TEXT,
-  is_active INTEGER DEFAULT 1
-);
+### Collection `aircraft_catalog`
+Catalogue des types d'avions disponibles (charge depuis `data/aircraft.json`).
 
--- Table aircraft (avions possedes)
-CREATE TABLE IF NOT EXISTS aircraft (
-  id TEXT PRIMARY KEY,
-  company_id TEXT,
-  owner_id TEXT,
-  owner_type TEXT DEFAULT 'player',
-  registration TEXT UNIQUE,
-  name TEXT,
-  aircraft_type TEXT NOT NULL,
-  icao_type TEXT,
-  cargo_capacity_kg INTEGER,
-  current_airport_ident TEXT,
-  status TEXT DEFAULT 'parked',
-  condition REAL DEFAULT 1.0,
-  hours REAL DEFAULT 0,
-  purchase_price REAL,
-  is_active INTEGER DEFAULT 1,
-  created_at TEXT DEFAULT (datetime('now')),
-  updated_at TEXT DEFAULT (datetime('now'))
-);
+```typescript
+interface AircraftCatalog {
+  id: string;                 // Ex: "c172"
+  name: string;               // Ex: "Cessna 172 Skyhawk"
+  icaoType: string;           // Ex: "C172"
+  manufacturer: string;
+  category: string;           // light, high_performance, twin, turboprop, etc.
+  cargoCapacityKg: number;
+  maxRangeNm: number;
+  cruiseSpeedKts: number;
+  basePrice: number;
+  operatingCostPerHour: number;
+  minRunwayLengthM: number;
+  requiredLicense: string;    // PPL, CPL, ATPL
+  msfsAircraftId: string;
+}
+```
+
+### Collection `aircraft`
+Avions possedes par les joueurs ou companies.
+
+```typescript
+interface Aircraft {
+  id: string;                 // UUID
+  registration: string;       // Ex: "F-ABCD"
+  name?: string;              // Surnom
+  type_code: string;          // Code ICAO (ex: "C172")
+  company_id: string | null;
+  owner_id: string | null;
+  owner_type: "player" | "company";
+  location_icao: string;      // Position ICAO
+  status: "parked" | "in_flight" | "maintenance" | "stored";
+  fuel_gallons: number;
+  condition: number;          // 0-100
+  flight_hours: number;
+  cycles?: number;
+  cargo_capacity_kg: number;
+  purchase_price?: number;
+  for_sale?: boolean;
+  is_active?: boolean;
+  created_at: string;
+  updated_at?: string;
+  systems?: AircraftSystemsInline;
+}
 ```
 
 ---

@@ -41,6 +41,7 @@ export interface SettingsViewProps {
   onSetLanguage: (lang: Language) => void;
   onSaveCredentials: () => void;
   onLogout: () => void;
+  onResetData: () => void;
 }
 
 /**
@@ -58,6 +59,7 @@ export function renderSettingsTab(props: SettingsViewProps): VNode {
     onSetLanguage,
     onSaveCredentials,
     onLogout,
+    onResetData,
   } = props;
 
   return (
@@ -146,6 +148,9 @@ export function renderSettingsTab(props: SettingsViewProps): VNode {
               type="text"
               placeholder="email@example.com"
               style="width: 100%; background: #1a1a24; border: 1px solid #374151; border-radius: 6px; padding: 10px 12px; color: white; font-size: 12px; outline: none; box-sizing: border-box;"
+              onkeydown={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+              onkeyup={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+              onkeypress={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
             />
           </div>
 
@@ -159,6 +164,9 @@ export function renderSettingsTab(props: SettingsViewProps): VNode {
               type="password"
               placeholder="••••••••"
               style="width: 100%; background: #1a1a24; border: 1px solid #374151; border-radius: 6px; padding: 10px 12px; color: white; font-size: 12px; outline: none; box-sizing: border-box;"
+              onkeydown={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+              onkeyup={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+              onkeypress={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
             />
             <div style="font-size: 10px; color: #6b7280; margin-top: 4px;">
               {currentLanguage.map(l => l === "fr" ? "Laisser vide pour garder le mot de passe actuel" : "Leave empty to keep current password")}
@@ -183,6 +191,28 @@ export function renderSettingsTab(props: SettingsViewProps): VNode {
           <Button callback={(): void => onLogout()}>
             <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; border-radius: 6px; padding: 12px; text-align: center; font-size: 12px; color: #ef4444; font-weight: 500;">
               {currentLanguage.map(l => translations[l].settings.logout)}
+            </div>
+          </Button>
+        </div>
+
+        {/* Section: Danger Zone - Reset Data */}
+        <div style="background: #252532; border: 1px solid #7f1d1d; border-radius: 8px; padding: 16px; margin-bottom: 12px;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+            <span style="font-size: 14px;">⚠️</span>
+            <span style="font-size: 13px; font-weight: 600; color: #fca5a5;">
+              {currentLanguage.map(l => l === "fr" ? "Zone de danger" : "Danger Zone")}
+            </span>
+          </div>
+
+          <div style="font-size: 11px; color: #9ca3af; margin-bottom: 12px;">
+            {currentLanguage.map(l => l === "fr"
+              ? "Réinitialiser toutes les données locales. Cette action est irréversible !"
+              : "Reset all local data. This action cannot be undone!")}
+          </div>
+
+          <Button callback={(): void => onResetData()}>
+            <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; border-radius: 6px; padding: 12px; text-align: center; font-size: 12px; color: #ef4444; font-weight: 500;">
+              {currentLanguage.map(l => l === "fr" ? "Réinitialiser les données" : "Reset All Data")}
             </div>
           </Button>
         </div>

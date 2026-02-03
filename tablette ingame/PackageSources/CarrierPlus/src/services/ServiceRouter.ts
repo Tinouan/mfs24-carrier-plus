@@ -250,9 +250,23 @@ export const WorldRouter = {
     return [];
   },
 
-  async getAvailableSlots(_icao: string): Promise<number> {
-    // Unlimited slots in P2P mode
-    return 10;
+  async getAvailableSlots(icao: string): Promise<number> {
+    // Get factory slots from airport database
+    const airport = await Services.world.getAirport(icao);
+    if (airport && airport.factory_slots !== undefined) {
+      return airport.factory_slots;
+    }
+    // Fallback based on type if factory_slots not defined
+    if (airport) {
+      switch (airport.type) {
+        case "large_airport": return 12;
+        case "medium_airport": return 6;
+        case "small_airport": return 3;
+        case "heliport": return 1;
+        default: return 0;
+      }
+    }
+    return 0;
   },
 
   async getAirportsInBounds(

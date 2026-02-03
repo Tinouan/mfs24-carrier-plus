@@ -119,6 +119,9 @@ export function renderHangarTab(props: HangarViewProps): VNode {
                   type="text"
                   placeholder="Rechercher (ICAO, type...)"
                   style="width: 100%; padding: 6px 10px; background: #1a1a24; border: 1px solid #374151; border-radius: 4px; color: white; font-size: 11px; outline: none; box-sizing: border-box;"
+                  onkeydown={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+                  onkeyup={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+                  onkeypress={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
                 />
               </div>
 
@@ -324,6 +327,9 @@ export function renderHangarTab(props: HangarViewProps): VNode {
                 type="text"
                 maxLength={10}
                 style="width: 100%; padding: 10px 12px; background: #1a1a24; border: 1px solid #374151; border-radius: 6px; color: white; font-size: 14px; font-weight: 600; text-transform: uppercase; outline: none; box-sizing: border-box;"
+                onkeydown={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+                onkeyup={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+                onkeypress={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
               />
               <div style="font-size: 10px; color: #6b7280; margin-top: 4px;">
                 {currentLanguage.map(l => l === "fr" ? "2-10 caractères (ex: F-ABCD)" : "2-10 characters (e.g., N12345)")}

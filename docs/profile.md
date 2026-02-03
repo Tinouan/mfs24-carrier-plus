@@ -8,22 +8,26 @@ Le système de profils gère les données du joueur en mode P2P (local-first).
 
 ---
 
-## Table SQLite
+## Collection localStorage
 
 ### `player`
 
-Table du profil joueur (stockée localement).
+Profil joueur (stocké dans localStorage avec préfixe `carrier_plus_`).
 
-| Colonne | Type | Description |
-|---------|------|-------------|
-| `id` | TEXT | UUID unique |
-| `name` | TEXT | Nom du joueur |
-| `nationality` | TEXT | Code pays (ex: "FR") |
-| `home_airport` | TEXT | Aéroport de base (ICAO) |
-| `money` | REAL | Crédits (CR) |
-| `xp` | INTEGER | Points d'expérience |
-| `created_at` | TEXT | Date de création (ISO) |
-| `updated_at` | TEXT | Dernière modification |
+| Champ | Type | Description |
+|-------|------|-------------|
+| `id` | string | UUID unique |
+| `name` | string | Nom du joueur |
+| `email` | string? | Email (optionnel) |
+| `nationality` | string? | Code pays (ex: "FR") |
+| `preferred_airport` | string? | Aéroport de base (ICAO) |
+| `money` | number | Crédits (CR) |
+| `xp` | number | Points d'expérience |
+| `trust_score` | number | Score anti-cheat (0-100) |
+| `is_premium` | boolean | Compte premium |
+| `created_at` | string | Date de création (ISO) |
+| `updated_at` | string | Dernière modification |
+| `last_login_at` | string? | Dernière connexion |
 
 ---
 

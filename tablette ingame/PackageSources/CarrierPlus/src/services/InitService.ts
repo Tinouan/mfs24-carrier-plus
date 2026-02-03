@@ -262,7 +262,7 @@ class InitServiceClass {
 
     // 1. Create player with custom name (100,000 credits for testing)
     this.reportProgress("Creating pilot profile...", 50);
-    const playerId = await this.createCustomPlayer(pilotName, nationality);
+    const playerId = await this.createCustomPlayer(pilotName, nationality, startingAirport);
 
     // 1b. Create pilot career stats
     this.reportProgress("Initializing career stats...", 60);
@@ -282,7 +282,7 @@ class InitServiceClass {
     this.callbacks.onComplete?.();
   }
 
-  private async createCustomPlayer(name: string, nationality: string): Promise<string> {
+  private async createCustomPlayer(name: string, nationality: string, homeAirport: string): Promise<string> {
     const playerId = this.generateUUID();
     const now = new Date().toISOString();
 
@@ -293,6 +293,7 @@ class InitServiceClass {
       money: 100000, // 100,000 credits for testing
       trust_score: 100,
       nationality: nationality,
+      preferred_airport: homeAirport,  // Home base airport
       is_premium: false,
       created_at: now,
       updated_at: now,
@@ -300,7 +301,7 @@ class InitServiceClass {
     };
 
     await DatabaseManager.put("player", player, false);
-    console.log(`[InitService] Created pilot: ${name} (${nationality}) with 100,000 credits`);
+    console.log(`[InitService] Created pilot: ${name} (${nationality}) at ${homeAirport} with 100,000 credits`);
 
     return playerId;
   }
@@ -357,24 +358,27 @@ class InitServiceClass {
     const aircraft: Aircraft = {
       id: aircraftId,
       registration: registration,
+      name: "Mon premier avion",  // Default nickname
       type_code: "C172",
-      company_id: null,      // No company - personal aircraft
-      owner_id: playerId,    // Owned by player directly
+      company_id: null,           // No company - personal aircraft
+      owner_id: playerId,         // Owned by player directly
+      owner_type: "player",       // Explicit ownership type
       location_icao: airport,
+      status: "parked",           // Aircraft starts parked
       fuel_gallons: 40,
-      condition: 100,        // Perfect condition
+      condition: 100,             // Perfect condition
       flight_hours: 0,
       cycles: 0,
+      cargo_capacity_kg: 120,     // C172 cargo capacity from catalog
       for_sale: false,
+      is_active: true,
       created_at: now,
       updated_at: now,
-      systems: systems,      // All systems at 100%
+      systems: systems,           // All systems at 100%
     };
 
     await DatabaseManager.put("aircraft", aircraft, false);
-    console.log(`[InitService] Created personal Cessna 172 ${registration} at ${airport}`);
-    console.log(`[InitService] Aircraft systems: all at 100% condition`);
-    console.log(`[InitService] Aircraft details: id=${aircraftId}, owner_id=${playerId}, company_id=null`);
+    console.log(`[InitService] Created personal C172 ${registration} at ${airport} for player ${playerId}`);
 
     return aircraftId;
   }
@@ -412,12 +416,16 @@ class InitServiceClass {
       type_code: typeCode,
       company_id: companyId,
       owner_id: null,
+      owner_type: "company",      // Explicit ownership type
       location_icao: airport,
+      status: "parked",           // Aircraft starts parked
       fuel_gallons: 40,
       condition: 100,
       flight_hours: 0,
       cycles: 0,
+      cargo_capacity_kg: 200,     // Default, will be overwritten from catalog
       for_sale: false,
+      is_active: true,
       created_at: now,
       updated_at: now,
       systems: systems,
@@ -736,7 +744,8 @@ class InitServiceClass {
       name: companyName || `${player.name} Aviation`,
       balance: 0,  // Starting balance
       owner_id: player.id,
-      reputation: 50,        // Starting reputation
+      reputation: 50,                                    // Starting reputation
+      headquarters_icao: player.preferred_airport,       // HQ at player's home airport
       founded_at: now,
       created_at: now,
       updated_at: now,
