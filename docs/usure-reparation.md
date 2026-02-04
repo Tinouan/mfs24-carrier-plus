@@ -1,4 +1,4 @@
-# MFS Carrier+ - Systeme Usure, Reparation & Carburant
+# MFS World of Aircraft - Systeme Usure, Reparation & Carburant
 
 **Version**: 1.6
 **Date**: 2026-02-01
@@ -513,10 +513,10 @@ class FleetServiceClass {
 
 | Fichier | Modifications |
 |---------|---------------|
-| `CarrierPlus.tsx` | Background tracker variables |
-| `CarrierPlus.tsx` | startBackgroundTracking(), stopBackgroundTracking() |
-| `CarrierPlus.tsx` | backgroundTrackerTick() |
-| `CarrierPlus.tsx` | applyBackgroundWear() |
-| `CarrierPlus.tsx` | syncBackgroundFuelToDb() |
-| `CarrierPlus.tsx` | resetBackgroundTracking() appele dans create/cancel/complete |
-| `CarrierPlus.tsx` | setSimulatorFuel() met a jour bgLastFuelGallons |
+| `WorldOfAircraft.tsx` | Background tracker variables |
+| `WorldOfAircraft.tsx` | startBackgroundTracking(), stopBackgroundTracking() |
+| `WorldOfAircraft.tsx` | backgroundTrackerTick() |
+| `WorldOfAircraft.tsx` | applyBackgroundWear() |
+| `WorldOfAircraft.tsx` | syncBackgroundFuelToDb() |
+| `WorldOfAircraft.tsx` | resetBackgroundTracking() appele dans create/cancel/complete |
+| `WorldOfAircraft.tsx` | setSimulatorFuel() met a jour bgLastFuelGallons |

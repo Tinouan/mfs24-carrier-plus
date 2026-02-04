@@ -1,231 +1,171 @@
-# MFS Carrier+ (MSFS 2024) — Architecture P2P
+# MFS World of Aircraft (MSFS 2024) — Architecture v3.0
 
-> **Version**: 0.9+ (P2P)  
-> **Repo**: https://github.com/Tinouan/mfs24-carrier-plus  
-> **Stack**: EFB TypeScript/React + SQLite local + P2P Sync
+> **Version**: 3.0 (Deux Carrières Distinctes : Solo / Online)
+> **Repo**: https://github.com/Tinouan/mfs24-carrier-plus
+> **Stack**: EFB TypeScript/React + Persistance Native MSFS + SEED (Cloudflare Workers + R2)
 
 ---
 
 ## Vue d'ensemble
 
-MFS Carrier+ est un mod de gestion de compagnie cargo pour **Microsoft Flight Simulator 2024**. L'architecture P2P permet de jouer en solo ou en multijoueur **sans serveur centralisé**.
+MFS World of Aircraft est un mod de gestion de compagnie cargo pour **Microsoft Flight Simulator 2024**. L'architecture v3.0 propose **deux carrières complètement séparées** : Solo et Online.
+
+### Changement majeur v3.0
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                                                              │
+│   CARRIÈRE SOLO                    CARRIÈRE ONLINE          │
+│   ─────────────                    ───────────────          │
+│   • Stockage: GetStoredData        • Stockage: SEED         │
+│   • Économie: IA locale            • Économie: joueurs      │
+│   • Anti-triche: DÉSACTIVÉ         • Anti-triche: STRICT    │
+│   • Connexion: NON requise         • Connexion: OBLIGATOIRE │
+│   • Progression: indépendante      • Progression: indépendante│
+│                                                              │
+│   PAS DE SYNC ENTRE LES DEUX !                              │
+│   PAS DE TRANSFERT DE DONNÉES !                             │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Comparaison des modes
+
+| Aspect | Solo | Online |
+|--------|------|--------|
+| **Stockage** | GetStoredData local | SEED Cloudflare |
+| **Économie** | IA (PNJ) | Joueurs réels |
+| **Marché** | Prix fixes, stock illimité | Offre/demande réelle |
+| **Anti-triche** | Désactivé | Strict (SEED calcule tout) |
+| **Classements** | Non | Oui |
+| **Connexion** | Non requise | Obligatoire |
+| **Xbox** | Garanti | Probable |
 
 ### Principes clés
 
 | Aspect | Implémentation |
 |--------|----------------|
-| **Stockage** | SQLite local (sql.js) |
+| **Sélection mode** | Écran de choix au démarrage |
+| **Persistance Solo** | GetStoredData/SetStoredData (MSFS API) |
+| **Persistance Online** | SEED (Cloudflare Workers + R2) |
 | **UI** | EFB intégré MSFS 2024 |
-| **Multijoueur** | P2P via shards (sync HTTP) |
-| **Données monde** | Un seul monde partagé entre tous les joueurs |
-| **Offline** | 100% jouable sans connexion |
+| **Multijoueur** | Mode Online uniquement via SEED |
+| **Anti-triche** | Mode Online uniquement |
 
 ---
 
 ## Architecture technique
 
-### Vue globale
+### Vue globale (Deux Carrières)
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         EFB CARRIER+                             │
-│                                                                  │
-│   ┌─────────────┐    ┌──────────────┐    ┌─────────────┐       │
-│   │   States    │◄──►│ Persistence  │◄──►│  SQLite     │       │
-│   │ (Subject<T>)│    │   Manager    │    │  (sql.js)   │       │
-│   └─────────────┘    └──────────────┘    └─────────────┘       │
-│         │                   │                                    │
-│         │                   ▼                                    │
-│         │            ┌──────────────┐                           │
-│         │            │   Network    │◄────► Autres joueurs      │
-│         │            │   Manager    │       (P2P Sync)          │
-│         │            └──────────────┘                           │
-│         │                                                        │
-│         ▼                                                        │
-│   ┌─────────────┐                                               │
-│   │     UI      │ ◄── OpenLayers Map, Hangar, Market, etc.     │
-│   └─────────────┘                                               │
-└─────────────────────────────────────────────────────────────────┘
+[Lancement EFB]
+       │
+       ▼
+[Écran de sélection]
+       │
+  ┌────┴────┐
+  │         │
+  ▼         ▼
+SOLO      ONLINE
+  │         │
+  ▼         ▼
+┌─────┐   ┌─────┐
+│Local│   │SEED │
+│Save │   │     │
+└─────┘   └─────┘
+  │         │
+  └────┬────┘
+       ▼
+[ServiceAdapter]
+(route selon mode)
+       │
+       ▼
+  [Même UI]
 ```
 
-### Flux de données
+### Diagramme détaillé
 
 ```
-1. DÉMARRAGE
-   SQLite → PersistenceManager → States → UI
+                            CLOUD (Cloudflare)
+┌────────────────────────────────────────────────────────────────────┐
+│                           SEED SERVER v2.0                          │
+│                  https://woa-seed.seedworldofaircraft.workers.dev  │
+│                         (MODE ONLINE UNIQUEMENT)                    │
+│                                                                     │
+│   ┌─────────────┐    ┌──────────────┐    ┌─────────────┐          │
+│   │  Workers    │◄──►│   R2 Bucket  │    │  Anti-Cheat │          │
+│   │  (REST API) │    │  (Storage)   │    │  (Trust)    │          │
+│   └─────────────┘    └──────────────┘    └─────────────┘          │
+└────────────────────────────────────────────────────────────────────┘
+                                 ▲
+                                 │ HTTPS (si mode Online)
+                                 │
+┌────────────────────────────────┴───────────────────────────────────┐
+│                         EFB CARRIER+ v3.0                           │
+│                                                                     │
+│   ┌─────────────┐    ┌──────────────┐    ┌─────────────┐          │
+│   │GameModeState│◄──►│ModeSelection │◄──►│ AuthState   │          │
+│   │ (solo|online)│    │   Screen     │    │ (si online) │          │
+│   └─────────────┘    └──────────────┘    └─────────────┘          │
+│         │                                                           │
+│         ▼                                                           │
+│   ┌─────────────────────────────────────────────────────────────┐  │
+│   │                     ServiceAdapter                           │  │
+│   │  Route selon GameModeState.currentMode                       │  │
+│   │  • Solo → SoloSaveService                                    │  │
+│   │  • Online → SyncService (SEED)                               │  │
+│   └─────────────────────────────────────────────────────────────┘  │
+│         │                   │                                       │
+│    ┌────┴────┐         ┌────┴────┐                                 │
+│    ▼         ▼         ▼         ▼                                 │
+│ ┌───────┐ ┌───────┐ ┌───────┐ ┌───────┐                           │
+│ │ Solo  │ │Local  │ │Sync   │ │ SEED  │                           │
+│ │ Save  │ │Market │ │Service│ │ API   │                           │
+│ │Service│ │ (IA)  │ │       │ │       │                           │
+│ └───────┘ └───────┘ └───────┘ └───────┘                           │
+│    │                    │                                           │
+│    ▼                    ▼                                           │
+│ ┌───────────────┐  ┌───────────────┐                               │
+│ │GetStoredData  │  │    SEED R2    │                               │
+│ │(MSFS Native)  │  │  (Cloudflare) │                               │
+│ └───────────────┘  └───────────────┘                               │
+│                                                                     │
+│   ┌─────────────────────────────────────────────────────────────┐  │
+│   │                          UI                                  │  │
+│   │   Map | Hangar | Market | Company | Profile | Settings       │  │
+│   │              (Identique pour les deux modes)                 │  │
+│   └─────────────────────────────────────────────────────────────┘  │
+└────────────────────────────────────────────────────────────────────┘
+```
 
-2. ACTION UTILISATEUR  
-   UI → Service → State.set() → PersistenceManager → SQLite
-                              → NetworkManager → Sync vers peers
+### Couches de persistance
 
-3. RÉCEPTION SYNC RÉSEAU
-   Peer → NetworkManager → States → UI
-                        → SQLite (backup)
+```
+┌─────────────────────────────────────────────────────────────┐
+│              PERSISTANCE PAR MODE                            │
+│                                                              │
+│   MODE SOLO                        MODE ONLINE              │
+│   ═════════                        ════════════              │
+│                                                              │
+│   GetStoredData (MSFS)             SEED (Cloudflare R2)     │
+│   • Profil joueur                  • Profil joueur validé   │
+│   • Flotte d'avions                • Flotte d'avions        │
+│   • Missions complétées            • Missions (anti-triche) │
+│   • Argent/XP (non vérifié)        • Argent/XP (calculé)    │
+│   • Économie IA locale             • Économie joueurs       │
+│                                    • Marché partagé         │
+│                                    • Trust Score            │
+│                                                              │
+│   Cache session: localStorage      Cache session: localStorage│
+│   (Effacé quand MSFS ferme)        (Effacé quand MSFS ferme) │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Structure des fichiers
-
-```
-tablette ingame/PackageSources/CarrierPlus/src/
-├── CarrierPlus.tsx              # Point d'entrée principal
-│
-├── types/
-│   └── index.ts                 # Interfaces TypeScript
-│
-├── constants/
-│   └── index.ts                 # URLs, intervalles, prix
-│
-├── state/                       # 17 modules State réactifs
-│   ├── index.ts
-│   ├── AuthState.ts             # Mode P2P, first launch
-│   ├── NavigationState.ts       # Tabs actifs
-│   ├── SettingsState.ts         # Langue, unités
-│   ├── SimVarState.ts           # Position, fuel, vitesse
-│   ├── MapState.ts              # Layers, sélection
-│   ├── MissionState.ts          # Mission active
-│   ├── MissionCreationState.ts  # Création mission
-│   ├── TrackingState.ts         # Progression vol
-│   ├── CheckpointState.ts       # Waypoints
-│   ├── CargoState.ts            # Transfert cargo
-│   ├── HangarState.ts           # Flotte, réparations
-│   ├── CompanyState.ts          # Company data
-│   ├── MarketState.ts           # Ordres marché
-│   ├── PopupState.ts            # Modals
-│   ├── InventoryState.ts        # Items
-│   └── FreeFlightState.ts       # Vol libre
-│
-├── managers/
-│   ├── TrackingManager.ts       # Tracking missions
-│   ├── MapManager.ts            # OpenLayers
-│   ├── MissionCreationManager.ts
-│   ├── FreeFlightManager.ts
-│   ├── DatabaseManager.ts       # SQLite (sql.js)
-│   ├── PersistenceManager.ts    # States ↔ SQLite
-│   └── NetworkManager.ts        # P2P state machine
-│
-├── services/
-│   ├── DataLayer.ts             # Abstraction local/réseau
-│   ├── FleetService.ts          # Gestion flotte
-│   ├── MissionService.ts        # Missions
-│   ├── WorldService.ts          # Aéroports, items
-│   ├── MarketService.ts         # Marché
-│   ├── InitService.ts           # Premier lancement
-│   ├── AIEconomyService.ts      # Économie solo (ordres IA)
-│   ├── PeerClient.ts            # Client P2P
-│   ├── PeerHost.ts              # Serveur P2P (PC only)
-│   └── DiscoveryService.ts      # Trouver le monde
-│
-├── components/                  # Composants UI
-├── helpers/                     # Fonctions utilitaires
-├── views/                       # Vues par onglet
-│
-├── data/
-│   ├── seed.json                # Items, recipes initiaux
-│   └── airports.json            # Cache aéroports (5000+)
-│
-├── locales/                     # i18n (fr, en, de, es, ru)
-│
-└── lib/
-    └── sql.js                   # SQLite pour browser
-```
-
----
-
-## Base de données SQLite
-
-### Schéma (15 tables)
-
-**Core (5 tables)**
-| Table | Description |
-|-------|-------------|
-| `player` | Profil joueur (id, name, money, xp, home_airport) |
-| `company` | Company du joueur (si achetée) |
-| `aircraft` | Flotte (personal + company) |
-| `inventory_locations` | Emplacements stockage |
-| `inventory_items` | Items par emplacement |
-
-**World Data (3 tables)**
-| Table | Description |
-|-------|-------------|
-| `items` | 94 items (T0-T2) |
-| `recipes` | 60 recettes |
-| `airports` | Cache aéroports MSFS |
-
-**Factories (3 tables)**
-| Table | Description |
-|-------|-------------|
-| `factories` | Usines de production |
-| `factory_storage` | Stockage local usine |
-| `production_batches` | Lots en cours |
-
-**Workers (2 tables)**
-| Table | Description |
-|-------|-------------|
-| `workers` | Workers + Engineers |
-| `country_stats` | Stats par pays (42 pays) |
-
-**Market & Missions (2 tables)**
-| Table | Description |
-|-------|-------------|
-| `market_orders` | Ordres achat/vente |
-| `missions` | Historique missions |
-
----
-
-## Modes de jeu
-
-### Mode Solo (offline)
-
-```
-┌─────────────────────────────────────────┐
-│              JOUEUR SOLO                 │
-│                                          │
-│   SQLite local ◄──► EFB                 │
-│        │                                 │
-│        ▼                                 │
-│   AIEconomyService                       │
-│   (génère ordres marché IA)             │
-└─────────────────────────────────────────┘
-```
-
-- Toutes les données en local
-- Économie simulée par IA
-- Aucune connexion requise
-
-### Mode Multijoueur (P2P)
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     1 SEUL MONDE CARRIER+                        │
-│                                                                  │
-│   SHARD EU         SHARD US         SHARD ASIA        SEED      │
-│   (max 100)        (max 100)        (max 100)      (NAS 24/7)   │
-│       │                │                │              │         │
-│       └────────────────┴────────────────┴──────────────┘         │
-│                              │                                   │
-│                    SYNC TEMPS RÉEL (2-5 sec)                     │
-│                                                                  │
-│   Données SYNC: market, inventaires, usines, classements        │
-│   Données LOCAL: position avion, mission en cours               │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-**Données synchronisées** (monde partagé) :
-- Ordres marché
-- Inventaires par aéroport
-- Usines et production
-- Classements joueurs
-
-**Données locales** (par joueur) :
-- Position avion temps réel
-- Mission en cours
-- Préférences UI
-
----
-
-## First Launch Flow
+## Flow de démarrage (v3.0)
 
 ```
 [MSFS démarre]
@@ -233,273 +173,571 @@ tablette ingame/PackageSources/CarrierPlus/src/
        ▼
 [EFB s'ouvre] → InitService.initialize()
        │
-       ├── Player existe dans SQLite?
-       │         │
-       │    Non  │  Oui
-       │         │
-       │         ▼
-       │   [Load existing data]
+       ▼
+[1. Charger GameModeState]
+       │
+       ├── Mode déjà choisi ? → Aller directement au mode
+       └── Premier lancement ou reset → Écran de sélection
        │
        ▼
-[First Launch Popup]
+[2. ÉCRAN DE SÉLECTION]
        │
-       │ Saisie: Nom, Nationalité, Aéroport de base
+       ├── Bouton "SOLO"
+       │      │
+       │      ▼
+       │   [Mode SOLO]
+       │      ├── GameModeState.setMode("solo")
+       │      ├── SoloSaveService.load()
+       │      ├── LocalMarketService.init() (économie IA)
+       │      └── Pas de connexion réseau
        │
-       ▼
-[completeFirstLaunch()]
-       │
-       ├── Créer Player (100,000 CR)
-       ├── Créer Aircraft personnel (C172)
-       ├── Initialiser seed data (items, recipes)
-       └── Générer market orders IA
-       │
-       ▼
-[Jeu prêt]
-```
-
----
-
-## Company System
-
-### Sans Company (début de jeu)
-
-Le joueur démarre avec :
-- 100,000 CR
-- 1 avion personnel (C172)
-- Accès au marché (achat/vente)
-- Missions disponibles
-
-### Achat Company (50,000 CR)
-
-```
-[Tab Company] → "Créer une compagnie"
-       │
-       │ Saisie: Nom de la company
-       │ Coût: 50,000 CR
+       └── Bouton "ONLINE"
+              │
+              ▼
+           [Connexion SEED requise]
+              │
+              ├─── Succès ─────┐
+              │                ▼
+              │         [Mode ONLINE]
+              │                ├── GameModeState.setMode("online")
+              │                ├── AuthState.setConnected()
+              │                ├── SyncService.loadPlayer()
+              │                └── SyncService.startPolling()
+              │
+              └─── Échec ──────┐
+                               ▼
+                        [Retour écran sélection]
+                        [Message: "Connexion requise"]
        │
        ▼
-[InitService.purchaseCompany()]
+[3. Démarrer Auto-Save]
        │
-       ├── Vérifier fonds (≥50,000)
-       ├── Déduire 50,000 du wallet
-       └── Créer Company
+       ├── Solo: setInterval(SoloSaveService.save, 60000)
+       └── Online: Pas d'auto-save local (SEED = source de vérité)
        │
        ▼
-[Company active - Accès à:]
-  - Usines (factories)
-  - Workers
-  - Flotte company
-  - Warehouses company
+[Prêt !] ◄── Jeu jouable dans le mode choisi
 ```
 
-### Ownership Model
-
-| Type | Description |
-|------|-------------|
-| **Personal** | Avion/warehouse du joueur |
-| **Company** | Avion/warehouse/factory de la company |
-
 ---
 
-## Gameplay Core Loop
+## GameModeState (NOUVEAU)
 
-### Mécanique principale
+### Structure
 
-1. **Recruter** des workers dans les pools d'aéroports
-2. **Produire** des items dans des usines
-3. **Transporter** ces items en avion entre aéroports
-4. **Vendre** sur le marché pour générer des profits
+```typescript
+// state/GameModeState.ts
 
-### Système d'inventaires
+type GameMode = "solo" | "online" | null;
 
-**4 types de containers** (localisés par aéroport) :
+interface GameModeStateType {
+  currentMode: Subject<GameMode>;
+  hasChosenMode: Subject<boolean>;
 
-| Container | Description |
-|-----------|-------------|
-| `player_warehouse` | Entrepôt personnel |
-| `company_warehouse` | Entrepôt company |
-| `factory_storage` | Stockage local usine |
-| `aircraft` | Cargo avion (limite poids) |
-
-**Anti-cheat** : Transport inter-aéroport = vol obligatoire
-- ❌ Transfert direct LFPG → EGLL bloqué
-- ✅ Charger avion → Voler → Décharger
-
----
-
-## Items & Recipes
-
-### Items (94 total)
-
-| Tier | Quantité | Type |
-|------|----------|------|
-| T0 | 34 | Matières premières (auto-produites) |
-| T1 | 30 | Produits transformés |
-| T2 | 30 | Produits avancés |
-
-**Tags** : `food`, `construction`, `electronics`, `medical`, `fuel`
-
-### Recipes (60 total)
-
-| Tier | Quantité | Ingrédients |
-|------|----------|-------------|
-| T1 | 30 | 2-3 items T0 |
-| T2 | 30 | 2-4 items T0/T1 |
-
----
-
-## Factory System
-
-### Slots par type d'aéroport
-
-| Type | Slots |
-|------|-------|
-| large_airport | 12 |
-| medium_airport | 6 |
-| small_airport | 3 |
-| seaplane_base | 1 |
-| heliport | 1 |
-| closed | 0 |
-
-### Tiers d'usines
-
-| Tier | Ingrédients | Workers max | Engineers max |
-|------|-------------|-------------|---------------|
-| T1 | 2 | 10 | 0 |
-| T2 | 2 | 20 | 1 |
-| T3 | 3 | 30 | 1 |
-| T4 | 3 | 40 | 2 |
-| T5 | 4 | 50 | 2 |
-| T6 | 4 | 60 | 3 |
-| T7 | 5 | 70 | 3 |
-| T8 | 5 | 80 | 4 |
-| T9 | 5 | 90 | 4 |
-| T10 | 5 | 100 | 5 |
-
-### Production
-
-```
-Temps = base_time × (200 / sum(worker.speed))
-```
-
-- Sans food : -50% vitesse
-- Bonus engineer : +10% output par engineer (max 50%)
-
----
-
-## Workers System
-
-### Recrutement
-
-- Workers disponibles dans les pools d'aéroports
-- Stats basées sur nationalité (42 pays)
-- Variation ±20% (speed, resistance), ±10% (salaire)
-
-### Capacités pools
-
-| Type aéroport | Workers | Engineers |
-|---------------|---------|-----------|
-| large_airport | 200 | 20 |
-| medium_airport | 100 | 10 |
-| small_airport | 50 | 5 |
-
-### Progression XP
-
-| Tier | XP requis | Bonus |
-|------|-----------|-------|
-| Novice | 0 | - |
-| Apprenti | 1,000 | +5% speed |
-| Compagnon | 5,000 | +10% speed |
-| Expert | 15,000 | +15% speed |
-| Maître | 50,000 | +20% speed |
-
-### Système de blessures
-
-- Risque base : 0.5%/heure
-- Sans food : risque x2
-- Blessure >10 jours → mort
-- Pénalité mort : -10,000 CR
-
-### Consommation
-
-- 1 food/worker/heure
-- Sans food : 30% efficacité + risque blessures x2
-
----
-
-## Mission System
-
-### Création mission
-
-1. Sélectionner avion (au sol, systèmes OK)
-2. Configurer cargo
-3. Entrer destination ICAO
-4. Valider et décoller
-
-### Tracking
-
-- Progression basée sur distance parcourue
-- Détection waypoints via GPS MSFS
-- Scoring : landing, fuel, time, events
-
-### Scoring
-
-| Catégorie | Critères |
-|-----------|----------|
-| Landing | Vertical speed, centerline |
-| Fuel | Consommation vs estimée |
-| Time | Durée vs estimée |
-| Events | Incidents en vol |
-| Bonus | Night, no-autopilot, etc. |
-
----
-
-## P2P Network
-
-### États NetworkManager
-
-```
-┌─────────┐     ┌─────────┐     ┌─────────┐
-│  SOLO   │────►│ JOINING │────►│ CLIENT  │
-└─────────┘     └─────────┘     └─────────┘
-     │               │               │
-     │               ▼               │
-     │         ┌─────────┐          │
-     └────────►│  HOST   │◄─────────┘
-               └─────────┘
-```
-
-| État | Description |
-|------|-------------|
-| `solo` | Mode offline, données locales uniquement |
-| `joining` | Connexion à un shard en cours |
-| `client` | Connecté, reçoit les sync |
-| `host` | Héberge un shard (PC uniquement) |
-
-### peers.json
-
-```json
-{
-  "version": 1,
-  "shards": [
-    {
-      "id": "seed",
-      "name": "SEED (Backup)",
-      "host": "ton-nas.synology.me",
-      "port": 7777,
-      "region": "EU",
-      "permanent": true
-    },
-    {
-      "id": "eu-1",
-      "name": "Europe 1",
-      "host": "dynamic",
-      "port": 7777,
-      "region": "EU",
-      "permanent": false
-    }
-  ]
+  setMode(mode: GameMode): void;
+  getMode(): GameMode;
+  resetMode(): void;  // Retour à l'écran de sélection
 }
+```
+
+### Implémentation
+
+```typescript
+class GameModeStateClass {
+  currentMode = new Subject<GameMode>(null);
+  hasChosenMode = new Subject<boolean>(false);
+
+  private STORAGE_KEY = "WorldOfAircraft_GameMode";
+
+  init(): void {
+    // Charger le mode sauvegardé
+    const saved = GetStoredData(this.STORAGE_KEY);
+    if (saved === "solo" || saved === "online") {
+      this.currentMode.set(saved);
+      this.hasChosenMode.set(true);
+    }
+  }
+
+  setMode(mode: GameMode): void {
+    this.currentMode.set(mode);
+    this.hasChosenMode.set(mode !== null);
+
+    if (mode) {
+      SetStoredData(this.STORAGE_KEY, mode);
+    }
+  }
+
+  getMode(): GameMode {
+    return this.currentMode.get();
+  }
+
+  resetMode(): void {
+    this.currentMode.set(null);
+    this.hasChosenMode.set(false);
+    SetStoredData(this.STORAGE_KEY, "");
+  }
+
+  isSolo(): boolean {
+    return this.currentMode.get() === "solo";
+  }
+
+  isOnline(): boolean {
+    return this.currentMode.get() === "online";
+  }
+}
+
+export const GameModeState = new GameModeStateClass();
+```
+
+---
+
+## SoloSaveService (NOUVEAU)
+
+### Structure
+
+```typescript
+// services/SoloSaveService.ts
+
+interface SoloSaveData {
+  version: number;
+  timestamp: number;
+
+  player: Player;
+  aircraft: Aircraft[];
+  company: Company | null;
+  completed_missions: CompletedMission[];
+
+  checksum: string;
+}
+```
+
+### Implémentation
+
+```typescript
+class SoloSaveServiceClass {
+  private STORAGE_KEY = "WorldOfAircraft_SoloSave";
+  private VERSION = 1;
+
+  async save(): Promise<boolean> {
+    if (!GameModeState.isSolo()) {
+      console.warn("[SoloSaveService] Not in solo mode, skipping save");
+      return false;
+    }
+
+    try {
+      const saveData: SoloSaveData = {
+        version: this.VERSION,
+        timestamp: Date.now(),
+        player: await this.collectPlayerData(),
+        aircraft: await this.collectAircraftData(),
+        company: CompanyState.company.get(),
+        completed_missions: MissionState.completedMissions.get(),
+        checksum: ""
+      };
+
+      saveData.checksum = this.calculateChecksum(saveData);
+
+      const json = JSON.stringify(saveData);
+      SetStoredData(this.STORAGE_KEY, json);
+
+      console.log("[SoloSaveService] Saved successfully");
+      return true;
+    } catch (e) {
+      console.error("[SoloSaveService] Save failed:", e);
+      return false;
+    }
+  }
+
+  async load(): Promise<SoloSaveData | null> {
+    try {
+      const json = GetStoredData(this.STORAGE_KEY);
+
+      if (!json || json === "") {
+        console.log("[SoloSaveService] No save data, creating new game");
+        return this.createNewGame();
+      }
+
+      const saveData: SoloSaveData = JSON.parse(json);
+
+      // Vérifier checksum
+      const expectedChecksum = saveData.checksum;
+      saveData.checksum = "";
+      const actualChecksum = this.calculateChecksum(saveData);
+
+      if (expectedChecksum !== actualChecksum) {
+        console.warn("[SoloSaveService] Checksum mismatch - data may be corrupted");
+        // En mode solo, on accepte quand même (pas d'anti-triche)
+      }
+
+      return saveData;
+    } catch (e) {
+      console.error("[SoloSaveService] Load failed:", e);
+      return this.createNewGame();
+    }
+  }
+
+  async restore(saveData: SoloSaveData): Promise<void> {
+    // Restaurer dans les States
+    if (saveData.player) {
+      AuthState.player.set(saveData.player);
+    }
+    if (saveData.aircraft) {
+      InventoryState.aircraft.set(saveData.aircraft);
+    }
+    if (saveData.company) {
+      CompanyState.company.set(saveData.company);
+    }
+  }
+
+  private createNewGame(): SoloSaveData {
+    return {
+      version: this.VERSION,
+      timestamp: Date.now(),
+      player: this.createDefaultPlayer(),
+      aircraft: [],
+      company: null,
+      completed_missions: [],
+      checksum: ""
+    };
+  }
+
+  private createDefaultPlayer(): Player {
+    return {
+      id: this.generateUUID(),
+      name: "Pilote Solo",
+      money: 50000,  // Argent de départ généreux en solo
+      xp: 0,
+      level: 1,
+      created_at: Date.now()
+    };
+  }
+
+  private calculateChecksum(data: SoloSaveData): string {
+    const str = JSON.stringify({
+      timestamp: data.timestamp,
+      player_money: data.player?.money,
+      player_xp: data.player?.xp,
+      aircraft_count: data.aircraft?.length,
+    });
+
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return hash.toString(16);
+  }
+
+  private generateUUID(): string {
+    return 'solo-' + Math.random().toString(36).substring(2, 15);
+  }
+}
+
+export const SoloSaveService = new SoloSaveServiceClass();
+```
+
+---
+
+## ServiceAdapter (mis à jour v3.0)
+
+Le ServiceAdapter route les appels selon le mode actif.
+
+```typescript
+// services/ServiceAdapter.ts
+
+class ServiceAdapterClass {
+
+  // === MISSIONS ===
+
+  async createMission(params: CreateMissionParams): Promise<Mission> {
+    if (GameModeState.isSolo()) {
+      // Mode Solo: calcul local, pas de validation anti-triche
+      return LocalMissionService.create(params);
+    } else {
+      // Mode Online: SEED calcule et valide tout
+      return SyncService.createMission(params);
+    }
+  }
+
+  async completeMission(missionId: string, stats: FlightStats): Promise<MissionResult> {
+    if (GameModeState.isSolo()) {
+      // Mode Solo: calcul local généreux
+      return LocalMissionService.complete(missionId, stats);
+    } else {
+      // Mode Online: SEED valide et calcule les récompenses
+      return SyncService.completeMission(missionId, stats);
+    }
+  }
+
+  // === CARBURANT ===
+
+  async refuel(aircraftId: string, gallons: number): Promise<RefuelResult> {
+    if (GameModeState.isSolo()) {
+      // Mode Solo: déduction locale, pas de validation
+      return LocalFleetService.refuel(aircraftId, gallons);
+    } else {
+      // Mode Online: SEED calcule le coût et vérifie les fonds
+      return SyncService.refuel(aircraftId, gallons);
+    }
+  }
+
+  // === MARCHÉ ===
+
+  async getMarketOrders(airportIcao: string): Promise<MarketOrder[]> {
+    if (GameModeState.isSolo()) {
+      // Mode Solo: ordres IA générés localement
+      return LocalMarketService.getOrders(airportIcao);
+    } else {
+      // Mode Online: vrais ordres joueurs depuis SEED
+      return SyncService.getMarketOrders(airportIcao);
+    }
+  }
+
+  async buyMarketOrder(orderId: string, quantity: number): Promise<BuyResult> {
+    if (GameModeState.isSolo()) {
+      // Mode Solo: achat IA local
+      return LocalMarketService.buy(orderId, quantity);
+    } else {
+      // Mode Online: SEED vérifie fonds et transfère
+      return SyncService.buyMarketOrder(orderId, quantity);
+    }
+  }
+
+  // === SAUVEGARDE ===
+
+  async save(): Promise<void> {
+    if (GameModeState.isSolo()) {
+      await SoloSaveService.save();
+    }
+    // Mode Online: pas de sauvegarde locale, SEED = source de vérité
+  }
+}
+
+export const ServiceAdapter = new ServiceAdapterClass();
+```
+
+---
+
+## SEED Server v2.0 (MODE ONLINE UNIQUEMENT)
+
+### Infrastructure
+
+| Composant | Technologie |
+|-----------|-------------|
+| **Compute** | Cloudflare Workers (edge computing) |
+| **Storage** | Cloudflare R2 (S3-compatible) |
+| **URL** | `https://woa-seed.seedworldofaircraft.workers.dev` |
+| **Latence** | < 50ms (edge mondial) |
+| **Version** | 2.0.0-anticheat |
+
+### Endpoints API
+
+**Status**
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/ping` | Health check + player count |
+
+**Players (données personnelles)**
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/players` | Créer un joueur |
+| GET | `/players/:id` | Récupérer un joueur |
+| PUT | `/players/:id` | Mettre à jour (PROTÉGÉ: bloque money/xp) |
+| GET | `/players/:id/aircraft` | Liste des avions du joueur |
+| POST | `/players/:id/aircraft` | Ajouter un avion |
+| GET | `/players/:id/company` | Company du joueur |
+| GET | `/players/:id/trust` | Trust Score |
+
+**Aircraft**
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| PUT | `/aircraft/:id` | Mettre à jour un avion |
+| POST | `/aircraft/:id/refuel` | Ravitaillement (SEED calcule coût) |
+
+**Missions (ANTI-CHEAT)**
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/missions` | Créer mission (SEED calcule base XP/reward) |
+| POST | `/missions/:id/complete` | Compléter (SEED calcule final XP/reward) |
+| GET | `/missions/active/:aircraftId` | Mission active pour un avion |
+
+**Companies**
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/companies` | Créer une company |
+| PUT | `/companies/:id` | Mettre à jour une company |
+
+**World (données partagées)**
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/world` | Monde complet (market, inventaires, prix) |
+| GET | `/world/inventories/:icao` | Inventaire d'un aéroport |
+| PUT | `/world/inventories/:icao` | Mettre à jour inventaire |
+
+**Market**
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/market/orders` | Liste ordres (filtres: airport, item, seller) |
+| POST | `/market/orders` | Poster un ordre de vente |
+| POST | `/market/orders/:id/buy` | Acheter un ordre (SEED vérifie fonds) |
+| DELETE | `/market/orders/:id` | Annuler un ordre |
+
+---
+
+## Structure des fichiers (v3.0)
+
+```
+tablette ingame/PackageSources/WorldOfAircraft/src/
+├── WorldOfAircraft.tsx              # Point d'entrée principal
+│
+├── types/
+│   └── index.ts                 # Interfaces TypeScript
+│
+├── constants/
+│   └── index.ts                 # URLs, intervalles, prix
+│
+├── state/                       # Modules State réactifs
+│   ├── index.ts
+│   ├── AuthState.ts             # Connexion SEED (mode online)
+│   ├── GameModeState.ts         # ** NOUVEAU ** Solo | Online
+│   ├── NavigationState.ts       # Tabs actifs
+│   ├── SettingsState.ts         # Langue, unités
+│   ├── SimVarState.ts           # Position, fuel, vitesse
+│   ├── MapState.ts              # Layers, sélection
+│   ├── MissionState.ts          # Mission active
+│   ├── CompanyState.ts          # Company du joueur
+│   ├── InventoryState.ts        # Inventaire joueur
+│   └── MarketState.ts           # Ordres marché
+│
+├── managers/
+│   ├── TrackingManager.ts       # Tracking missions
+│   ├── MapManager.ts            # OpenLayers
+│   ├── DatabaseManager.ts       # localStorage persistence
+│   └── FreeFlightManager.ts     # Tracking vol libre
+│
+├── services/
+│   ├── SoloSaveService.ts       # ** NOUVEAU ** Sauvegarde mode Solo
+│   ├── SyncService.ts           # Connexion SEED (mode Online)
+│   ├── ServiceAdapter.ts        # Facade unifiée (route selon mode)
+│   ├── InitService.ts           # Init avec sélection mode
+│   ├── LocalFleetService.ts     # Gestion flotte locale
+│   ├── LocalMissionService.ts   # Missions mode Solo
+│   ├── LocalMarketService.ts    # Marché IA (mode Solo)
+│   └── AIEconomyService.ts      # Ordres IA (mode Solo)
+│
+├── components/
+│   ├── ModeSelectionScreen.tsx  # ** NOUVEAU ** Écran choix Solo/Online
+│   ├── ConnectionScreen.tsx     # Écran connexion SEED (mode Online)
+│   ├── ConnectionStatusIndicator.tsx  # Indicateur status
+│   └── ...                      # Autres composants UI
+│
+├── views/                       # Vues par onglet
+│
+├── data/
+│   ├── seed.json                # Items, recipes initiaux
+│   └── airports-main.json       # Cache aéroports
+│
+├── locales/                     # i18n (fr, en, de, es, ru)
+│
+└── lib/
+    └── sql.js                   # SQLite pour browser (legacy)
+```
+
+### Fichiers supprimés (v3.0)
+
+Ces fichiers ne sont plus nécessaires avec l'architecture deux carrières :
+
+| Fichier | Raison |
+|---------|--------|
+| ~~NetworkState.ts~~ | Remplacé par GameModeState |
+| ~~SyncManager.ts~~ | Plus de sync entre modes |
+| ~~OfflineMissionService.ts~~ | Plus de queue offline |
+| ~~NativePersistence.ts~~ | Remplacé par SoloSaveService |
+
+---
+
+## Mode Solo - Règles
+
+### Autorisé en Solo (TOUT)
+
+| Action | Comportement |
+|--------|--------------|
+| Missions | Calcul local, récompenses généreuses |
+| Refuel | Gratuit ou prix fixe bas |
+| Marché | Ordres IA, stock illimité |
+| Vol libre | Tracking local |
+| Achat avion | Prix catalogue, toujours disponible |
+| **Triche** | **Le joueur peut modifier sa save s'il le souhaite** |
+
+### Économie IA (Solo)
+
+```typescript
+// LocalMarketService.ts - Mode Solo uniquement
+
+class LocalMarketServiceClass {
+  // Génère des ordres IA pour simuler un marché
+  generateAIOrders(airportIcao: string): MarketOrder[] {
+    const items = this.getItemsForAirport(airportIcao);
+
+    return items.map(item => ({
+      id: `ai-${item.code}-${airportIcao}`,
+      seller_id: "AI_TRADER",
+      seller_name: "Marchand local",
+      item_code: item.code,
+      quantity: 999,  // Stock illimité
+      price_per_unit: item.base_price,  // Prix fixe
+      airport_icao: airportIcao,
+      is_ai: true
+    }));
+  }
+}
+```
+
+---
+
+## Mode Online - Règles
+
+### OBLIGATOIRE en Online
+
+| Aspect | Règle |
+|--------|-------|
+| Connexion | SEED obligatoire, pas de fallback offline |
+| Anti-triche | Strict, SEED calcule tout |
+| Validation | Toutes les transactions vérifiées |
+| Trust Score | Actif, pénalités si anomalies |
+
+### BLOQUÉ si déconnecté
+
+Si la connexion au SEED est perdue en mode Online :
+- Afficher message "Connexion perdue"
+- Bloquer toutes les actions (missions, marché, refuel)
+- Proposer de passer en mode Solo (nouvelle carrière)
+
+---
+
+## Développement local
+
+### Serveur mock (dev)
+
+```bash
+# Installer Bun
+irm bun.sh/install.ps1 | iex
+
+# Lancer le serveur mock
+bun run seed-mock/server.ts
+# → http://localhost:8787
+
+# Dans SyncService
+SyncService.useDevMode();
+```
+
+### Déploiement production
+
+```bash
+cd seed-server
+npx wrangler deploy
+# → https://woa-seed.seedworldofaircraft.workers.dev
 ```
 
 ---
@@ -514,15 +752,20 @@ Temps = base_time × (200 / sum(worker.speed))
 | Build | esbuild + SASS |
 | State | MSFS Subject<T> (réactif) |
 | Map | OpenLayers 10 |
-| Storage | SQLite (sql.js) |
+| **Persistance Solo** | **GetStoredData/SetStoredData** |
+| **Persistance Online** | **SEED (Cloudflare R2)** |
+| Storage session | localStorage (Coherent GT) |
 | i18n | 5 langues (fr, en, de, es, ru) |
 
-### Contraintes Coherent GT
+### SEED Server (Backend - Mode Online uniquement)
 
-- Pas de CSS classes dynamiques → styles inline
-- Pas de `onClick` → `Button` avec `callback`
-- Pas de `.map()` JSX → `ref` + `innerHTML`
-- Debug : `localhost:19999` + `Ctrl+Shift+R`
+| Composant | Technologie |
+|-----------|-------------|
+| Runtime | Cloudflare Workers |
+| Storage | Cloudflare R2 |
+| API | REST JSON |
+| Auth | API Key + Player ID |
+| Anti-cheat | Trust Score + validation |
 
 ---
 
@@ -530,40 +773,59 @@ Temps = base_time × (200 / sum(worker.speed))
 
 | Fichier | Description |
 |---------|-------------|
+| [anticheat-seed.md](anticheat-seed.md) | Système anti-triche (MODE ONLINE uniquement) |
 | [efb-tablet.md](efb-tablet.md) | UI et composants EFB |
 | [items-recipes.md](items-recipes.md) | Liste items et recettes |
-| [factories.md](factories.md) | Système d'usines |
-| [workers.md](workers.md) | Système de workers |
 | [inventory.md](inventory.md) | Gestion inventaires |
 | [market.md](market.md) | Système de marché |
-| [missions.md](missions.md) | Système de missions |
 
 ---
 
 ## Roadmap
 
-### V0.9 — Mode P2P (En cours)
+### V3.0 — Deux Carrières (Actuel)
 
-- [x] Architecture P2P définie
-- [ ] DatabaseManager (SQLite)
-- [ ] PersistenceManager
-- [ ] DataLayer
-- [ ] Mode solo complet
-- [ ] NetworkManager
-- [ ] Sync multi-shards
+- [x] Architecture SEED Central (mode Online)
+- [x] SyncService (connexion SEED)
+- [x] ServiceAdapter (routing selon mode)
+- [x] Connection Screen (mode Online)
+- [x] SEED Server (Cloudflare Workers + R2)
+- [x] Anti-cheat complet (mode Online)
+- [x] **GameModeState** (choix Solo/Online)
+- [x] **ModeSelectionScreen** (écran de sélection)
+- [x] **SoloSaveService** (persistance mode Solo)
+- [x] **LocalMarketService** (économie IA mode Solo)
+- [ ] Tests complets des deux modes
+- [ ] UI indicateur de mode actif
 
-### V1.0 — Release
+### V3.1 — Améliorations
 
-- [ ] Polish UI
-- [ ] Tests complets
-- [ ] Documentation utilisateur
+- [ ] Tracking vol libre vers SEED (mode Online)
+- [ ] Affichage Trust Score dans ProfileView (mode Online)
+- [ ] Cron Cloudflare récupération quotidienne trust
+- [ ] Statistiques séparées par mode
 
-### V1.1+ — Futures évolutions
+### V3.2+ — Futures évolutions
 
 - [ ] Licences pilote (PPL, IFR, CPL, ATPL)
 - [ ] Examens de licence
-- [ ] Contrats NPC
-- [ ] Classements mondiaux
+- [ ] Contrats NPC (mode Solo)
+- [ ] Classements mondiaux (mode Online)
+- [ ] Factories sur SEED (mode Online)
+
+---
+
+## Résumé v2.1 → v3.0
+
+| Composant | Avant (v2.1) | Après (v3.0) |
+|-----------|--------------|--------------|
+| Modes | Hybride (online/offline) | Deux carrières séparées |
+| Sync | Queue + SyncManager | Aucune sync entre modes |
+| Offline | OfflineMissionService | SoloSaveService (carrière Solo) |
+| Anti-triche | Partout (complexe) | Online only (simple) |
+| NetworkState | Connecting/Online/Offline/Syncing | Supprimé → GameModeState |
+| Conflits | Résolution complexe | Aucun (pas de sync) |
+| Xbox | Incertain (fetch bloqué?) | Solo garanti, Online probable |
 
 ---
 

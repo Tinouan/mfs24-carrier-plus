@@ -1,140 +1,259 @@
 # Inventory System - Documentation Technique
 
-> **Version**: V0.9 (Architecture P2P)
+> **Version**: V1.0 (Architecture P2P - IndexedDB)
 
 ## Vue d'ensemble
 
 Le système d'inventaire gère le stockage et le transport des items:
-- **3 tables dédiées** (player_inventory, company_inventory, aircraft_inventory)
+- **Table unifiée `inventory`** avec `location_type` pour différencier les types
 - **Localisation par aéroport** - Items physiquement localisés
 - **Anti-cheat** - Transferts uniquement au même aéroport
 - **Transport = Vol** - Inter-aéroport nécessite un avion
 
-**Architecture P2P**: Les données sont stockées localement en SQLite et synchronisées avec les autres joueurs via le NetworkManager.
+**Architecture P2P**: Les données sont stockées localement en **IndexedDB** et synchronisées avec les autres joueurs via le NetworkManager.
 
 ---
 
-## Tables SQLite
+## Base de données IndexedDB
 
-### `player_inventory`
+### Table `inventory`
 
-Inventaire personnel du joueur, localisé par aéroport.
-
-| Colonne | Type | Description |
-|---------|------|-------------|
-| `id` | TEXT (UUID) | Clé primaire |
-| `player_id` | TEXT | FK → player |
-| `item_id` | TEXT | FK → items |
-| `qty` | INTEGER | Quantité (≥ 0) |
-| `airport_ident` | TEXT | Localisation ICAO |
-| `created_at` | TEXT | Date création |
-| `updated_at` | TEXT | Dernière modification |
-
-**Contrainte:** `UNIQUE(player_id, item_id, airport_ident)`
-
-### `company_inventory`
-
-Inventaire de la company, localisé par aéroport. Reçoit la production des factories.
+Table unifiée pour tous les types d'inventaire.
 
 | Colonne | Type | Description |
 |---------|------|-------------|
-| `id` | TEXT (UUID) | Clé primaire |
-| `company_id` | TEXT | FK → companies |
-| `item_id` | TEXT | FK → items |
-| `qty` | INTEGER | Quantité (≥ 0) |
-| `airport_ident` | TEXT | Localisation ICAO |
-| `for_sale` | INTEGER | En vente (0/1) |
-| `sale_price` | REAL | Prix de vente unitaire |
-| `sale_qty` | INTEGER | Quantité en vente |
-| `created_at` | TEXT | Date création |
-| `updated_at` | TEXT | Dernière modification |
+| `id` | string (UUID) | Clé primaire |
+| `location_type` | string | Type: "player", "airport", "aircraft" |
+| `location_id` | string | ICAO (airport) ou UUID (aircraft) |
+| `item_code` | string | Code de l'item (ex: "wheat", "flour") |
+| `quantity` | number | Quantité (≥ 0) |
 
-**Contrainte:** `UNIQUE(company_id, item_id, airport_ident)`
+### Valeurs de `location_type`
 
-### `aircraft_inventory`
+| Type | Description | Owner | Exemple location_id |
+|------|-------------|-------|---------------------|
+| `player` | Inventaire personnel | Player | "LFPG" (ICAO) |
+| `airport` | Inventaire company | Company | "LFPG" (ICAO) |
+| `aircraft` | Cargo avion | Company | UUID de l'avion |
 
-Cargo d'un avion. Pas de `airport_ident` - la position = position de l'avion.
+### Logique de stockage
 
-| Colonne | Type | Description |
-|---------|------|-------------|
-| `id` | TEXT (UUID) | Clé primaire |
-| `aircraft_id` | TEXT | FK → aircraft |
-| `item_id` | TEXT | FK → items |
-| `qty` | INTEGER | Quantité (≥ 0) |
-| `created_at` | TEXT | Date création |
-| `updated_at` | TEXT | Dernière modification |
-
-**Contrainte:** `UNIQUE(aircraft_id, item_id)`
+- **Achat market perso** → `location_type: "player"`, `location_id: ICAO`
+- **Achat market company** → `location_type: "airport"`, `location_id: ICAO`
+- **Production factory** → `location_type: "airport"`, `location_id: factory.airport_ident`
+- **Cargo avion** → `location_type: "aircraft"`, `location_id: aircraft.id`
 
 ---
 
-## Types de Containers
+## Interface Utilisateur
 
-| Type | Description | Owner |
-|------|-------------|-------|
-| `player_inventory` | Entrepôt personnel | Player |
-| `company_inventory` | Entrepôt company + Production | Company |
-| `aircraft_inventory` | Cargo avion (limite poids) | Company/Player |
+### Inventaire Personnel (Profile > Inventaire)
 
-### Icônes UI
+Accessible via l'onglet **Profile** puis sous-onglet **Inventaire**.
 
-| Type | Icône | Nom affiché |
-|------|-------|-------------|
-| `player_inventory` | 👤 | Stock Perso - ICAO |
-| `company_inventory` | 🏢 | Stock Company - ICAO |
-| `aircraft_inventory` | ✈️ | [Immatriculation] |
+```
+┌─────────────────────────────────────────────────────────┐
+│ INVENTAIRE                                               │
+├─────────────────────────────────────────────────────────┤
+│ [T0] [T1] [T2] [T3] [Tous]                              │
+│                                                          │
+│ 🔍 Aéroport...     🔍 Nom item...                        │
+├─────────────────────────────────────────────────────────┤
+│ ┌────────────────────────────────────────────────────┐  │
+│ │ 📍 LFPG                                            │  │
+│ │ ├── 🌾 Wheat (T0)              x50    170$        │  │
+│ │ └── 🍞 Bread (T1)              x25    500$        │  │
+│ ├────────────────────────────────────────────────────┤  │
+│ │ 📍 LFML                                            │  │
+│ │ └── 🧈 Butter (T1)             x10    350$        │  │
+│ └────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Inventaire Company (Company > Inventaire)
+
+Accessible via l'onglet **Company** puis sous-onglet **Inventaire**.
+Affiche un header avec le nom et la base de la company.
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ 🏢 TitiAirlines                                     │ │
+│ │    Base: LFPG                                       │ │
+│ └─────────────────────────────────────────────────────┘ │
+├─────────────────────────────────────────────────────────┤
+│ INVENTAIRE COMPANY                                       │
+├─────────────────────────────────────────────────────────┤
+│ [T0] [T1] [T2] [T3] [Tous]                              │
+│                                                          │
+│ 🔍 Aéroport...     🔍 Nom item...                        │
+├─────────────────────────────────────────────────────────┤
+│ (Liste des items company groupés par aéroport)          │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Filtres disponibles
+
+| Filtre | Description | État |
+|--------|-------------|------|
+| **Tier** | Boutons T0/T1/T2/T3/Tous | Active un seul à la fois |
+| **ICAO** | Recherche par code aéroport | Texte libre |
+| **Item** | Recherche par nom d'item | Texte libre |
+
+### Affichage des items
+
+- **Groupés par aéroport** - Header avec icône 📍 et code ICAO
+- **Couleur par tier** - Vert (T0), Bleu (T1), Violet (T2), Orange (T3)
+- **Informations** - Nom, tier, quantité, valeur totale
 
 ---
 
 ## Services TypeScript
 
-### InventoryService
+### LocalMarketService
 
 ```typescript
-// services/InventoryService.ts
+// services/LocalMarketService.ts
 
-class InventoryServiceClass {
-  // Inventaire personnel (tous aéroports)
-  async getPlayerInventory(airportIdent?: string): Promise<InventoryItem[]>;
+class LocalMarketServiceClass {
+  // Inventaire personnel (location_type: "player")
+  async getPlayerInventory(): Promise<InventoryItem[]>;
 
-  // Inventaire company
-  async getCompanyInventory(airportIdent?: string): Promise<InventoryItem[]>;
+  // Inventaire company (location_type: "airport" + aircraft cargo)
+  async getCompanyInventory(): Promise<InventoryItem[]>;
 
-  // Cargo d'un avion
-  async getAircraftCargo(aircraftId: string): Promise<AircraftCargo>;
-
-  // Charger items dans avion
-  async loadCargo(params: {
-    aircraft_id: string;
-    item_id: string;
-    qty: number;
-    from_inventory: 'player' | 'company';
-  }): Promise<void>;
-
-  // Décharger items de l'avion
-  async unloadCargo(params: {
-    aircraft_id: string;
-    item_id: string;
-    qty: number;
-    to_inventory: 'player' | 'company';
-  }): Promise<void>;
-
-  // Vue globale (player + company)
-  async getOverview(): Promise<InventoryOverview>;
+  // Ajouter à l'inventaire (achat market)
+  async addToInventory(
+    locationId: string,
+    itemCode: string,
+    quantity: number,
+    locationType: "player" | "airport" | "aircraft"
+  ): Promise<void>;
 }
 ```
 
-### DataLayer (Abstraction)
+### DatabaseManager
 
 ```typescript
-// En mode solo → SQLite local
-DataLayer.setLocalMode();
+// managers/DatabaseManager.ts
 
-// En mode multi → Via peer
-DataLayer.setNetworkMode({ host: '192.168.1.10', port: 7777 });
+class DatabaseManagerClass {
+  // Récupérer inventaire à une location
+  async getInventoryAt(
+    locationType: string,
+    locationId: string
+  ): Promise<DbInventoryItem[]>;
 
-// Les services utilisent DataLayer
-const inventory = await DataLayer.getInventory('player', playerId);
+  // Ajouter/mettre à jour un item
+  async addInventoryItem(
+    locationType: string,
+    locationId: string,
+    itemCode: string,
+    quantity: number
+  ): Promise<void>;
+
+  // Récupérer tout l'inventaire
+  async getAll<T>(store: "inventory"): Promise<T[]>;
+}
+```
+
+---
+
+## Flux d'Achat Market
+
+### Achat personnel
+
+```
+[Market] ─── wallet: "player" ───→ [inventory]
+                                    location_type: "player"
+                                    location_id: order.airport_ident
+```
+
+### Achat company
+
+```
+[Market] ─── wallet: "company" ──→ [inventory]
+                                    location_type: "airport"
+                                    location_id: order.airport_ident
+```
+
+### Code d'achat
+
+```typescript
+// LocalMarketService.buyFromMarket()
+async buyFromMarket(params: BuyParams): Promise<void> {
+  const { orderId, quantity, walletType } = params;
+  const order = await this.getOrder(orderId);
+
+  // Déterminer le type de location selon le wallet
+  const locationType = walletType === "player" ? "player" : "airport";
+
+  // Ajouter à l'inventaire
+  await DatabaseManager.addInventoryItem(
+    locationType,
+    order.airport_ident,
+    order.item_code,
+    quantity
+  );
+
+  // Déduire du wallet
+  if (walletType === "player") {
+    await this.deductFromPlayerWallet(total);
+  } else {
+    await this.deductFromCompanyWallet(total);
+  }
+}
+```
+
+---
+
+## État React (MSFS SDK Subjects)
+
+### InventoryState.ts
+
+```typescript
+// state/InventoryState.ts
+
+export interface InventoryStateType {
+  // Status global
+  inventoryStatus: Subject<LoadingStatus>;
+  inventoryError: Subject<string | null>;
+  inventoryType: Subject<InventoryOwnerType>;
+
+  // Données brutes P2P
+  inventoryItems: Subject<LocalInventoryItem[]>;
+
+  // Inventaire Profile (affichage)
+  profileInventory: Subject<ProfileInventoryItem[]>;
+  profileInventoryLoading: Subject<boolean>;
+  profileIcaoFilter: Subject<string>;
+  profileItemFilter: Subject<string>;
+  profileTierFilter: Subject<number | null>;
+
+  // Inventaire Company (affichage)
+  companyInventory: Subject<ProfileInventoryItem[]>;
+  companyInventoryLoading: Subject<boolean>;
+  companyIcaoFilter: Subject<string>;
+  companyItemFilter: Subject<string>;
+  companyTierFilter: Subject<number | null>;
+}
+```
+
+### Type ProfileInventoryItem
+
+```typescript
+// types/index.ts
+
+export interface ProfileInventoryItem {
+  id: string;
+  item_code: string;
+  item_name: string;
+  tier: number;
+  quantity: number;
+  unit_price: number;
+  total_value: number;
+  airport_ident: string;
+}
 ```
 
 ---
@@ -151,149 +270,32 @@ const inventory = await DataLayer.getInventory('player', playerId);
 ### Load Cargo
 
 ```typescript
-// InventoryService.loadCargo()
 async loadCargo(params: LoadCargoParams): Promise<void> {
   const aircraft = await FleetService.getAircraft(params.aircraft_id);
-  const inventory = await this.getInventoryAtAirport(
+
+  // 1. Items doivent être au même aéroport que l'avion
+  const inventory = await DatabaseManager.getInventoryAt(
     params.from_inventory,
     aircraft.current_airport_ident
   );
 
-  // 1. Items doivent être au même aéroport que l'avion
-  const item = inventory.find(i => i.item_id === params.item_id);
-  if (!item || item.qty < params.qty) {
+  const item = inventory.find(i => i.item_code === params.item_code);
+  if (!item || item.quantity < params.qty) {
     throw new Error("Insufficient stock at aircraft location");
   }
 
   // 2. Vérifier capacité cargo
   const cargo = await this.getAircraftCargo(params.aircraft_id);
-  const itemWeight = await this.getItemWeight(params.item_id);
+  const itemWeight = await this.getItemWeight(params.item_code);
   if (cargo.current_weight_kg + (params.qty * itemWeight) > cargo.capacity_kg) {
     throw new Error("Cargo capacity exceeded");
   }
 
   // 3. Transférer
-  await this.removeFromInventory(params.from_inventory, params.item_id, params.qty);
-  await this.addToAircraftCargo(params.aircraft_id, params.item_id, params.qty);
+  await DatabaseManager.removeFromInventory(params.from_inventory, params.item_code, params.qty);
+  await DatabaseManager.addInventoryItem("aircraft", params.aircraft_id, params.item_code, params.qty);
 }
 ```
-
-### Unload Cargo
-
-```typescript
-// InventoryService.unloadCargo()
-async unloadCargo(params: UnloadCargoParams): Promise<void> {
-  const aircraft = await FleetService.getAircraft(params.aircraft_id);
-
-  // Items arrivent à l'aéroport actuel de l'avion
-  const destinationAirport = aircraft.current_airport_ident;
-
-  await this.removeFromAircraftCargo(params.aircraft_id, params.item_id, params.qty);
-  await this.addToInventory(
-    params.to_inventory,
-    params.item_id,
-    params.qty,
-    destinationAirport
-  );
-}
-```
-
----
-
-## Interface Utilisateur
-
-### Vue Inventaire
-
-```
-┌─────────────────────────────────────────────────────┐
-│ 📦 INVENTAIRE          👤 5,000$ | 🏢 25,000$       │
-│ 72 items | 1,250$ | 3 aéroports                     │
-├─────────────────────────────────────────────────────┤
-│ 🔍 Rechercher...     [Tous][Perso][Company][EnVente]│
-├─────────────────────────────────────────────────────┤
-│ ▼ 📍 LFPG                           2 conteneurs    │
-│   ┌──────────────────┐  ┌──────────────────┐       │
-│   │ 👤 Stock Perso   │  │ ✈️ F-TINO        │       │
-│   │ 🌾 Blé x50       │  │ 📦 Vide          │       │
-│   │ 170$ [Voir][🔄]  │  │ 0$ [Voir][🔄]    │       │
-│   └──────────────────┘  └──────────────────┘       │
-│ ▶ 📍 LFML                           1 conteneur     │
-└─────────────────────────────────────────────────────┘
-```
-
-### Fonctionnalités UI
-
-- **Vue groupée par aéroport** - Conteneurs regroupés avec expand/collapse
-- **Recherche temps réel** - Filtrage des items par nom
-- **Filtres par type** - Entrepôts perso/company, avions, en vente
-- **Modal détail** - Vue table complète du contenu
-- **Wallets header** - Affichage wallet perso et company
-
-### Barre Cargo (Avions)
-
-Affichage visuel de la capacité cargo:
-- **Vert** - < 70% rempli
-- **Orange** - 70-90% rempli
-- **Rouge** - > 90% rempli
-
----
-
-## Système de Vente
-
-### Mise en vente
-
-Les items mis en vente sont **déduits** de l'inventaire normal:
-
-```typescript
-// InventoryService.setForSale()
-async setForSale(params: {
-  item_id: string;
-  airport_ident: string;
-  sale_price: number;
-  sale_qty: number;
-}): Promise<void> {
-  const inventory = await this.getCompanyInventoryItem(params.item_id, params.airport_ident);
-
-  if (inventory.qty < params.sale_qty) {
-    throw new Error("Insufficient quantity");
-  }
-
-  // Déduire du stock normal
-  inventory.qty -= params.sale_qty;
-  inventory.for_sale = true;
-  inventory.sale_price = params.sale_price;
-  inventory.sale_qty = params.sale_qty;
-
-  await DatabaseManager.saveInventory(inventory);
-}
-```
-
-### Annulation de vente
-
-```typescript
-// InventoryService.cancelSale()
-async cancelSale(itemId: string, airportIdent: string): Promise<void> {
-  const inventory = await this.getCompanyInventoryItem(itemId, airportIdent);
-
-  // Retourner au stock normal
-  inventory.qty += inventory.sale_qty;
-  inventory.for_sale = false;
-  inventory.sale_price = null;
-  inventory.sale_qty = 0;
-
-  await DatabaseManager.saveInventory(inventory);
-}
-```
-
-### Filtre "En Vente"
-
-| Filtre | Description |
-|--------|-------------|
-| Tous | Tous les items |
-| Perso | player_inventory uniquement |
-| Company | company_inventory uniquement |
-| Avions | aircraft_inventory uniquement |
-| **En Vente** | Items avec `for_sale=true` |
 
 ---
 
@@ -302,47 +304,10 @@ async cancelSale(itemId: string, airportIdent: string): Promise<void> {
 ### Transport entre aéroports
 
 ```
-[player/company_inventory LFPG] ──load──→ [aircraft_inventory] ──vol──→ [player/company_inventory KJFK]
-                                    ↑                              ↑
-                               même aéroport                 même aéroport
+[player/airport inventory LFPG] ──load──→ [aircraft inventory] ──vol──→ [player/airport inventory KJFK]
+                                     ↑                              ↑
+                                même aéroport                  même aéroport
 ```
-
-### Exemple complet
-
-```typescript
-// 1. Charger à LFPG
-await InventoryService.loadCargo({
-  aircraft_id: "uuid",
-  item_id: "uuid",
-  qty: 100,
-  from_inventory: "company"
-});
-
-// 2. Vol MSFS (le joueur vole)
-
-// 3. Update position après atterrissage
-await FleetService.updateAircraftLocation("uuid", "KJFK");
-
-// 4. Décharger à KJFK
-await InventoryService.unloadCargo({
-  aircraft_id: "uuid",
-  item_id: "uuid",
-  qty: 100,
-  to_inventory: "player"
-});
-```
-
----
-
-## Flux Production → Inventaire
-
-Les factories T1+ écrivent directement dans `company_inventory`:
-
-```
-[Factory T1+] ─completeBatch()─→ [company_inventory @ factory.airport_ident]
-```
-
-Pas de stockage intermédiaire - les produits arrivent directement dans l'inventaire company.
 
 ---
 
@@ -350,39 +315,66 @@ Pas de stockage intermédiaire - les produits arrivent directement dans l'invent
 
 ### Données synchronisées
 
-| Donnée | Direction | Fréquence |
-|--------|-----------|-----------|
-| Inventaires par aéroport | Bidirectionnel | 5 sec |
-| Items en vente | Bidirectionnel | 5 sec |
-| Cargo avions | Local uniquement | - |
+| Donnée | Direction | Stockage |
+|--------|-----------|----------|
+| Inventaires | Bidirectionnel | IndexedDB |
+| Items en vente | Bidirectionnel | IndexedDB |
+| Positions avions | Local | IndexedDB |
 
-### Données locales uniquement
+### NetworkManager
 
-- Position exacte de l'avion (cargo suit)
-- Mission en cours
-- Préférences UI
+```typescript
+// managers/NetworkManager.ts
+
+// Sync inventaire avec les peers
+async syncInventory(): Promise<void> {
+  const localInventory = await DatabaseManager.getAll("inventory");
+  await this.broadcastToPeers({ type: "inventory_sync", data: localInventory });
+}
+```
 
 ---
 
-## Sécurité et Transactions
-
-### Isolation des données
-
-- Toutes les requêtes filtrent par `player_id` ou `company_id`
-- Impossible d'accéder aux inventaires d'autres joueurs
-- Seul le marché expose des données publiques
-
-### Transactions
-
-- Toutes les opérations sont atomiques
-- Rollback en cas d'erreur
-- Vérification du stock avant modification
+## Contraintes et Sécurité
 
 ### Contraintes
 
-- `qty` ne peut pas devenir négatif
-- `sale_qty` ≤ `qty` disponible
-- Un item/location = un seul enregistrement (UNIQUE constraint)
+- `quantity` ne peut pas devenir négatif
+- Un item/location = agrégation des quantités
+- Validation des codes items contre la table `items`
+
+### Isolation
+
+- Mode P2P: données locales uniquement
+- Sync manuelle avec les peers connectés
+
+---
+
+## Notes d'implémentation
+
+### Coherent GT (MSFS 2024)
+
+- **Pas de Map()** - Utiliser `Record<string, T>` à la place
+- **Keyboard blocking** - `stopPropagation()` + `stopImmediatePropagation()` sur les inputs
+- **Subjects MSFS SDK** - État réactif via `Subject.create()` et `.sub()`
+
+### Filtrage côté client
+
+```typescript
+// Appliquer les filtres sur profileInventory
+const filtered = inventory.filter(item => {
+  // Filtre tier
+  if (tierFilter !== null && item.tier !== tierFilter) return false;
+
+  // Filtre ICAO
+  if (icaoFilter && !item.airport_ident.toLowerCase().includes(icaoFilter.toLowerCase())) return false;
+
+  // Filtre nom item
+  if (itemFilter && !item.item_name.toLowerCase().includes(itemFilter.toLowerCase())) return false;
+
+  return true;
+});
+```
 
 ---
 
@@ -392,3 +384,4 @@ Pas de stockage intermédiaire - les produits arrivent directement dans l'invent
 - [ ] Frais de stockage (warehouse rent)
 - [ ] Historique des prix du marché
 - [ ] Ordres d'achat (buy orders)
+- [ ] Chargement/déchargement cargo (UI)

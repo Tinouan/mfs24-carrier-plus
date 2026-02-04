@@ -1,4 +1,4 @@
-# MFS Carrier+ - EFB Tablet Documentation
+# MFS World of Aircraft - EFB Tablet Documentation
 
 Documentation de l'app EFB (Electronic Flight Bag) pour Microsoft Flight Simulator 2024.
 
@@ -13,12 +13,12 @@ Il faut copier manuellement apres chaque build:
 
 ```bash
 # 1. Build
-cd "tablette ingame/PackageSources/CarrierPlus"
+cd "tablette ingame/PackageSources/WorldOfAircraft"
 npm run build
 
 # 2. Copier vers Community (PowerShell/Git Bash)
-cp dist/CarrierPlus.js "C:/Users/tinou/AppData/Local/Packages/Microsoft.Limitless_8wekyb3d8bbwe/LocalCache/Packages/Community2024/mfs-carrierplus-efb/html_ui/efb_ui/efb_apps/CarrierPlus/"
-cp dist/CarrierPlus.js.map "C:/Users/tinou/AppData/Local/Packages/Microsoft.Limitless_8wekyb3d8bbwe/LocalCache/Packages/Community2024/mfs-carrierplus-efb/html_ui/efb_ui/efb_apps/CarrierPlus/"
+cp dist/WorldOfAircraft.js "C:/Users/tinou/AppData/Local/Packages/Microsoft.Limitless_8wekyb3d8bbwe/LocalCache/Packages/Community2024/mfs-carrierplus-efb/html_ui/efb_ui/efb_apps/WorldOfAircraft/"
+cp dist/WorldOfAircraft.js.map "C:/Users/tinou/AppData/Local/Packages/Microsoft.Limitless_8wekyb3d8bbwe/LocalCache/Packages/Community2024/mfs-carrierplus-efb/html_ui/efb_ui/efb_apps/WorldOfAircraft/"
 
 # 3. Recharger dans MSFS: Ctrl+Shift+R dans le debugger (http://localhost:19999)
 ```
@@ -27,8 +27,8 @@ cp dist/CarrierPlus.js.map "C:/Users/tinou/AppData/Local/Packages/Microsoft.Limi
 
 ```bash
 # Comparer les timestamps
-ls -la "tablette ingame/PackageSources/CarrierPlus/dist/CarrierPlus.js"
-ls -la "C:/Users/tinou/AppData/Local/Packages/Microsoft.Limitless_8wekyb3d8bbwe/LocalCache/Packages/Community2024/mfs-carrierplus-efb/html_ui/efb_ui/efb_apps/CarrierPlus/CarrierPlus.js"
+ls -la "tablette ingame/PackageSources/WorldOfAircraft/dist/WorldOfAircraft.js"
+ls -la "C:/Users/tinou/AppData/Local/Packages/Microsoft.Limitless_8wekyb3d8bbwe/LocalCache/Packages/Community2024/mfs-carrierplus-efb/html_ui/efb_ui/efb_apps/WorldOfAircraft/WorldOfAircraft.js"
 ```
 
 ---
@@ -37,10 +37,10 @@ ls -la "C:/Users/tinou/AppData/Local/Packages/Microsoft.Limitless_8wekyb3d8bbwe/
 
 ### Source code
 ```
-tablette ingame/PackageSources/CarrierPlus/
+tablette ingame/PackageSources/WorldOfAircraft/
 ├── src/
-│   ├── CarrierPlus.tsx     # Code principal
-│   ├── CarrierPlus.scss    # Styles (note: CSS classes ne fonctionnent pas, utiliser inline styles)
+│   ├── WorldOfAircraft.tsx     # Code principal
+│   ├── WorldOfAircraft.scss    # Styles (note: CSS classes ne fonctionnent pas, utiliser inline styles)
 │   └── Assets/
 │       └── app-icon.svg    # Icone de l'app
 ├── dist/                   # Fichiers compiles (generes)
@@ -54,9 +54,9 @@ tablette ingame/PackageSources/CarrierPlus/
 ### Dossier deploye (Community)
 ```
 C:\Users\tinou\AppData\Local\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\Packages\Community2024\mfs-carrierplus-efb\
-├── html_ui/efb_ui/efb_apps/CarrierPlus/
-│   ├── CarrierPlus.js      # Bundle compile
-│   ├── CarrierPlus.css     # Styles
+├── html_ui/efb_ui/efb_apps/WorldOfAircraft/
+│   ├── WorldOfAircraft.js      # Bundle compile
+│   ├── WorldOfAircraft.css     # Styles
 │   └── Assets/
 │       └── app-icon.svg
 ├── layout.json
@@ -71,7 +71,7 @@ C:\Users\tinou\AppData\Local\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCac
 
 ```bash
 # Build une fois
-cd "tablette ingame/PackageSources/CarrierPlus"
+cd "tablette ingame/PackageSources/WorldOfAircraft"
 npm run build
 
 # Watch mode (auto-rebuild + auto-deploy)
@@ -127,7 +127,7 @@ Utiliser le composant `Button` officiel avec `callback`:
 
 ### Styles - IMPORTANT
 
-**Les classes CSS ne fonctionnent pas** dans l'EFB malgre le prefix `.efb-view.CarrierPlus`.
+**Les classes CSS ne fonctionnent pas** dans l'EFB malgre le prefix `.efb-view.WorldOfAircraft`.
 
 **Utiliser les styles inline:**
 
@@ -415,7 +415,7 @@ private async fetchAvailableSlotsAtAirport(icaoCode: string): Promise<void> {
     // data = { airport_ident, airport_type, max_slots, occupied_slots, available_slots }
     this.availableSlotsAtAirport.set(data.available_slots ?? 0);
   } catch (error) {
-    console.error("[CarrierPlus] Failed to fetch available slots:", error);
+    console.error("[WorldOfAircraft] Failed to fetch available slots:", error);
     this.availableSlotsAtAirport.set(null);
   }
 }
@@ -448,7 +448,7 @@ Les erreurs 404 pour les fichiers `.map` sont normales (Asobo n'a pas inclus les
 
 ---
 
-## Structure de l'App CarrierPlus (V0.8)
+## Structure de l'App WorldOfAircraft (V0.8)
 
 ### Onglets (dans l'ordre sidebar)
 
@@ -466,7 +466,7 @@ Les erreurs 404 pour les fichiers `.map` sont normales (Asobo n'a pas inclus les
 ### Cycle de vie
 
 ```tsx
-class CarrierPlusView extends AppView {
+class WorldOfAircraftView extends AppView {
   public onOpen(): void {
     // App ouverte - demarrer les updates
   }
@@ -493,14 +493,14 @@ class CarrierPlusView extends AppView {
 # Build
 npm run build
 
-# Watch (dans le dossier CarrierPlus)
+# Watch (dans le dossier WorldOfAircraft)
 npm run watch
 
 # Watch + Deploy automatique
 watch.bat
 
 # Deployer manuellement
-cp dist/CarrierPlus.js "C:/Users/tinou/AppData/Local/Packages/Microsoft.Limitless_8wekyb3d8bbwe/LocalCache/Packages/Community2024/mfs-carrierplus-efb/html_ui/efb_ui/efb_apps/CarrierPlus/"
+cp dist/WorldOfAircraft.js "C:/Users/tinou/AppData/Local/Packages/Microsoft.Limitless_8wekyb3d8bbwe/LocalCache/Packages/Community2024/mfs-carrierplus-efb/html_ui/efb_ui/efb_apps/WorldOfAircraft/"
 ```
 
 ---
@@ -512,8 +512,8 @@ cp dist/CarrierPlus.js "C:/Users/tinou/AppData/Local/Packages/Microsoft.Limitles
 1. Verifier que le build a reussi
 2. Verifier que les fichiers sont copies vers Community:
    ```bash
-   ls -la "tablette ingame/PackageSources/CarrierPlus/dist/CarrierPlus.js"
-   ls -la "C:/Users/tinou/AppData/.../CarrierPlus/CarrierPlus.js"
+   ls -la "tablette ingame/PackageSources/WorldOfAircraft/dist/WorldOfAircraft.js"
+   ls -la "C:/Users/tinou/AppData/.../WorldOfAircraft/WorldOfAircraft.js"
    ```
 3. Les timestamps doivent correspondre
 4. Recharger l'EFB: **Ctrl+Shift+R** dans le debugger
@@ -715,7 +715,7 @@ private disposeMap(): void {
       this.olMap.setTarget(undefined); // Detache du DOM
       this.olMap.dispose();            // Libere les ressources
     } catch (e) {
-      console.log("[CarrierPlus] Map dispose error (normal after refresh)");
+      console.log("[WorldOfAircraft] Map dispose error (normal after refresh)");
     }
     this.olMap = null;
   }
@@ -1106,7 +1106,7 @@ export { navigationState } from "./NavigationState";
 export { settingsState } from "./SettingsState";
 // ... etc
 
-// Usage dans CarrierPlus.tsx
+// Usage dans WorldOfAircraft.tsx
 import {
   authState,
   navigationState,

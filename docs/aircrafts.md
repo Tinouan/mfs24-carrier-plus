@@ -1,4 +1,4 @@
-# MFS Carrier+ - Systeme Fleet (Avions)
+# MFS World of Aircraft - Systeme Fleet (Avions)
 
 **Version**: 2.3
 **Date**: 2026-01-30
@@ -461,7 +461,7 @@ Retourne tous les avions que le joueur peut utiliser:
 
 ### Implementation Frontend
 
-Fichier: `tablette ingame/PackageSources/CarrierPlus/src/CarrierPlus.tsx`
+Fichier: `tablette ingame/PackageSources/WorldOfAircraft/src/WorldOfAircraft.tsx`
 
 ```tsx
 // State

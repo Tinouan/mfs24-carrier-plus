@@ -1,4 +1,4 @@
-# LEGAL — Mfs Carrier+
+# LEGAL — Mfs World of Aircraft
 
 ## Licence
 

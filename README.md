@@ -1,4 +1,4 @@
-# MFS Carrier+
+# MFS World of Aircraft
 
 🛫 **Jeu de gestion de compagnie aérienne cargo pour Microsoft Flight Simulator 2024**
 
@@ -43,7 +43,7 @@ Un mod complet qui transforme MSFS 2024 en simulateur de gestion de fret aérien
 1. Téléchargez la dernière release
 2. Copiez le dossier `carrierplus-efb` dans votre dossier Community MSFS
 3. Lancez MSFS 2024
-4. Ouvrez l'EFB dans le cockpit → Onglet "Carrier+"
+4. Ouvrez l'EFB dans le cockpit → Onglet "World of Aircraft"
 
 ---
 
@@ -123,7 +123,7 @@ Un mod complet qui transforme MSFS 2024 en simulateur de gestion de fret aérien
 mfs24-carrier-plus/
 ├── tablette ingame/          # EFB MSFS 2024
 │   └── PackageSources/
-│       └── CarrierPlus/
+│       └── WorldOfAircraft/
 │           └── src/          # Code source TypeScript
 ├── docs/                     # Documentation technique
 ├── peers.json                # Config shards P2P
