@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AssetPackage Version="1.0.0">
+	<ItemSettings>
+		<ContentType>MISC</ContentType>
+		<Title>World of Aircraft EFB</Title>
+		<Manufacturer>World of Aircraft</Manufacturer>
+		<Creator>Tinouan</Creator>
+	</ItemSettings>
+	<Flags>
+		<VisibleInStore>false</VisibleInStore>
+		<CanBeReferenced>true</CanBeReferenced>
+	</Flags>
+	<PackageOrderHint>MISC</PackageOrderHint>
+	<AssetGroups>
+		<AssetGroup Name="ContentInfo">
+			<Type Version="0">ContentInfo</Type>
+			<Flags>
+				<FSXCompatibility>false</FSXCompatibility>
+			</Flags>
+			<AssetDir>PackageDefinitions\world-of-aircraft-efb\ContentInfo</AssetDir>
+			<OutputDir>ContentInfo\world-of-aircraft-efb</OutputDir>
+		</AssetGroup>
+		<AssetGroup Name="efb_worldofaircraft">
+			<Type Version="0">Copy</Type>
+			<Flags>
+				<FSXCompatibility>false</FSXCompatibility>
+			</Flags>
+			<AssetDir>PackageSources\WorldOfAircraft\dist\</AssetDir>
+			<OutputDir>.\html_ui\efb_ui\efb_apps\WorldOfAircraft\</OutputDir>
+		</AssetGroup>
+	</AssetGroups>
+</AssetPackage>
