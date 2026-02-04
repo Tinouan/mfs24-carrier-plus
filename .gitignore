@@ -15,6 +15,7 @@ __pycache__/
 # mac/windows
 .DS_Store
 Thumbs.db
+nul
 
 # MSFS généré
 tablette ingame/_PackageInt/
