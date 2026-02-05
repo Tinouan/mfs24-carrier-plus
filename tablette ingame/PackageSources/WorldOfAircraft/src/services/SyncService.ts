@@ -444,6 +444,33 @@ class SyncServiceClass {
     }
   }
 
+  /**
+   * Create a new aircraft on SEED (uses POST)
+   * Used for starter aircraft during first launch
+   */
+  async createAircraft(aircraft: SeedAircraft): Promise<boolean> {
+    if (!this.connected || !this.playerId) return false;
+
+    try {
+      // POST to player's aircraft collection to create new aircraft
+      const response = await fetch(`${this.SEED_URL}/players/${this.playerId}/aircraft`, {
+        method: "POST",
+        headers: this.getHeaders(),
+        body: JSON.stringify(aircraft),
+      });
+
+      if (response.ok) {
+        console.log(`[Sync] Aircraft created: ${aircraft.registration}`);
+        return true;
+      }
+      console.warn(`[Sync] Create aircraft failed: ${response.status}`);
+      return false;
+    } catch (e) {
+      console.error("[Sync] Create aircraft failed:", e);
+      return false;
+    }
+  }
+
   // ═══════════════════════════════════════════════════════════
   // COMPANY
   // ═══════════════════════════════════════════════════════════

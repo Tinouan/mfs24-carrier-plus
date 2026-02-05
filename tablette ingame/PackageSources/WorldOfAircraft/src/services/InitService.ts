@@ -786,7 +786,7 @@ class InitServiceClass {
   }
 
   /**
-   * Sync aircraft to SEED server
+   * Sync aircraft to SEED server (creates new aircraft on SEED)
    */
   private async syncAircraftToSeed(aircraft: Aircraft): Promise<void> {
     try {
@@ -807,14 +807,15 @@ class InitServiceClass {
         hours: aircraft.flight_hours || 0,
       };
 
-      const success = await SyncService.saveAircraft(seedAircraft);
+      // Use createAircraft (POST) for new aircraft, not saveAircraft (PUT)
+      const success = await SyncService.createAircraft(seedAircraft);
       if (success) {
-        console.log(`[InitService] Aircraft ${aircraft.registration} synced to SEED`);
+        console.log(`[InitService] Aircraft ${aircraft.registration} created on SEED`);
       } else {
-        console.warn(`[InitService] Failed to sync aircraft ${aircraft.registration} to SEED`);
+        console.warn(`[InitService] Failed to create aircraft ${aircraft.registration} on SEED`);
       }
     } catch (e) {
-      console.error("[InitService] Error syncing aircraft to SEED:", e);
+      console.error("[InitService] Error creating aircraft on SEED:", e);
     }
   }
 
