@@ -43,6 +43,7 @@ declare function SetStoredData(key: string, value: string): void;
 class NativePersistenceClass {
   private STORAGE_KEY = "WOA_SaveData";
   private SOLO_SETUP_KEY = "WOA_SoloSetupComplete";
+  private PLAYER_ID_KEY = "WOA_PlayerId";
   private VERSION = 1;
   private autoSaveInterval: number | null = null;
 
@@ -286,6 +287,70 @@ class NativePersistenceClass {
       console.log("[NativePersistence] Solo setup flag cleared");
     } catch (e) {
       console.error("[NativePersistence] Failed to clear solo setup flag:", e);
+    }
+  }
+
+  /**
+   * Get the stored player ID (persists across EFB sessions)
+   */
+  getPlayerId(): string | null {
+    if (!this.isAvailable()) {
+      // Fallback to localStorage if native APIs not available
+      return localStorage.getItem("woa_player_id");
+    }
+
+    try {
+      const value = GetStoredData(this.PLAYER_ID_KEY);
+      if (value && value.length > 0) {
+        return value;
+      }
+      // Also check localStorage as fallback (migration from old system)
+      const localId = localStorage.getItem("woa_player_id");
+      if (localId) {
+        // Migrate to native storage
+        this.setPlayerId(localId);
+        return localId;
+      }
+      return null;
+    } catch {
+      return localStorage.getItem("woa_player_id");
+    }
+  }
+
+  /**
+   * Set the player ID (persists across EFB sessions)
+   */
+  setPlayerId(playerId: string): void {
+    // Always save to localStorage as backup
+    localStorage.setItem("woa_player_id", playerId);
+
+    if (!this.isAvailable()) {
+      return;
+    }
+
+    try {
+      SetStoredData(this.PLAYER_ID_KEY, playerId);
+      console.log(`[NativePersistence] Player ID saved: ${playerId}`);
+    } catch (e) {
+      console.error("[NativePersistence] Failed to save player ID:", e);
+    }
+  }
+
+  /**
+   * Clear player ID (for testing/reset)
+   */
+  clearPlayerId(): void {
+    localStorage.removeItem("woa_player_id");
+
+    if (!this.isAvailable()) {
+      return;
+    }
+
+    try {
+      SetStoredData(this.PLAYER_ID_KEY, "");
+      console.log("[NativePersistence] Player ID cleared");
+    } catch (e) {
+      console.error("[NativePersistence] Failed to clear player ID:", e);
     }
   }
 

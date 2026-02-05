@@ -1411,6 +1411,7 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
       // Clear native persistence (MSFS GetStoredData/SetStoredData)
       NativePersistence.clear();
       NativePersistence.clearSoloSetup();
+      NativePersistence.clearPlayerId();
       console.log("[WOA] Native persistence cleared");
 
       // Clear saved game mode

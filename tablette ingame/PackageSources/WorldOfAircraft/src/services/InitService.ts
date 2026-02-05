@@ -363,15 +363,18 @@ class InitServiceClass {
   }
 
   /**
-   * Get or create a local player ID (stored in localStorage)
+   * Get or create a local player ID (stored via NativePersistence for cross-session persistence)
    * This ID links to the SEED player record
    */
   private getOrCreatePlayerId(): string {
-    let playerId = localStorage.getItem("woa_player_id");
+    // Use NativePersistence which persists across EFB sessions (unlike localStorage in Coherent GT)
+    let playerId = NativePersistence.getPlayerId();
     if (!playerId) {
       playerId = this.generateUUID();
-      localStorage.setItem("woa_player_id", playerId);
+      NativePersistence.setPlayerId(playerId);
       console.log(`[InitService] Created new player ID: ${playerId}`);
+    } else {
+      console.log(`[InitService] Loaded existing player ID: ${playerId}`);
     }
     return playerId;
   }
