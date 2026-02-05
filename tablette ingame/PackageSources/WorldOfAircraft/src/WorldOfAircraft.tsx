@@ -11,12 +11,11 @@ import {
   AppSuspendMode,
   AppView,
   AppViewProps,
-  Button,
   Efb,
   RequiredProps,
   TVNode,
 } from "@efb/efb-api";
-import { FSComponent, VNode, Subject, MappedSubject, NodeReference, EventBus } from "@microsoft/msfs-sdk";
+import { FSComponent, VNode, Subject, MappedSubject } from "@microsoft/msfs-sdk";
 
 // OpenLayers imports
 import Map from "ol/Map";
@@ -271,9 +270,6 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
   private maxGForce = 1.0;
   private landingFpm = 0;
   private flightStartTime: Date | null = null;
-  private parkingBrakeWarningShown = false;  // V1.9: Avoid spam when parking brake at wrong airport
-  private engineShutdownWarningShown = false;  // V1.6: Avoid spam when engine shutdown at destination
-
   // Flight tracking state (non-Subject)
   private fuelStartPercent = 0;
 
@@ -289,12 +285,6 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
   private originLon: number = 0;
   private destLat: number = 0;
   private destLon: number = 0;
-
-  // V2.3: ATC Tracking state (non-Subject)
-  private atcClearedTakeoff = false;
-  private atcClearedLanding = false;
-  private tookOffWithoutClearance = false;
-  private landedWithoutClearance = false;
 
   // Hangar DOM refs
   private hangarListRef = FSComponent.createRef<HTMLDivElement>();
@@ -399,9 +389,7 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
             this.setupInputEventBlocker(companyInput);
             // Add manual input listener since JSX oninput doesn't work in Coherent GT
             companyInput.addEventListener("input", () => {
-              const value = companyInput.value;
-              console.log("[WOA] Company name input:", value);
-              companyState.buyCompanyName.set(value);
+              companyState.buyCompanyName.set(companyInput.value);
             });
           }
           // Setup airport input
@@ -411,7 +399,6 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
             airportInput.addEventListener("input", () => {
               const value = airportInput.value.toUpperCase();
               airportInput.value = value;  // Force uppercase
-              console.log("[WOA] Company airport input:", value);
               companyState.buyCompanyAirport.set(value);
             });
           }
@@ -470,7 +457,6 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
       }
       // V2.1: Auto-refresh apercu when switching to it
       if (subTab === "apercu" && (authState.isLoggedIn.get() || authState.isP2PMode.get())) {
-        console.log("[WOA] Switched to apercu sub-tab, refreshing active mission...");
         void this.fetchActiveMission();
       }
     });
@@ -713,27 +699,6 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
       .then(async () => {
         // Enable auto-save after loading
         PersistenceManager.enableAutoSave();
-
-        // P2P Auto-login: DISABLED temporarily for testing
-        // TODO: Re-enable after fixing freeze issue
-        /*
-        if (authState.isP2PMode.get()) {
-          try {
-            const player = await PlayerRouter.getPlayer();
-            if (player) {
-              authState.isLoggedIn.set(true);
-              authState.currentUser.set({
-                id: player.id,
-                username: player.name,
-                email: "",
-              });
-              console.log(`[WOA] P2P auto-login: ${player.name}`);
-            }
-          } catch (e) {
-            console.warn("[WOA] P2P auto-login failed:", e);
-          }
-        }
-        */
 
         // Start AI economy for solo mode (price fluctuation, AI orders)
         AIEconomyService.initialize({
@@ -1375,8 +1340,6 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
 
     // When input is focused, tell MSFS to capture keyboard for the EFB
     input.addEventListener("focus", () => {
-      console.log("[WOA] Input focused - requesting keyboard capture via Coherent");
-      // Tell MSFS to capture keyboard input for this field
       // @ts-ignore - Coherent is a global provided by MSFS
       if (typeof Coherent !== "undefined") {
         // @ts-ignore
@@ -1386,7 +1349,6 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
 
     // When input loses focus, release keyboard back to simulator
     input.addEventListener("blur", () => {
-      console.log("[WOA] Input blurred - releasing keyboard via Coherent");
       // @ts-ignore
       if (typeof Coherent !== "undefined") {
         // @ts-ignore
@@ -1406,9 +1368,7 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
     // This is needed because input.value doesn't work reliably in Coherent GT
     input.addEventListener("input", (e: Event) => {
       const target = e.target as HTMLInputElement;
-      const value = target.value.toUpperCase();
-      console.log("[WOA] Destination input event:", value);
-      missionCreationState.fpDestinationInput.set(value);
+      missionCreationState.fpDestinationInput.set(target.value.toUpperCase());
     });
 
     // Also capture on keyup as a fallback
@@ -1416,12 +1376,9 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
       const target = e.target as HTMLInputElement;
       const value = target.value.toUpperCase();
       if (value !== missionCreationState.fpDestinationInput.get()) {
-        console.log("[WOA] Destination keyup:", value);
         missionCreationState.fpDestinationInput.set(value);
       }
     });
-
-    console.log("[WOA] Destination input setup complete");
   }
 
   /**
@@ -1480,176 +1437,30 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
   }
 
   /**
-   * Test CommBus and MSFS APIs availability in Coherent GT
-   * This determines if we can use WASM module for encrypted persistence
+   * Test MSFS APIs availability in Coherent GT (simplified)
    */
   private async testCommBus(): Promise<void> {
-    console.log("═══════════════════════════════════════");
-    console.log("       WOA COMMBUS TEST        ");
-    console.log("═══════════════════════════════════════");
+    const w = window as any;
+    const apis = {
+      SimVar: typeof w.SimVar !== "undefined",
+      Coherent: typeof w.Coherent !== "undefined",
+      GetStoredData: typeof w.GetStoredData === "function",
+      SetStoredData: typeof w.SetStoredData === "function",
+      CommBusCall: typeof w.CommBusCall === "function",
+    };
 
-    // Test 1: CommBusCall existe ?
-    console.log("\n[TEST 1] CommBusCall availability");
-    try {
-      if (typeof (window as any).CommBusCall !== "undefined") {
-        console.log("  ✅ CommBusCall: exists");
-      } else {
-        console.log("  ❌ CommBusCall: undefined");
-      }
-    } catch (e) {
-      console.log("  ❌ CommBusCall error:", e);
-    }
-
-    // Test 2: RegisterCommBusListener existe ?
-    console.log("\n[TEST 2] RegisterCommBusListener availability");
-    try {
-      if (typeof (window as any).RegisterCommBusListener !== "undefined") {
-        console.log("  ✅ RegisterCommBusListener: exists");
-      } else {
-        console.log("  ❌ RegisterCommBusListener: undefined");
-      }
-    } catch (e) {
-      console.log("  ❌ RegisterCommBusListener error:", e);
-    }
-
-    // Test 3: Coherent.call existe ?
-    console.log("\n[TEST 3] Coherent.call availability");
-    try {
-      if (typeof (window as any).Coherent !== "undefined" && typeof (window as any).Coherent.call === "function") {
-        console.log("  ✅ Coherent.call: exists");
-      } else {
-        console.log("  ❌ Coherent.call: undefined");
-      }
-    } catch (e) {
-      console.log("  ❌ Coherent.call error:", e);
-    }
-
-    // Test 4: Coherent.on existe ?
-    console.log("\n[TEST 4] Coherent.on availability");
-    try {
-      if (typeof (window as any).Coherent !== "undefined" && typeof (window as any).Coherent.on === "function") {
-        console.log("  ✅ Coherent.on: exists");
-      } else {
-        console.log("  ❌ Coherent.on: undefined");
-      }
-    } catch (e) {
-      console.log("  ❌ Coherent.on error:", e);
-    }
-
-    // Test 5: LaunchFlowManager (API MSFS)
-    console.log("\n[TEST 5] LaunchFlowManager availability");
-    try {
-      if (typeof (window as any).LaunchFlowManager !== "undefined") {
-        console.log("  ✅ LaunchFlowManager: exists");
-      } else {
-        console.log("  ❌ LaunchFlowManager: undefined");
-      }
-    } catch (e) {
-      console.log("  ❌ LaunchFlowManager error:", e);
-    }
-
-    // Test 6: Tenter un appel CommBus (même sans WASM)
-    console.log("\n[TEST 6] Try CommBusCall");
-    try {
-      const CommBusCall = (window as any).CommBusCall;
-      if (typeof CommBusCall === "function") {
-        const result = CommBusCall("CYCLIC_TEST", "hello", 5);
-        console.log("  ✅ CommBusCall executed, result:", result);
-      } else {
-        console.log("  ❌ CommBusCall is not a function");
-      }
-    } catch (e) {
-      console.log("  ❌ CommBusCall failed:", e);
-    }
-
-    // Test 7: Coherent.call avec différentes méthodes
-    console.log("\n[TEST 7] Coherent.call tests");
-    const Coherent = (window as any).Coherent;
-    const methodsToTest = [
-      "cyclic_call",
-      "COMM_BUS_BROADCAST",
-      "COMM_BUS_CALL",
-      "fs.readFile",
-      "fs.writeFile",
-    ];
-
-    for (const method of methodsToTest) {
+    // Test persistence
+    let persistenceWorks = false;
+    if (apis.GetStoredData && apis.SetStoredData) {
       try {
-        if (Coherent && typeof Coherent.call === "function") {
-          const result = await Coherent.call(method, "test");
-          console.log(`  ✅ ${method}: returned`, result);
-        } else {
-          console.log(`  ❌ ${method}: Coherent.call not available`);
-        }
-      } catch (e: any) {
-        console.log(`  ❌ ${method}: error`, e.message || e);
-      }
+        w.SetStoredData("woa_test", "ok");
+        persistenceWorks = w.GetStoredData("woa_test") === "ok";
+      } catch { /* ignore */ }
     }
 
-    // Test 8: Liste des fonctions globales disponibles
-    console.log("\n[TEST 8] Available global functions (MSFS related)");
-    const msfsGlobals = [
-      "SimVar",
-      "Coherent",
-      "CommBusCall",
-      "RegisterCommBusListener",
-      "UnregisterCommBusListener",
-      "GetStoredData",
-      "SetStoredData",
-      "OpenStorageFile",
-      "SaveStorageFile",
-      "GameStorage",
-    ];
-
-    for (const g of msfsGlobals) {
-      try {
-        const exists = typeof (window as any)[g] !== "undefined";
-        console.log(`  ${exists ? "✅" : "❌"} ${g}: ${exists ? "exists" : "undefined"}`);
-      } catch (e) {
-        console.log(`  ❌ ${g}: error`);
-      }
-    }
-
-    // Test 9: Test GetStoredData/SetStoredData if exists
-    console.log("\n[TEST 9] GetStoredData/SetStoredData test");
-    try {
-      const GetStoredData = (window as any).GetStoredData;
-      const SetStoredData = (window as any).SetStoredData;
-      if (typeof SetStoredData === "function" && typeof GetStoredData === "function") {
-        SetStoredData("woa_test", "hello_world");
-        console.log("  ✅ SetStoredData: called");
-        const retrieved = GetStoredData("woa_test");
-        console.log("  ✅ GetStoredData: returned", retrieved);
-        if (retrieved === "hello_world") {
-          console.log("  ⭐ PERSISTENCE WORKS! Data round-trip successful!");
-        }
-      } else {
-        console.log("  ❌ GetStoredData/SetStoredData: not available");
-      }
-    } catch (e) {
-      console.log("  ❌ GetStoredData/SetStoredData error:", e);
-    }
-
-    // Test 10: Test Coherent.trigger
-    console.log("\n[TEST 10] Coherent.trigger availability");
-    try {
-      if (Coherent && typeof Coherent.trigger === "function") {
-        console.log("  ✅ Coherent.trigger: exists");
-      } else {
-        console.log("  ❌ Coherent.trigger: undefined");
-      }
-    } catch (e) {
-      console.log("  ❌ Coherent.trigger error:", e);
-    }
-
-    console.log("\n═══════════════════════════════════════");
-    console.log("           TEST COMPLETE               ");
-    console.log("═══════════════════════════════════════");
-    console.log("\nCheck results above to see what APIs are available.");
-    console.log("If GetStoredData/SetStoredData work, we have persistence!");
-    console.log("If CommBus works, we can communicate with WASM modules.");
-
-    alert("CommBus test complete! Check the console (localhost:19999) for results.");
+    const summary = Object.entries(apis).map(([k, v]) => `${v ? "✅" : "❌"} ${k}`).join("\n");
+    console.log(`[WOA] API Test:\n${summary}\n${persistenceWorks ? "✅" : "❌"} Persistence roundtrip`);
+    alert(`API Test Complete\n\n${summary}\n\nPersistence: ${persistenceWorks ? "OK" : "FAIL"}`);
   }
 
   /**
@@ -2041,18 +1852,14 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
     const rect = container.getBoundingClientRect();
     const pixel: [number, number] = [e.clientX - rect.left, e.clientY - rect.top];
 
-    console.log("[WOA] Map click at pixel:", pixel);
-
     // Convert pixel to map coordinate
     const clickCoord = this.olMap.getCoordinateFromPixel(pixel);
     if (!clickCoord) {
-      console.log("[WOA] Could not get coordinate from pixel");
       mapState.selectedAirport.set(null);
       return;
     }
 
     const clickLonLat = toLonLat(clickCoord);
-    console.log("[WOA] Click coordinate:", clickLonLat);
 
     // Get current zoom to determine hit tolerance
     const zoom = this.olMap.getView().getZoom() || 7;
@@ -2106,8 +1913,6 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
       const name = nearestFeature.get("name");
       const type = nearestFeature.get("type");
 
-      console.log("[WOA] Airport found:", { icao, name, type, distance: nearestDistance });
-
       if (icao && type) {
         // Get coordinates from feature geometry
         const geometry = nearestFeature.getGeometry();
@@ -2135,43 +1940,35 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
     }
 
     // Clicked elsewhere - close menu
-    console.log("[WOA] No airport feature found, closing menu");
     mapState.selectedAirport.set(null);
   }
 
-  // Fetch user's factories at a specific airport
   private async fetchMyFactoriesAtAirport(icaoCode: string): Promise<void> {
     const token = authState.authToken.get();
     if (!token) {
       mapState.myFactoriesAtAirport.set([]);
       return;
     }
-
     try {
       const factories = await WorldRouter.getFactoriesAtAirport(icaoCode);
-      console.log(`[WOA] My factories at ${icaoCode}:`, factories.length);
       mapState.myFactoriesAtAirport.set(factories);
     } catch (error) {
-      console.error("[WOA] Failed to fetch my factories:", error);
+      console.error("[WOA] Failed to fetch factories:", error);
       mapState.myFactoriesAtAirport.set([]);
     }
   }
 
-  // Fetch available factory slots at a specific airport
   private async fetchAvailableSlotsAtAirport(icaoCode: string): Promise<void> {
     try {
       const slots = await WorldRouter.getAvailableSlots(icaoCode);
-      console.log(`[WOA] Available slots at ${icaoCode}:`, slots);
       mapState.availableSlotsAtAirport.set(slots);
     } catch (error) {
-      console.error("[WOA] Failed to fetch available slots:", error);
+      console.error("[WOA] Failed to fetch slots:", error);
       mapState.availableSlotsAtAirport.set(null);
     }
   }
 
-  // Context menu actions
-  private openCreateFactory(airport: { icao: string; name: string }): void {
-    console.log("[WOA] TODO: Open create factory form at", airport.icao);
+  private openCreateFactory(_airport: { icao: string; name: string }): void {
     // TODO: Implement factory creation form
     mapState.selectedAirport.set(null);
   }
@@ -2243,9 +2040,6 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
   private async refreshMissionOrigin(): Promise<void> {
     // V1.5: Always ensure status is idle at start to prevent stuck button
     missionState.missionStatus.set("idle");
-
-    // V2.6: Multiple detection methods with direct SimVar reads
-    console.log("[WOA] refreshMissionOrigin: Starting airport detection...");
     missionState.missionStatus.set("loading");
 
     try {
@@ -2253,36 +2047,24 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
 
       // Method 1: Read SimVar directly (bypass state caching issues)
       if (typeof SimVar !== "undefined") {
-        // Try multiple SimVar names that might contain closest airport
-        const simVarNames = [
-          "GPS CLOSEST AIRPORT ID",
-          "GPS WP PREV ID",  // Previous waypoint might be current airport
-          "ATC AIRPORT IS TOWERED",  // Indicates we're at an airport
-        ];
+        const simVarNames = ["GPS CLOSEST AIRPORT ID", "GPS WP PREV ID", "ATC AIRPORT IS TOWERED"];
 
         for (const varName of simVarNames) {
           try {
             const value = SimVar.GetSimVarValue(varName, "string") as string;
-            console.log(`[WOA] refreshMissionOrigin: ${varName} = "${value}"`);
-
             if (value && typeof value === "string") {
-              // Clean up the value and check if it's a valid ICAO
               const cleaned = value.trim().toUpperCase();
               if (/^[A-Z]{3,4}$/.test(cleaned)) {
                 detectedAirport = cleaned;
-                console.log(`[WOA] refreshMissionOrigin: Found airport from ${varName}: ${detectedAirport}`);
                 break;
               }
             }
-          } catch (e) {
-            // SimVar not available, continue
-          }
+          } catch { /* SimVar not available */ }
         }
 
-        // Also try the state value (might have been updated by readSimVars loop)
+        // Also try the state value
         if (!detectedAirport) {
           const stateAirport = simVarState.closestAirport.get();
-          console.log(`[WOA] refreshMissionOrigin: State closestAirport = "${stateAirport}"`);
           if (stateAirport && stateAirport !== "----" && /^[A-Z]{3,4}$/i.test(stateAirport)) {
             detectedAirport = stateAirport.toUpperCase();
           }
@@ -2291,64 +2073,39 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
 
       // Method 2: Fallback to coordinate-based search
       if (!detectedAirport) {
-        console.log("[WOA] refreshMissionOrigin: SimVar methods failed, trying coordinate search...");
-
-        // Check if airports cache is loaded
-        const airportsCacheCount = DatabaseManager.getAirportsCache().length;
-        console.log(`[WOA] refreshMissionOrigin: Airports cache has ${airportsCacheCount} airports`);
-
-        // If cache is empty, wait and retry (airports might still be loading)
-        if (airportsCacheCount === 0) {
-          console.log("[WOA] refreshMissionOrigin: Airports cache empty, waiting for load...");
+        // Wait for airports cache if empty
+        if (DatabaseManager.getAirportsCache().length === 0) {
           for (let retry = 0; retry < 10 && DatabaseManager.getAirportsCache().length === 0; retry++) {
             await new Promise(resolve => setTimeout(resolve, 500));
-            console.log(`[WOA] refreshMissionOrigin: Waiting for airports... attempt ${retry + 1}/10`);
           }
-          const newCount = DatabaseManager.getAirportsCache().length;
-          console.log(`[WOA] refreshMissionOrigin: After waiting, cache has ${newCount} airports`);
         }
 
-        // Read coordinates directly from SimVar
+        // Read coordinates
         let lat = 0, lon = 0;
         if (typeof SimVar !== "undefined") {
           lat = SimVar.GetSimVarValue("PLANE LATITUDE", "degrees") as number || 0;
           lon = SimVar.GetSimVarValue("PLANE LONGITUDE", "degrees") as number || 0;
         }
-
-        // Fallback to state
         if (lat === 0 && lon === 0) {
           lat = simVarState.latitude.get();
           lon = simVarState.longitude.get();
         }
 
-        console.log(`[WOA] refreshMissionOrigin: Coordinates lat=${lat}, lon=${lon}`);
-
         if (lat === 0 && lon === 0) {
-          console.log("[WOA] refreshMissionOrigin: No GPS position available");
           missionState.missionStatus.set("idle");
           return;
         }
 
-        // Search in our airport database
         const airport = await WorldRouter.getClosestAirport(lat, lon);
         if (airport) {
           detectedAirport = airport.ident;
-          console.log(`[WOA] refreshMissionOrigin: Coordinate search found: ${airport.ident} (${airport.name}) at ${airport.distance_nm}nm`);
-        } else {
-          console.log("[WOA] refreshMissionOrigin: WorldRouter.getClosestAirport returned null");
-          // Debug: Log first few airports in cache to verify data
-          const cachePreview = DatabaseManager.getAirportsCache().slice(0, 3);
-          console.log("[WOA] refreshMissionOrigin: Cache preview:", cachePreview.map(a => `${a.ident}(${a.latitude},${a.longitude})`).join(", "));
         }
       }
 
       // Set the detected airport
       if (detectedAirport) {
-        console.log(`[WOA] refreshMissionOrigin: SUCCESS - Setting origin to: ${detectedAirport}`);
         missionState.missionOriginIcao.set(detectedAirport);
-        // V1.2: Auto-load current aircraft from SimVar instead of fetching list
         void this.loadCurrentAircraftForMission();
-        // Also check for active mission
         this.fetchActiveMission();
         missionState.missionStatus.set("idle");
       } else {
@@ -2356,7 +2113,7 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
       }
 
     } catch (error) {
-      console.error("[WOA] refreshMissionOrigin: Error:", error);
+      console.error("[WOA] refreshMissionOrigin error:", error);
       missionState.missionError.set(this.t("missions", "errorDetectingAirport"));
       missionState.missionStatus.set("error");
     }
@@ -2405,12 +2162,6 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
   // Read flight plan data from aircraft GPS SimVars
   // V2.2: Delegates to MissionCreationManager for SimVar reading
   private readFlightPlanFromGPS(): void {
-    console.log("[WOA] Reading flight plan from aircraft GPS...");
-
-    // Explore EFB internal data (for debugging)
-    this.exploreEfbInternalData();
-
-    // Delegate to manager - callbacks will update state
     missionCreationManager.readFlightPlanFromGPS();
 
     // Setup destination input listeners (must be done when input exists)
@@ -2423,112 +2174,51 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
 
   /**
    * Subscribe to FlightPlanner events from the EventBus
-   * This allows us to intercept flight plans created in the EFB
    */
   private subscribeToFlightPlannerEvents(): void {
-    console.log("[WOA] Setting up FlightPlanner event subscriptions...");
-
     try {
       const bus = this.props.bus;
-      if (!bus) {
-        console.log("[WOA] No EventBus available");
-        return;
-      }
+      if (!bus) return;
 
-      // Subscribe to flight plan created event
-      const fplCreatedSub = bus.getSubscriber<any>().on("fplCreated").handle((event: any) => {
-        console.log("[WOA] *** fplCreated event ***", event);
-        this.onEfbFlightPlanCreated(event);
-      });
-      this.fplEventSubscriptions.push(fplCreatedSub);
-
-      // Subscribe to flight plan loaded event
-      const fplLoadedSub = bus.getSubscriber<any>().on("fplLoaded").handle((event: any) => {
-        console.log("[WOA] *** fplLoaded event ***", event);
-        this.onEfbFlightPlanLoaded(event);
-      });
-      this.fplEventSubscriptions.push(fplLoadedSub);
-
-      // Subscribe to flight plan calculated event (after route computation)
-      const fplCalculatedSub = bus.getSubscriber<any>().on("fplCalculated").handle((event: any) => {
-        console.log("[WOA] *** fplCalculated event ***", event);
-        this.onEfbFlightPlanCalculated(event);
-      });
-      this.fplEventSubscriptions.push(fplCalculatedSub);
-
-      // Subscribe to origin/destination changes
-      const fplOriginDestSub = bus.getSubscriber<any>().on("fplOriginDestChanged").handle((event: any) => {
-        console.log("[WOA] *** fplOriginDestChanged event ***", event);
-        this.onEfbFlightPlanOriginDestChanged(event);
-      });
-      this.fplEventSubscriptions.push(fplOriginDestSub);
-
-      // Subscribe to leg changes
-      const fplLegChangeSub = bus.getSubscriber<any>().on("fplLegChange").handle((event: any) => {
-        console.log("[WOA] *** fplLegChange event ***", event);
-      });
-      this.fplEventSubscriptions.push(fplLegChangeSub);
-
-      console.log("[WOA] FlightPlanner event subscriptions active");
-
+      this.fplEventSubscriptions.push(
+        bus.getSubscriber<any>().on("fplCreated").handle((event: any) => this.onEfbFlightPlanCreated(event)),
+        bus.getSubscriber<any>().on("fplLoaded").handle((event: any) => this.onEfbFlightPlanLoaded(event)),
+        bus.getSubscriber<any>().on("fplCalculated").handle((event: any) => this.onEfbFlightPlanCalculated(event)),
+        bus.getSubscriber<any>().on("fplOriginDestChanged").handle((event: any) => this.onEfbFlightPlanOriginDestChanged(event)),
+        bus.getSubscriber<any>().on("fplLegChange").handle(() => { /* leg change */ })
+      );
     } catch (error) {
-      console.error("[WOA] Error subscribing to FlightPlanner events:", error);
+      console.error("[WOA] FlightPlanner events error:", error);
     }
   }
 
-  /**
-   * Unsubscribe from FlightPlanner events
-   */
   private unsubscribeFromFlightPlannerEvents(): void {
-    console.log("[WOA] Unsubscribing from FlightPlanner events...");
     for (const sub of this.fplEventSubscriptions) {
-      try {
-        sub.destroy();
-      } catch (e) { /* ignore */ }
+      try { sub.destroy(); } catch { /* ignore */ }
     }
     this.fplEventSubscriptions = [];
   }
 
-  /**
-   * Handle fplCreated event - a new flight plan was created in the EFB
-   */
-  private onEfbFlightPlanCreated(event: any): void {
-    console.log("[WOA] EFB Flight Plan CREATED - Plan index:", event?.planIndex);
+  private onEfbFlightPlanCreated(_event: any): void {
     popupState.popupNotification.set(this.t("missions", "efbFlightPlanCreated"));
-    // Try to read the plan data via Coherent
     this.tryReadEfbFlightPlan();
   }
 
-  /**
-   * Handle fplLoaded event - a flight plan was loaded
-   */
-  private onEfbFlightPlanLoaded(event: any): void {
-    console.log("[WOA] EFB Flight Plan LOADED - Plan index:", event?.planIndex);
+  private onEfbFlightPlanLoaded(_event: any): void {
     popupState.popupNotification.set(this.t("missions", "efbFlightPlanLoaded"));
     this.tryReadEfbFlightPlan();
   }
 
-  /**
-   * Handle fplCalculated event - flight plan path was computed
-   */
-  private onEfbFlightPlanCalculated(event: any): void {
-    console.log("[WOA] EFB Flight Plan CALCULATED - Plan index:", event?.planIndex);
-    // This is the best moment to read the flight plan - after calculation
+  private onEfbFlightPlanCalculated(_event: any): void {
     this.tryReadEfbFlightPlan();
   }
 
-  /**
-   * Handle fplOriginDestChanged event
-   */
   private onEfbFlightPlanOriginDestChanged(event: any): void {
-    console.log("[WOA] EFB Flight Plan origin/dest changed:", event);
     if (event?.airport) {
       const icao = event.airport?.icao || "";
       if (event.type === "OriginChanged" && icao) {
-        console.log("[WOA] EFB Origin set to:", icao);
         missionCreationState.fpOriginIcao.set(icao);
       } else if (event.type === "DestinationChanged" && icao) {
-        console.log("[WOA] EFB Destination set to:", icao);
         missionCreationState.fpDestinationInput.set(icao);
         const inputEl = this.fpDestinationInputRef.getOrDefault();
         if (inputEl) inputEl.value = icao;
@@ -2539,225 +2229,54 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
   /**
    * Explore EFB internal data - call this to debug what's available
    */
-  private exploreEfbInternalData(): void {
-    console.log("[WOA] ========== EXPLORING EFB INTERNAL DATA ==========");
-
-    // 1. Check localStorage for EFB data
-    console.log("[WOA] -- localStorage keys --");
-    try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key) {
-          const value = localStorage.getItem(key);
-          // Only log flight plan related keys or first 100 chars
-          if (key.toLowerCase().includes("flight") || key.toLowerCase().includes("plan") || key.toLowerCase().includes("route") || key.toLowerCase().includes("efb")) {
-            console.log(`  ${key}:`, value?.substring(0, 200));
-          }
-        }
-      }
-    } catch (e) { console.log("  localStorage not accessible"); }
-
-    // 2. Check sessionStorage
-    console.log("[WOA] -- sessionStorage keys --");
-    try {
-      for (let i = 0; i < sessionStorage.length; i++) {
-        const key = sessionStorage.key(i);
-        if (key) {
-          const value = sessionStorage.getItem(key);
-          if (key.toLowerCase().includes("flight") || key.toLowerCase().includes("plan") || key.toLowerCase().includes("route") || key.toLowerCase().includes("efb")) {
-            console.log(`  ${key}:`, value?.substring(0, 200));
-          }
-        }
-      }
-    } catch (e) { console.log("  sessionStorage not accessible"); }
-
-    // 3. Try EFB-specific Coherent calls
-    const efbCalls = [
-      "EFB_GET_FLIGHTPLAN",
-      "EFB_GET_ROUTE",
-      "EFB_GET_CURRENT_ROUTE",
-      "GET_EFB_FLIGHTPLAN",
-      "GET_EFB_ROUTE",
-      "FLIGHTPLANNER_GET_ROUTE",
-      "FLIGHTPLANNER_GET_FLIGHTPLAN",
-      "GET_PLANNER_ROUTE",
-      "GET_PLANNED_ROUTE",
-      "GET_ROUTE_DATA",
-      "GET_FLIGHT_DATA",
-      "NAV_GET_FLIGHTPLAN",
-      "NAVIGATION_GET_ROUTE",
-    ];
-
-    console.log("[WOA] -- Trying EFB-specific Coherent calls --");
-    for (const call of efbCalls) {
-      Coherent.call(call).then((result: any) => {
-        console.log(`  ${call} SUCCESS:`, result);
-      }).catch(() => {
-        // Silent fail - not available
-      });
-    }
-
-    // 4. Try to access window objects that might contain EFB state
-    console.log("[WOA] -- Checking window objects --");
-    const windowAny = window as any;
-    const objectsToCheck = ["efb", "EFB", "flightPlanner", "FlightPlanner", "navData", "NavData", "route", "Route", "flightPlan", "FlightPlan"];
-    for (const obj of objectsToCheck) {
-      if (windowAny[obj]) {
-        console.log(`  window.${obj}:`, windowAny[obj]);
-      }
-    }
-
-    // 5. Check Coherent engine bindings
-    console.log("[WOA] -- Coherent engine info --");
-    try {
-      if (windowAny.engine) {
-        console.log("  engine exists:", typeof windowAny.engine);
-        if (windowAny.engine.mock !== undefined) console.log("  engine.mock:", windowAny.engine.mock);
-      }
-    } catch (e) { /* */ }
-
-    // 6. Check IndexedDB for EFB databases
-    console.log("[WOA] -- IndexedDB databases --");
-    try {
-      if (indexedDB && indexedDB.databases) {
-        indexedDB.databases().then((dbs: any[]) => {
-          console.log("  Available databases:", dbs);
-          for (const db of dbs) {
-            console.log(`    - ${db.name} (v${db.version})`);
-            // Try to open and read flight plan data
-            if (db.name && (db.name.toLowerCase().includes("efb") || db.name.toLowerCase().includes("flight") || db.name.toLowerCase().includes("nav"))) {
-              this.exploreIndexedDB(db.name);
-            }
-          }
-        }).catch((e: any) => console.log("  indexedDB.databases() failed:", e));
-      }
-    } catch (e) { console.log("  IndexedDB not accessible"); }
-
-    // 7. Look for Vue/React state (EFB might use a framework)
-    console.log("[WOA] -- Framework state --");
-    try {
-      // Vue devtools
-      if (windowAny.__VUE_DEVTOOLS_GLOBAL_HOOK__) console.log("  Vue detected");
-      if (windowAny.__REACT_DEVTOOLS_GLOBAL_HOOK__) console.log("  React detected");
-      // Check for any store
-      if (windowAny.__store__) console.log("  __store__:", windowAny.__store__);
-      if (windowAny.$store) console.log("  $store:", windowAny.$store);
-    } catch (e) { /* */ }
-
-    console.log("[WOA] ========== END EXPLORATION ==========");
-  }
-
-  /**
-   * Explore an IndexedDB database
-   */
-  private exploreIndexedDB(dbName: string): void {
-    console.log(`[WOA] Exploring IndexedDB: ${dbName}`);
-    try {
-      const request = indexedDB.open(dbName);
-      request.onsuccess = (event: any) => {
-        const db = event.target.result;
-        console.log(`  Stores in ${dbName}:`, Array.from(db.objectStoreNames));
-
-        // Look for flight plan related stores
-        for (const storeName of db.objectStoreNames) {
-          if (storeName.toLowerCase().includes("flight") || storeName.toLowerCase().includes("route") || storeName.toLowerCase().includes("plan")) {
-            console.log(`  Reading store: ${storeName}`);
-            try {
-              const tx = db.transaction(storeName, "readonly");
-              const store = tx.objectStore(storeName);
-              const getAllRequest = store.getAll();
-              getAllRequest.onsuccess = () => {
-                console.log(`    ${storeName} data:`, getAllRequest.result);
-              };
-            } catch (e) { /* */ }
-          }
-        }
-        db.close();
-      };
-      request.onerror = () => console.log(`  Failed to open ${dbName}`);
-    } catch (e) { /* */ }
-  }
-
   /**
    * Try to read the EFB flight plan via Coherent API
    */
   private tryReadEfbFlightPlan(): void {
-    console.log("[WOA] Attempting to read EFB flight plan via Coherent...");
-
-    // First, explore what's available
-    this.exploreEfbInternalData();
-
     try {
-      // Method 1: GET_FLIGHTPLAN
+      // Try multiple Coherent API methods
       Coherent.call("GET_FLIGHTPLAN").then((fp: any) => {
-        console.log("[WOA] GET_FLIGHTPLAN result:", fp);
-        if (fp) {
-          // Even if waypoints is empty, try to extract origin/dest from other fields
-          this.processEfbFlightPlan(fp);
-        }
-      }).catch((e: any) => {
-        console.log("[WOA] GET_FLIGHTPLAN failed:", e);
-      });
+        if (fp) this.processEfbFlightPlan(fp);
+      }).catch(() => { /* not available */ });
 
-      // Method 2: LOAD_CURRENT_ATC_FLIGHTPLAN + GET_FLIGHTPLAN
       Coherent.call("LOAD_CURRENT_ATC_FLIGHTPLAN").then(() => {
         return Coherent.call("GET_FLIGHTPLAN");
       }).then((fp: any) => {
-        console.log("[WOA] ATC FLIGHTPLAN after load:", fp);
         if (fp) this.processEfbFlightPlan(fp);
-      }).catch((e: any) => {
-        console.log("[WOA] ATC FLIGHTPLAN failed:", e);
-      });
+      }).catch(() => { /* not available */ });
 
-      // Method 3: Try to get number of waypoints and iterate
       Coherent.call("GET_FLIGHTPLAN_WAYPOINT_COUNT").then((count: any) => {
-        console.log("[WOA] WAYPOINT_COUNT:", count);
         if (typeof count === "number" && count > 0) {
           this.readWaypointsOneByOne(count);
         }
       }).catch(() => { /* not available */ });
 
-      // Method 4: Try GET_CURRENT_FLIGHTPLAN
       Coherent.call("GET_CURRENT_FLIGHTPLAN").then((fp: any) => {
-        console.log("[WOA] GET_CURRENT_FLIGHTPLAN:", fp);
         if (fp) this.processEfbFlightPlan(fp);
       }).catch(() => { /* not available */ });
 
-      // Method 5: Try FLIGHTPLAN_GET_CURRENT
       Coherent.call("FLIGHTPLAN_GET_CURRENT").then((fp: any) => {
-        console.log("[WOA] FLIGHTPLAN_GET_CURRENT:", fp);
         if (fp) this.processEfbFlightPlan(fp);
       }).catch(() => { /* not available */ });
 
-      // Method 6: Try to get origin and destination directly
       Promise.all([
         Coherent.call("GET_FLIGHTPLAN_ORIGIN").catch(() => null),
         Coherent.call("GET_FLIGHTPLAN_DESTINATION").catch(() => null),
       ]).then(([origin, dest]: any[]) => {
-        console.log("[WOA] Origin/Dest direct:", { origin, dest });
         if (origin?.icao) missionCreationState.fpOriginIcao.set(origin.icao);
-        if (dest?.icao) {
-          missionCreationState.fpDestinationInput.set(dest.icao);
-        }
+        if (dest?.icao) missionCreationState.fpDestinationInput.set(dest.icao);
       });
-
     } catch (error) {
-      console.error("[WOA] Error reading EFB flight plan:", error);
+      console.error("[WOA] EFB flight plan error:", error);
     }
   }
 
-  /**
-   * Try to read waypoints one by one
-   */
   private readWaypointsOneByOne(count: number): void {
-    console.log("[WOA] Reading", count, "waypoints one by one...");
     const waypoints: Array<{ ident: string; lat: number; lon: number; type: string }> = [];
-
     const promises = [];
     for (let i = 0; i < count; i++) {
       promises.push(
         Coherent.call("GET_FLIGHTPLAN_WAYPOINT", i).then((wp: any) => {
-          console.log(`[WOA] Waypoint ${i}:`, wp);
           if (wp) {
             waypoints[i] = {
               ident: wp.ident || wp.icao || `WP${i}`,
@@ -2771,15 +2290,12 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
     }
 
     Promise.all(promises).then(() => {
-      console.log("[WOA] All waypoints read:", waypoints.filter(w => w));
       const validWps = waypoints.filter(w => w);
       if (validWps.length > 0) {
         const origin = validWps[0]?.ident || "";
         const dest = validWps[validWps.length - 1]?.ident || "";
         if (/^[A-Z]{4}$/.test(origin)) missionCreationState.fpOriginIcao.set(origin);
-        if (/^[A-Z]{4}$/.test(dest)) {
-          missionCreationState.fpDestinationInput.set(dest);
-        }
+        if (/^[A-Z]{4}$/.test(dest)) missionCreationState.fpDestinationInput.set(dest);
         popupState.popupNotification.set(`Plan EFB: ${origin} -> ${dest} (${validWps.length} WPs)`);
       }
     });
@@ -2789,102 +2305,66 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
    * Process the flight plan data retrieved from EFB
    */
   private processEfbFlightPlan(fp: any): void {
-    console.log("[WOA] Processing EFB flight plan:", fp);
-    console.log("[WOA] Waypoints count:", fp.waypoints?.length);
-
     const waypoints: Array<{ ident: string; lat: number; lon: number; type: string }> = [];
     let origin = "";
     let destination = "";
     let totalDistance = 0;
 
-    // Try to extract from waypoints array first
+    // Extract from waypoints array
     if (fp.waypoints && Array.isArray(fp.waypoints) && fp.waypoints.length > 0) {
       for (let i = 0; i < fp.waypoints.length; i++) {
         const wp = fp.waypoints[i];
         const ident = wp.ident || wp.icao || "";
-        const lat = wp.lla?.lat || wp.lat || 0;
-        const lon = wp.lla?.long || wp.lla?.lon || wp.lon || 0;
-        const type = wp.waypointType || wp.type || "unknown";
-
-        waypoints.push({ ident, lat, lon, type });
-
-        // First waypoint with ICAO pattern is likely origin
-        if (i === 0 && /^[A-Z]{4}$/.test(ident)) {
-          origin = ident;
-        }
-        // Last waypoint with ICAO pattern is likely destination
-        if (i === fp.waypoints.length - 1 && /^[A-Z]{4}$/.test(ident)) {
-          destination = ident;
-        }
-
-        console.log(`  WP ${i}: ${ident} (${lat.toFixed(4)}, ${lon.toFixed(4)}) type=${type}`);
+        waypoints.push({
+          ident,
+          lat: wp.lla?.lat || wp.lat || 0,
+          lon: wp.lla?.long || wp.lla?.lon || wp.lon || 0,
+          type: wp.waypointType || wp.type || "unknown",
+        });
+        if (i === 0 && /^[A-Z]{4}$/.test(ident)) origin = ident;
+        if (i === fp.waypoints.length - 1 && /^[A-Z]{4}$/.test(ident)) destination = ident;
       }
     }
 
-    // If waypoints empty, try to extract from other fields
+    // Fallback: try alternate fields for origin
     if (!origin) {
-      // Try directToOrigin, originAirport, departure fields
       const originCandidates = [
-        fp.directToOrigin?.icao,
-        fp.directToOrigin?.ident,
-        fp.originAirport?.icao,
-        fp.originAirport?.ident,
-        fp.departure?.icao,
-        fp.departure?.ident,
-        fp.origin?.icao,
-        fp.origin?.ident,
+        fp.directToOrigin?.icao, fp.directToOrigin?.ident,
+        fp.originAirport?.icao, fp.originAirport?.ident,
+        fp.departure?.icao, fp.departure?.ident,
+        fp.origin?.icao, fp.origin?.ident,
       ];
       for (const c of originCandidates) {
-        if (c && /^[A-Z]{4}$/.test(c)) {
-          origin = c;
-          console.log("[WOA] Found origin from alternate field:", origin);
-          break;
-        }
+        if (c && /^[A-Z]{4}$/.test(c)) { origin = c; break; }
       }
     }
 
+    // Fallback: try alternate fields for destination
     if (!destination) {
-      // Try directToTarget, destinationAirport, arrival fields
       const destCandidates = [
-        fp.directToTarget?.icao,
-        fp.directToTarget?.ident,
-        fp.destinationAirport?.icao,
-        fp.destinationAirport?.ident,
-        fp.arrival?.icao,
-        fp.arrival?.ident,
-        fp.destination?.icao,
-        fp.destination?.ident,
+        fp.directToTarget?.icao, fp.directToTarget?.ident,
+        fp.destinationAirport?.icao, fp.destinationAirport?.ident,
+        fp.arrival?.icao, fp.arrival?.ident,
+        fp.destination?.icao, fp.destination?.ident,
       ];
       for (const c of destCandidates) {
-        if (c && /^[A-Z]{4}$/.test(c)) {
-          destination = c;
-          console.log("[WOA] Found destination from alternate field:", destination);
-          break;
-        }
+        if (c && /^[A-Z]{4}$/.test(c)) { destination = c; break; }
       }
     }
 
-    // Try to get distance
     totalDistance = fp.totalDistance || fp.distance || 0;
 
-    // Update UI fields
-    if (origin) {
-      missionCreationState.fpOriginIcao.set(origin);
-    }
+    // Update state
+    if (origin) missionCreationState.fpOriginIcao.set(origin);
     if (destination) {
       missionCreationState.fpDestinationInput.set(destination);
       const inputEl = this.fpDestinationInputRef.getOrDefault();
       if (inputEl) inputEl.value = destination;
     }
-    if (waypoints.length > 0) {
-      missionCreationState.fpWaypointCount.set(waypoints.length);
-    }
-    if (totalDistance > 0) {
-      missionCreationState.fpTotalDistance.set(totalDistance);
-    }
+    if (waypoints.length > 0) missionCreationState.fpWaypointCount.set(waypoints.length);
+    if (totalDistance > 0) missionCreationState.fpTotalDistance.set(totalDistance);
 
     popupState.popupNotification.set(`Plan EFB: ${origin} -> ${destination} (${waypoints.length} WPs)`);
-    console.log("[WOA] EFB Flight plan processed:", { origin, destination, waypointCount: waypoints.length, totalDistance });
   }
 
   // Validate the flight plan with user-entered destination
@@ -2939,15 +2419,10 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
 
   // Validate cargo (mark as applied)
   private validateCargoStep(): void {
-    console.log("[WOA] validateCargoStep called");
     const cargoWeight = cargoState.aircraftCargoWeight.get();
     const fuelPercent = missionCreationState.fuelTargetPercent.get();
-    console.log("[WOA] Cargo weight to apply:", cargoWeight, "kg, Fuel:", fuelPercent, "%");
 
-    // Apply weight to aircraft payload stations
     void this.applyCargoToAircraft(cargoWeight);
-
-    // Apply fuel to aircraft
     this.applyFuelToAircraft();
 
     missionCreationState.cargoValidated.set(true);
@@ -2958,97 +2433,43 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
   // Apply cargo weight to aircraft payload stations
   private async applyCargoToAircraft(cargoWeightKg: number): Promise<void> {
     try {
-      // Get number of payload stations
       const stationCount = SimVar.GetSimVarValue("PAYLOAD STATION COUNT", "number") as number || 0;
-      console.log("[WOA] Aircraft has", stationCount, "payload stations");
+      if (stationCount < 1) return;
 
-      // Log current weights of all stations
-      console.log("[WOA] Current payload stations:");
+      // Find cargo/baggage stations by name
+      const cargoKeywords = ["BAGGAGE", "CARGO", "FREIGHT", "LUGGAGE", "HOLD", "POD", "BELLY"];
+      const cargoStations: number[] = [];
+
       for (let i = 1; i <= stationCount; i++) {
-        const weight = SimVar.GetSimVarValue(`PAYLOAD STATION WEIGHT:${i}`, "kilograms") as number || 0;
-        const name = SimVar.GetSimVarValue(`PAYLOAD STATION NAME:${i}`, "string") as string || `Station ${i}`;
-        console.log(`  Station ${i} (${name}): ${weight.toFixed(1)} kg`);
+        const name = (SimVar.GetSimVarValue(`PAYLOAD STATION NAME:${i}`, "string") as string || "").toUpperCase();
+        if (cargoKeywords.some(keyword => name.includes(keyword))) {
+          cargoStations.push(i);
+        }
       }
 
-      if (stationCount >= 1) {
-        // Find cargo/baggage stations by name
-        const cargoStations: number[] = [];
+      // Fallback: use last station if no cargo stations found
+      if (cargoStations.length === 0) cargoStations.push(stationCount);
 
-        // Keywords for cargo/baggage stations (from MSFS SDK documentation)
-        const cargoKeywords = [
-          "BAGGAGE",   // Common: "Aft Baggage", "Fwd Baggage"
-          "CARGO",     // Common: "Cargo", "Cargo Pod", "Belly Cargo"
-          "FREIGHT",   // Freight aircraft
-          "LUGGAGE",   // Alternative to baggage
-          "HOLD",      // Cargo hold: "Forward Hold", "Aft Hold"
-          "POD",       // External cargo pod
-          "BELLY",     // Belly cargo compartment
-        ];
+      // Reset all cargo stations to 0
+      for (const station of cargoStations) {
+        await SimVar.SetSimVarValue(`PAYLOAD STATION WEIGHT:${station}`, "kilograms", 0);
+      }
+      await new Promise(resolve => setTimeout(resolve, 200));
 
-        for (let i = 1; i <= stationCount; i++) {
-          const name = (SimVar.GetSimVarValue(`PAYLOAD STATION NAME:${i}`, "string") as string || "").toUpperCase();
-          // Check if station name contains any cargo keyword
-          const isCargo = cargoKeywords.some(keyword => name.includes(keyword));
-          if (isCargo) {
-            cargoStations.push(i);
-            console.log(`[WOA] Found cargo station ${i}: ${name}`);
-          }
-        }
-
-        // Fallback: if no cargo stations found, use the last station
-        if (cargoStations.length === 0) {
-          console.log("[WOA] No BAGGAGE/CARGO stations found, using last station");
-          cargoStations.push(stationCount);
-        }
-
-        // ALWAYS reset all cargo stations to 0 first
-        console.log("[WOA] Resetting cargo stations to 0...");
+      // Apply weight if > 0
+      if (cargoWeightKg > 0) {
+        const weightPerStation = cargoWeightKg / cargoStations.length;
         for (const station of cargoStations) {
-          await SimVar.SetSimVarValue(`PAYLOAD STATION WEIGHT:${station}`, "kilograms", 0);
-          console.log(`[WOA] Reset station ${station} to 0 kg`);
+          await SimVar.SetSimVarValue(`PAYLOAD STATION WEIGHT:${station}`, "kilograms", weightPerStation);
         }
-
-        // Small delay to ensure reset is applied
-        await new Promise(resolve => setTimeout(resolve, 200));
-
-        // Apply the new weight only if > 0
-        if (cargoWeightKg > 0) {
-          const weightPerStation = cargoWeightKg / cargoStations.length;
-          console.log(`[WOA] Distributing ${cargoWeightKg} kg across cargo stations:`, cargoStations);
-
-          for (const station of cargoStations) {
-            await SimVar.SetSimVarValue(`PAYLOAD STATION WEIGHT:${station}`, "kilograms", weightPerStation);
-            console.log(`[WOA] Set station ${station} = ${weightPerStation.toFixed(1)} kg`);
-          }
-        } else {
-          console.log("[WOA] No cargo to apply (0 kg)");
-        }
-
-        // Note: Coherent triggers (PAYLOAD_STATION_VALUE_CHANGED) were tested but they
-        // override/reset the SimVar values to 0. The SimVar approach works for aircraft
-        // physics, but the MSFS EFB Weight & Balance UI won't visually update.
-        // This is a known MSFS 2024 limitation - the weight IS applied to the aircraft.
-
-        // Wait a bit then verify
-        setTimeout(() => {
-          console.log("[WOA] Verifying payload after apply:");
-          for (let i = 1; i <= stationCount; i++) {
-            const weight = SimVar.GetSimVarValue(`PAYLOAD STATION WEIGHT:${i}`, "kilograms") as number || 0;
-            console.log(`  Station ${i}: ${weight.toFixed(1)} kg`);
-          }
-          const totalWeight = SimVar.GetSimVarValue("TOTAL WEIGHT", "kilograms") as number || 0;
-          console.log("[WOA] Total aircraft weight:", totalWeight.toFixed(0), "kg");
-        }, 500);
       }
-
     } catch (e) {
-      console.error("[WOA] Error applying cargo weight:", e);
+      console.error("[WOA] Error applying cargo:", e);
     }
   }
 
   // Modify cargo (reset validation)
   private modifyCargoStep(): void {
-    console.log("[WOA] modifyCargoStep called");
     missionCreationState.cargoValidated.set(false);
     this.updateCreationSteps();
   }
@@ -4080,59 +3501,10 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
   }
 
   /**
-   * V1.3: Close refuel popup - V2.5: Delegated to PopupManager
-   */
-  private closeRefuelPopup(): void {
-    popupManager.closeRefuel();
-  }
-
-  /**
-   * V1.3: Render refuel popup - V2.5: Delegated to PopupManager
-   */
-  private renderRefuelPopup(): void {
-    popupManager.renderRefuel();
-  }
-
-  /**
-   * V1.3: Execute refuel - V2.5: Delegated to PopupManager
-   */
-  private async executeRefuel(): Promise<void> {
-    await popupManager.confirmRefuel();
-  }
-
-  /**
    * V1.4: Open systems detail popup - V2.5: Delegated to PopupManager
    */
   private openSystemsPopup(): void {
     popupManager.openSystems();
-  }
-
-  /**
-   * V1.4: Close systems detail popup - V2.5: Delegated to PopupManager
-   */
-  private closeSystemsPopup(): void {
-    popupManager.closeSystems();
-  }
-
-  /**
-   * V1.4: Render systems detail popup - V2.5: Delegated to PopupManager
-   */
-  private renderSystemsPopup(): void {
-    popupManager.renderSystems();
-  }
-
-  /**
-   * V1.1: Fetch repair quote - V2.5: Delegated to PopupManager
-   */
-  private async fetchRepairQuote(aircraftId: string): Promise<void> {
-    await popupManager.fetchRepairQuote(aircraftId);
-  }
-
-  /**
-   * V1.1: Render repair list - V2.5: Delegated to PopupManager
-   */
-  private renderRepairList(): void {
-    popupManager.renderRepairList();
   }
 
   /**
@@ -4574,10 +3946,6 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
     this.destLat = 0;
     this.destLon = 0;
     // V2.3: ATC tracking reset
-    this.atcClearedTakeoff = false;
-    this.atcClearedLanding = false;
-    this.tookOffWithoutClearance = false;
-    this.landedWithoutClearance = false;
     trackingState.trackingAtcCompliance.set(100);
     trackingState.trackingAtcViolations.set(0);
     trackingState.trackingBonusRealTime.set(100);
@@ -5746,28 +5114,30 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
     }
   }
 
-  private renderProfileInventory(): void {
-    const listEl = this.profileInventoryListRef.getOrDefault();
+  /**
+   * Shared grouped inventory renderer - used by both profile and company inventory
+   */
+  private renderGroupedInventory(
+    listEl: HTMLElement | null,
+    items: Array<{ id: string; item_code: string; item_name: string; quantity: number; airport_icao: string; tier: number }>,
+    filters: { icao: string; item: string; tier: number | null }
+  ): void {
     if (!listEl) return;
 
     // Apply filters
-    const icaoFilter = inventoryState.profileIcaoFilter.get().trim().toUpperCase();
-    const itemFilter = inventoryState.profileItemFilter.get().trim().toLowerCase();
-    const tierFilter = inventoryState.profileTierFilter.get();
-    let items = inventoryState.profileInventory.get();
-
-    if (icaoFilter.length > 0) {
-      items = items.filter(i => i.airport_icao && i.airport_icao.toUpperCase().includes(icaoFilter));
+    let filtered = items;
+    if (filters.icao.length > 0) {
+      filtered = filtered.filter(i => i.airport_icao?.toUpperCase().includes(filters.icao.toUpperCase()));
     }
-    if (itemFilter.length > 0) {
-      items = items.filter(i => i.item_name && i.item_name.toLowerCase().includes(itemFilter));
+    if (filters.item.length > 0) {
+      filtered = filtered.filter(i => i.item_name?.toLowerCase().includes(filters.item.toLowerCase()));
     }
-    if (tierFilter !== null) {
-      items = items.filter(i => i.tier === tierFilter);
+    if (filters.tier !== null) {
+      filtered = filtered.filter(i => i.tier === filters.tier);
     }
 
     // Render empty state
-    if (items.length === 0) {
+    if (filtered.length === 0) {
       listEl.innerHTML = `
         <div style="background: #252532; border-radius: 12px; padding: 24px; text-align: center;">
           <svg style="width: 40px; height: 40px; margin-bottom: 12px; opacity: 0.4;" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="1.5">
@@ -5781,9 +5151,9 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
       return;
     }
 
-    // Group by airport using plain object (Map doesn't work in Coherent GT)
-    const byAirport: Record<string, typeof items> = {};
-    for (const item of items) {
+    // Group by airport
+    const byAirport: Record<string, typeof filtered> = {};
+    for (const item of filtered) {
       const icao = item.airport_icao || "UNKNOWN";
       if (!byAirport[icao]) byAirport[icao] = [];
       byAirport[icao].push(item);
@@ -5791,33 +5161,39 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
 
     // Render grouped inventory
     let html = "";
-    const icaos = Object.keys(byAirport);
-    for (const icao of icaos) {
+    for (const icao of Object.keys(byAirport)) {
       const airportItems = byAirport[icao];
-      html += `
-        <div style="background: #252532; border-radius: 8px; padding: 12px; margin-bottom: 8px;">
-          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-            <span style="font-family: monospace; color: #60a5fa; font-size: 12px; font-weight: 600;">${icao}</span>
-            <span style="font-size: 10px; color: #6b7280;">(${airportItems.length} items)</span>
-          </div>
-          <div style="display: flex; flex-direction: column; gap: 4px;">
-      `;
+      html += `<div style="background: #252532; border-radius: 8px; padding: 12px; margin-bottom: 8px;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span style="font-family: monospace; color: #60a5fa; font-size: 12px; font-weight: 600;">${icao}</span>
+          <span style="font-size: 10px; color: #6b7280;">(${airportItems.length} items)</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 4px;">`;
       for (const item of airportItems) {
         const tierColor = item.tier === 0 ? "#6b7280" : item.tier === 1 ? "#22c55e" : item.tier === 2 ? "#3b82f6" : "#a855f7";
-        html += `
-          <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; background: #1a1a24; border-radius: 4px;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="width: 6px; height: 6px; border-radius: 50%; background: ${tierColor};"></span>
-              <span style="font-size: 11px; color: white;">${item.item_name}</span>
-            </div>
-            <span style="font-size: 11px; color: #9ca3af; font-weight: 600;">x${item.quantity}</span>
+        html += `<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; background: #1a1a24; border-radius: 4px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="width: 6px; height: 6px; border-radius: 50%; background: ${tierColor};"></span>
+            <span style="font-size: 11px; color: white;">${item.item_name}</span>
           </div>
-        `;
+          <span style="font-size: 11px; color: #9ca3af; font-weight: 600;">x${item.quantity}</span>
+        </div>`;
       }
       html += `</div></div>`;
     }
-
     listEl.innerHTML = html;
+  }
+
+  private renderProfileInventory(): void {
+    this.renderGroupedInventory(
+      this.profileInventoryListRef.getOrDefault(),
+      inventoryState.profileInventory.get(),
+      {
+        icao: inventoryState.profileIcaoFilter.get().trim(),
+        item: inventoryState.profileItemFilter.get().trim(),
+        tier: inventoryState.profileTierFilter.get()
+      }
+    );
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -5857,77 +5233,15 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
   }
 
   private renderCompanyInventory(): void {
-    const listEl = this.companyInventoryListRef.getOrDefault();
-    if (!listEl) return;
-
-    // Apply filters
-    const icaoFilter = inventoryState.companyIcaoFilter.get().trim().toUpperCase();
-    const itemFilter = inventoryState.companyItemFilter.get().trim().toLowerCase();
-    const tierFilter = inventoryState.companyTierFilter.get();
-    let items = inventoryState.companyInventory.get();
-
-    if (icaoFilter.length > 0) {
-      items = items.filter(i => i.airport_icao && i.airport_icao.toUpperCase().includes(icaoFilter));
-    }
-    if (itemFilter.length > 0) {
-      items = items.filter(i => i.item_name && i.item_name.toLowerCase().includes(itemFilter));
-    }
-    if (tierFilter !== null) {
-      items = items.filter(i => i.tier === tierFilter);
-    }
-
-    // Render empty state
-    if (items.length === 0) {
-      listEl.innerHTML = `
-        <div style="background: #252532; border-radius: 12px; padding: 24px; text-align: center;">
-          <svg style="width: 40px; height: 40px; margin-bottom: 12px; opacity: 0.4;" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="1.5">
-            <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
-            <path d="M3.27 6.96L12 12.01l8.73-5.05"/>
-            <path d="M12 22.08V12"/>
-          </svg>
-          <div style="color: #6b7280; font-size: 12px;">${this.t("inventory", "noItems")}</div>
-        </div>
-      `;
-      return;
-    }
-
-    // Group by airport using plain object (Map doesn't work in Coherent GT)
-    const byAirport: Record<string, typeof items> = {};
-    for (const item of items) {
-      const icao = item.airport_icao || "UNKNOWN";
-      if (!byAirport[icao]) byAirport[icao] = [];
-      byAirport[icao].push(item);
-    }
-
-    // Render grouped inventory
-    let html = "";
-    const icaos = Object.keys(byAirport);
-    for (const icao of icaos) {
-      const airportItems = byAirport[icao];
-      html += `
-        <div style="background: #252532; border-radius: 8px; padding: 12px; margin-bottom: 8px;">
-          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-            <span style="font-family: monospace; color: #60a5fa; font-size: 12px; font-weight: 600;">${icao}</span>
-            <span style="font-size: 10px; color: #6b7280;">(${airportItems.length} items)</span>
-          </div>
-          <div style="display: flex; flex-direction: column; gap: 4px;">
-      `;
-      for (const item of airportItems) {
-        const tierColor = item.tier === 0 ? "#6b7280" : item.tier === 1 ? "#22c55e" : item.tier === 2 ? "#3b82f6" : "#a855f7";
-        html += `
-          <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; background: #1a1a24; border-radius: 4px;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="width: 6px; height: 6px; border-radius: 50%; background: ${tierColor};"></span>
-              <span style="font-size: 11px; color: white;">${item.item_name}</span>
-            </div>
-            <span style="font-size: 11px; color: #9ca3af; font-weight: 600;">x${item.quantity}</span>
-          </div>
-        `;
+    this.renderGroupedInventory(
+      this.companyInventoryListRef.getOrDefault(),
+      inventoryState.companyInventory.get(),
+      {
+        icao: inventoryState.companyIcaoFilter.get().trim(),
+        item: inventoryState.companyItemFilter.get().trim(),
+        tier: inventoryState.companyTierFilter.get()
       }
-      html += `</div></div>`;
-    }
-
-    listEl.innerHTML = html;
+    );
   }
 
   public render(): VNode {
