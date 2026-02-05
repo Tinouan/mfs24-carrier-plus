@@ -178,7 +178,13 @@ class InitServiceClass {
       return;
     }
 
-    // 2. Setup was completed before - try to restore from native MSFS persistence
+    // 2. Clear local cache to prevent mode data contamination
+    console.log("[InitService] Solo: Clearing local cache before restore...");
+    await DatabaseManager.clear("aircraft");
+    await DatabaseManager.clear("player");
+    await DatabaseManager.clear("company");
+
+    // 3. Restore from native MSFS persistence
     this.reportProgress("Restauration sauvegarde Solo...", 40);
     const savedData = await NativePersistence.load();
 
@@ -269,8 +275,9 @@ class InitServiceClass {
     }
 
     // 4. Load player data from SEED (NO local preservation in Online mode!)
+    // IMPORTANT: Pass our local playerId to ensure consistency with local aircraft
     this.reportProgress("Synchronisation avec SEED...", 80);
-    await this.loadPlayerDataFromSeedOnlineMode(seedPlayer);
+    await this.loadPlayerDataFromSeedOnlineMode(seedPlayer, playerId);
 
     // 5. Start polling for world updates
     SyncService.startPolling(30000);
@@ -289,17 +296,33 @@ class InitServiceClass {
 
   /**
    * Load player data from SEED in Online mode
-   * In Online mode, SEED is the source of truth - NO local preservation!
+   * Architecture v3.0: SEED is the ONLY source of truth for Online mode
+   * NO merge with local data - Solo and Online are COMPLETELY SEPARATE games!
+   *
+   * @param seedPlayer - Player data from SEED server
+   * @param localPlayerId - Our local player ID (from NativePersistence) to ensure consistency
    */
-  private async loadPlayerDataFromSeedOnlineMode(seedPlayer: SeedPlayer): Promise<void> {
+  private async loadPlayerDataFromSeedOnlineMode(seedPlayer: SeedPlayer, localPlayerId: string): Promise<void> {
     console.log(`[InitService] Online: Loading player data: ${seedPlayer.name}`);
+    console.log(`[InitService] Online: Local player ID: ${localPlayerId}, SEED player ID: ${seedPlayer.id}`);
 
-    // In Online mode, SEED is ALWAYS the source of truth
+    // ═══════════════════════════════════════════════════════════════════════
+    // CRITICAL: Clear local data first to prevent Solo/Online data contamination
+    // Architecture v3.0: Solo and Online have COMPLETELY SEPARATE saves
+    // ═══════════════════════════════════════════════════════════════════════
+    console.log("[InitService] Online: Clearing local cache before SEED sync...");
+    await DatabaseManager.clear("aircraft");
+    await DatabaseManager.clear("player");
+    await DatabaseManager.clear("company");
+    console.log("[InitService] Online: Local cache cleared - loading fresh from SEED");
+
+    // Use LOCAL player ID for consistency
+    // SEED data is used for name, money, xp, etc.
     const localPlayer: Player = {
-      id: seedPlayer.id,
+      id: localPlayerId,
       name: seedPlayer.name,
       xp: seedPlayer.xp,
-      money: seedPlayer.money, // SEED value only - no local override!
+      money: seedPlayer.money,
       trust_score: 100,
       preferred_airport: seedPlayer.home_airport,
       is_premium: false,
@@ -309,9 +332,9 @@ class InitServiceClass {
     };
 
     await DatabaseManager.put("player", localPlayer, false);
-    console.log(`[InitService] Online: Player cached: ${localPlayer.name} (Money: ${localPlayer.money} from SEED)`);
+    console.log(`[InitService] Online: Player cached: ${localPlayer.name} (ID: ${localPlayerId}, Money: ${localPlayer.money})`);
 
-    // Load player's aircraft from SEED
+    // Load aircraft from SEED - NO merge, SEED is the only source of truth
     const seedAircraft = await SyncService.loadPlayerAircraft(seedPlayer.id);
     for (const seedAc of seedAircraft) {
       const localAircraft: Aircraft = {
@@ -319,7 +342,7 @@ class InitServiceClass {
         registration: seedAc.registration,
         name: seedAc.aircraft_type,
         type_code: seedAc.icao_type,
-        owner_id: seedAc.owner_id,
+        owner_id: localPlayerId,
         owner_type: "player",
         company_id: null,
         location_icao: seedAc.current_airport_ident,
@@ -338,7 +361,7 @@ class InitServiceClass {
     }
     console.log(`[InitService] Online: Loaded ${seedAircraft.length} aircraft from SEED`);
 
-    // Load company if exists
+    // Load company if exists on SEED
     const company = await SyncService.loadPlayerCompany(seedPlayer.id);
     if (company) {
       await DatabaseManager.put("company", company, false);
@@ -781,6 +804,15 @@ class InitServiceClass {
 
     await DatabaseManager.put("aircraft", aircraft, false);
     console.log(`[InitService] Created personal C172 ${registration} at ${airport} for player ${playerId}`);
+
+    // DIAGNOSTIC: Verify aircraft was actually saved
+    const allAircraft = await DatabaseManager.getAll<Aircraft>("aircraft");
+    console.log(`[InitService] VERIFY: Total aircraft in DB after creation: ${allAircraft.length}`);
+    const savedAircraft = await DatabaseManager.getAircraftByOwner(playerId);
+    console.log(`[InitService] VERIFY: Aircraft with owner_id=${playerId}: ${savedAircraft.length}`);
+    if (savedAircraft.length > 0) {
+      console.log(`[InitService] VERIFY: First aircraft: id=${savedAircraft[0].id}, reg=${savedAircraft[0].registration}, owner=${savedAircraft[0].owner_id}`);
+    }
 
     return aircraft;
   }

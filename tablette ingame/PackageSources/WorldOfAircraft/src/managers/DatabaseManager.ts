@@ -1167,7 +1167,9 @@ class DatabaseManagerClass {
   }
 
   async getAircraftByOwner(ownerId: string): Promise<Aircraft[]> {
-    return this.query<Aircraft>("aircraft", "owner_id", ownerId);
+    const results = await this.query<Aircraft>("aircraft", "owner_id", ownerId);
+    console.log(`[DatabaseManager] getAircraftByOwner(${ownerId}): found ${results.length} aircraft`);
+    return results;
   }
 
   async getAircraftAtAirport(icao: string): Promise<Aircraft[]> {

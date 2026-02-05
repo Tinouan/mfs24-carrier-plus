@@ -28,8 +28,16 @@ class LocalFleetServiceClass {
   async getFleet(): Promise<HangarAircraftItem[]> {
     const player = await DatabaseManager.getPlayer();
     if (!player) throw new Error("No player found");
+    console.log(`[LocalFleetService] getFleet() called for player id=${player.id}, name=${player.name}`);
 
     const catalog = await DatabaseManager.getAll<AircraftCatalog>("aircraft_catalog");
+
+    // DIAGNOSTIC: Check all aircraft in DB
+    const allAircraft = await DatabaseManager.getAll<Aircraft>("aircraft");
+    console.log(`[LocalFleetService] Total aircraft in DB: ${allAircraft.length}`);
+    for (const ac of allAircraft) {
+      console.log(`[LocalFleetService] Aircraft: id=${ac.id}, reg=${ac.registration}, owner_id=${ac.owner_id}, company_id=${ac.company_id}`);
+    }
 
     const result: HangarAircraftItem[] = [];
 
@@ -38,6 +46,7 @@ class LocalFleetServiceClass {
 
     // 1. Get personal aircraft (owned directly by player)
     const personalAircraft = await DatabaseManager.getAircraftByOwner(player.id);
+    console.log(`[LocalFleetService] Personal aircraft for player ${player.id}: ${personalAircraft.length}`);
     for (const ac of personalAircraft) {
       const catEntry = catalog.find((c) => c.icaoType === ac.type_code || c.id === ac.type_code);
       result.push({
@@ -88,12 +97,22 @@ class LocalFleetServiceClass {
     for (const ac of allAircraft) {
       let needsRepair = false;
 
-      // 1. Fix owner_id if missing/invalid
+      // 1. Fix owner_id if missing/invalid OR if it doesn't match current player
       const hasNoOwner = !ac.owner_id || ac.owner_id === "undefined" || ac.owner_id === "null";
       const hasNoCompany = !ac.company_id || ac.company_id === "undefined" || ac.company_id === "null";
+      const isPlayerAircraft = ac.owner_type === "player" || hasNoCompany;
+      const ownerIdMismatch = ac.owner_id && ac.owner_id !== playerId && isPlayerAircraft;
+
       if (hasNoOwner && hasNoCompany) {
+        console.log(`[LocalFleetService] Fixing orphaned aircraft ${ac.registration}: no owner -> ${playerId}`);
         ac.owner_id = playerId;
         ac.company_id = null;
+        needsRepair = true;
+      } else if (ownerIdMismatch) {
+        // Aircraft belongs to a player but owner_id doesn't match current player
+        // This happens when SEED returns a different player ID or after reset
+        console.log(`[LocalFleetService] Fixing owner_id mismatch for ${ac.registration}: ${ac.owner_id} -> ${playerId}`);
+        ac.owner_id = playerId;
         needsRepair = true;
       }
 

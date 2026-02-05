@@ -12,6 +12,7 @@
 
 import { DatabaseManager, type Player, type Aircraft, type Company, type Mission } from "../managers/DatabaseManager";
 import { NetworkState, type OfflineAction } from "../state/NetworkState";
+import { getCurrentGameMode, type GameMode } from "../state/GameModeState";
 
 // ═══════════════════════════════════════════════════════════
 // TYPES
@@ -41,11 +42,51 @@ declare function SetStoredData(key: string, value: string): void;
 // ═══════════════════════════════════════════════════════════
 
 class NativePersistenceClass {
-  private STORAGE_KEY = "WOA_SaveData";
-  private SOLO_SETUP_KEY = "WOA_SoloSetupComplete";
-  private PLAYER_ID_KEY = "WOA_PlayerId";
+  // Base keys - will be prefixed with mode (Solo/Online)
+  private BASE_STORAGE_KEY = "SaveData";
+  private BASE_SETUP_KEY = "SetupComplete";
+  private BASE_PLAYER_ID_KEY = "PlayerId";
   private VERSION = 1;
   private autoSaveInterval: number | null = null;
+
+  // ═══════════════════════════════════════════════════════════
+  // MODE-PREFIXED KEY HELPERS
+  // Architecture v3.0: Solo and Online have COMPLETELY SEPARATE saves
+  // ═══════════════════════════════════════════════════════════
+
+  /**
+   * Get mode prefix for storage keys
+   * Solo mode: "WOA_Solo_"
+   * Online mode: "WOA_Online_"
+   */
+  private getModePrefix(mode?: GameMode | null): string {
+    const currentMode = mode ?? getCurrentGameMode();
+    if (currentMode === "solo") return "WOA_Solo_";
+    if (currentMode === "online") return "WOA_Online_";
+    // Fallback for when mode isn't set yet (shouldn't happen in normal flow)
+    return "WOA_";
+  }
+
+  /**
+   * Get storage key with mode prefix
+   */
+  private getStorageKey(mode?: GameMode | null): string {
+    return this.getModePrefix(mode) + this.BASE_STORAGE_KEY;
+  }
+
+  /**
+   * Get setup complete key with mode prefix
+   */
+  private getSetupKey(mode?: GameMode | null): string {
+    return this.getModePrefix(mode) + this.BASE_SETUP_KEY;
+  }
+
+  /**
+   * Get player ID key with mode prefix
+   */
+  private getPlayerIdKey(mode?: GameMode | null): string {
+    return this.getModePrefix(mode) + this.BASE_PLAYER_ID_KEY;
+  }
 
   // ═══════════════════════════════════════════════════════════
   // PUBLIC API
@@ -76,9 +117,10 @@ class NativePersistenceClass {
       saveData.checksum = this.calculateChecksum(saveData);
 
       const json = JSON.stringify(saveData);
-      SetStoredData(this.STORAGE_KEY, json);
+      const storageKey = this.getStorageKey();
+      SetStoredData(storageKey, json);
 
-      console.log(`[NativePersistence] Saved successfully (${(json.length / 1024).toFixed(1)} KB)`);
+      console.log(`[NativePersistence] Saved to ${storageKey} (${(json.length / 1024).toFixed(1)} KB)`);
       return true;
     } catch (e) {
       console.error("[NativePersistence] Save failed:", e);
@@ -96,10 +138,21 @@ class NativePersistenceClass {
     }
 
     try {
-      const json = GetStoredData(this.STORAGE_KEY);
+      const storageKey = this.getStorageKey();
+      let json = GetStoredData(storageKey);
+
+      // Migration: Check old non-prefixed key WOA_SaveData
+      if ((!json || json === "") && getCurrentGameMode() === "solo") {
+        const oldKey = "WOA_SaveData";
+        json = GetStoredData(oldKey);
+        if (json && json !== "") {
+          console.log(`[NativePersistence] Migrating save data from ${oldKey} to ${storageKey}`);
+          SetStoredData(storageKey, json); // Migrate to new key
+        }
+      }
 
       if (!json || json === "") {
-        console.log("[NativePersistence] No save data found");
+        console.log(`[NativePersistence] No save data found for ${storageKey}`);
         return null;
       }
 
@@ -198,7 +251,7 @@ class NativePersistenceClass {
   }
 
   /**
-   * Effacer la sauvegarde
+   * Effacer la sauvegarde (for current mode)
    */
   clear(): void {
     if (!this.isAvailable()) {
@@ -207,8 +260,9 @@ class NativePersistenceClass {
     }
 
     try {
-      SetStoredData(this.STORAGE_KEY, "");
-      console.log("[NativePersistence] Save data cleared");
+      const storageKey = this.getStorageKey();
+      SetStoredData(storageKey, "");
+      console.log(`[NativePersistence] Save data cleared for ${storageKey}`);
     } catch (e) {
       console.error("[NativePersistence] Clear failed:", e);
     }
@@ -223,7 +277,8 @@ class NativePersistenceClass {
     }
 
     try {
-      const json = GetStoredData(this.STORAGE_KEY);
+      const storageKey = this.getStorageKey();
+      const json = GetStoredData(storageKey);
       if (!json || json === "") {
         return { exists: false };
       }
@@ -240,115 +295,171 @@ class NativePersistenceClass {
   }
 
   /**
-   * Check if Solo mode setup has been completed
+   * Check if setup has been completed for current mode
    * Used to detect true "first launch" vs. returning player
+   * @param mode - Optional mode override (defaults to current mode)
    */
-  isSoloSetupComplete(): boolean {
+  isSetupComplete(mode?: GameMode | null): boolean {
     if (!this.isAvailable()) {
       return false;
     }
 
     try {
-      const value = GetStoredData(this.SOLO_SETUP_KEY);
-      return value === "true";
+      const setupKey = this.getSetupKey(mode);
+      const value = GetStoredData(setupKey);
+      if (value === "true") return true;
+      // Migration: Check old key WOA_SoloSetupComplete (no underscore)
+      if ((mode ?? getCurrentGameMode()) === "solo") {
+        const oldValue = GetStoredData("WOA_SoloSetupComplete");
+        if (oldValue === "true") {
+          this.setSetupComplete(true, "solo"); // Migrate to new key
+          return true;
+        }
+      }
+      return false;
     } catch {
       return false;
     }
   }
 
   /**
-   * Mark Solo mode setup as complete
+   * @deprecated Use isSetupComplete() instead
+   */
+  isSoloSetupComplete(): boolean {
+    return this.isSetupComplete("solo");
+  }
+
+  /**
+   * Mark mode setup as complete
    * Call this after first launch wizard is finished
+   * @param mode - Optional mode override (defaults to current mode)
+   */
+  setSetupComplete(complete: boolean = true, mode?: GameMode | null): void {
+    if (!this.isAvailable()) {
+      console.warn("[NativePersistence] Cannot set setup flag - native APIs not available");
+      return;
+    }
+
+    try {
+      const setupKey = this.getSetupKey(mode);
+      SetStoredData(setupKey, complete ? "true" : "false");
+      console.log(`[NativePersistence] Setup complete flag for ${setupKey}: ${complete}`);
+    } catch (e) {
+      console.error("[NativePersistence] Failed to set setup flag:", e);
+    }
+  }
+
+  /**
+   * @deprecated Use setSetupComplete() instead
    */
   setSoloSetupComplete(complete: boolean = true): void {
+    this.setSetupComplete(complete, "solo");
+  }
+
+  /**
+   * Clear setup flag for current mode (for testing/reset)
+   * @param mode - Optional mode override (defaults to current mode)
+   */
+  clearSetup(mode?: GameMode | null): void {
     if (!this.isAvailable()) {
-      console.warn("[NativePersistence] Cannot set solo setup flag - native APIs not available");
       return;
     }
 
     try {
-      SetStoredData(this.SOLO_SETUP_KEY, complete ? "true" : "false");
-      console.log(`[NativePersistence] Solo setup complete flag set to: ${complete}`);
+      const setupKey = this.getSetupKey(mode);
+      SetStoredData(setupKey, "");
+      console.log(`[NativePersistence] Setup flag cleared for ${setupKey}`);
     } catch (e) {
-      console.error("[NativePersistence] Failed to set solo setup flag:", e);
+      console.error("[NativePersistence] Failed to clear setup flag:", e);
     }
   }
 
   /**
-   * Clear Solo mode setup flag (for testing/reset)
+   * @deprecated Use clearSetup() instead
    */
   clearSoloSetup(): void {
-    if (!this.isAvailable()) {
-      return;
-    }
-
-    try {
-      SetStoredData(this.SOLO_SETUP_KEY, "");
-      console.log("[NativePersistence] Solo setup flag cleared");
-    } catch (e) {
-      console.error("[NativePersistence] Failed to clear solo setup flag:", e);
-    }
+    this.clearSetup("solo");
   }
 
   /**
-   * Get the stored player ID (persists across EFB sessions)
+   * Get the stored player ID for current mode (persists across EFB sessions)
+   * Solo and Online have SEPARATE player IDs!
+   * @param mode - Optional mode override (defaults to current mode)
    */
-  getPlayerId(): string | null {
+  getPlayerId(mode?: GameMode | null): string | null {
+    const playerIdKey = this.getPlayerIdKey(mode);
+    const localStorageKey = `woa_${(mode ?? getCurrentGameMode()) || ""}_player_id`;
+
     if (!this.isAvailable()) {
       // Fallback to localStorage if native APIs not available
-      return localStorage.getItem("woa_player_id");
+      return localStorage.getItem(localStorageKey);
     }
 
     try {
-      const value = GetStoredData(this.PLAYER_ID_KEY);
+      const value = GetStoredData(playerIdKey);
       if (value && value.length > 0) {
         return value;
       }
-      // Also check localStorage as fallback (migration from old system)
-      const localId = localStorage.getItem("woa_player_id");
+      // Migration 1: Check localStorage as fallback
+      const localId = localStorage.getItem(localStorageKey);
       if (localId) {
-        // Migrate to native storage
-        this.setPlayerId(localId);
+        this.setPlayerId(localId, mode);
         return localId;
+      }
+      // Migration 2: Check old non-prefixed key (WOA_PlayerId)
+      const oldKey = "WOA_PlayerId";
+      const oldValue = GetStoredData(oldKey);
+      if (oldValue && oldValue.length > 0) {
+        console.log(`[NativePersistence] Migrating player ID from ${oldKey} to ${playerIdKey}`);
+        this.setPlayerId(oldValue, mode);
+        return oldValue;
       }
       return null;
     } catch {
-      return localStorage.getItem("woa_player_id");
+      return localStorage.getItem(localStorageKey);
     }
   }
 
   /**
-   * Set the player ID (persists across EFB sessions)
+   * Set the player ID for current mode (persists across EFB sessions)
+   * @param mode - Optional mode override (defaults to current mode)
    */
-  setPlayerId(playerId: string): void {
+  setPlayerId(playerId: string, mode?: GameMode | null): void {
+    const playerIdKey = this.getPlayerIdKey(mode);
+    const localStorageKey = `woa_${(mode ?? getCurrentGameMode()) || ""}_player_id`;
+
     // Always save to localStorage as backup
-    localStorage.setItem("woa_player_id", playerId);
+    localStorage.setItem(localStorageKey, playerId);
 
     if (!this.isAvailable()) {
       return;
     }
 
     try {
-      SetStoredData(this.PLAYER_ID_KEY, playerId);
-      console.log(`[NativePersistence] Player ID saved: ${playerId}`);
+      SetStoredData(playerIdKey, playerId);
+      console.log(`[NativePersistence] Player ID saved to ${playerIdKey}: ${playerId}`);
     } catch (e) {
       console.error("[NativePersistence] Failed to save player ID:", e);
     }
   }
 
   /**
-   * Clear player ID (for testing/reset)
+   * Clear player ID for current mode (for testing/reset)
+   * @param mode - Optional mode override (defaults to current mode)
    */
-  clearPlayerId(): void {
-    localStorage.removeItem("woa_player_id");
+  clearPlayerId(mode?: GameMode | null): void {
+    const playerIdKey = this.getPlayerIdKey(mode);
+    const localStorageKey = `woa_${(mode ?? getCurrentGameMode()) || ""}_player_id`;
+
+    localStorage.removeItem(localStorageKey);
 
     if (!this.isAvailable()) {
       return;
     }
 
     try {
-      SetStoredData(this.PLAYER_ID_KEY, "");
-      console.log("[NativePersistence] Player ID cleared");
+      SetStoredData(playerIdKey, "");
+      console.log(`[NativePersistence] Player ID cleared for ${playerIdKey}`);
     } catch (e) {
       console.error("[NativePersistence] Failed to clear player ID:", e);
     }
