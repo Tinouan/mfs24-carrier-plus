@@ -6,6 +6,8 @@
  * Event listeners must be attached by the caller after setting innerHTML.
  */
 
+import { formatMoney } from "../helpers/PlayerHelpers";
+
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════
@@ -25,6 +27,7 @@ export interface RefuelPopupData {
     total: string;
     cancel: string;
     full: string;
+    confirmRefuel: string;
   };
 }
 
@@ -159,7 +162,7 @@ export function renderRefuelPopupHtml(data: RefuelPopupData): string {
   const gaugeColor = getFuelGaugeColor(targetPercent);
 
   return `
-    <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 100;">
+    <div class="refuel-overlay" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 9999;">
       <div style="background: #1f2937; border: 2px solid #374151; border-radius: 12px; padding: 20px; width: 320px;">
         <!-- Header -->
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
@@ -202,8 +205,8 @@ export function renderRefuelPopupHtml(data: RefuelPopupData): string {
           </div>
           <div style="text-align: right;">
             <div style="font-size: 11px; color: #6b7280; margin-bottom: 4px;">${translations.total}</div>
-            <div style="font-size: 24px; font-weight: 700; color: #f59e0b;">$${cost.toFixed(2)}</div>
-            <div style="font-size: 11px; color: #9ca3af;">@ $${pricePerGallon.toFixed(2)}/gal</div>
+            <div style="font-size: 24px; font-weight: 700; color: #f59e0b;">${formatMoney(cost)}</div>
+            <div style="font-size: 11px; color: #9ca3af;">@ ${formatMoney(pricePerGallon)}/gal</div>
           </div>
         </div>
 
@@ -216,7 +219,7 @@ export function renderRefuelPopupHtml(data: RefuelPopupData): string {
             ${translations.full}
           </button>
           <button class="refuel-confirm-btn" style="flex: 1; padding: 14px; background: #22c55e; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">
-            OK
+            ${translations.confirmRefuel}
           </button>
         </div>
       </div>

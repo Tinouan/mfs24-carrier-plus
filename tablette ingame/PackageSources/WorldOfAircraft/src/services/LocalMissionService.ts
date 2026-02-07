@@ -177,6 +177,22 @@ class LocalMissionServiceClass {
     await DatabaseManager.put("missions", mission);
     console.log(`[LocalMissionService] Created mission ${missionId}: ${data.origin_icao} -> ${data.destination_icao}`);
 
+    // Calculate XP estimate
+    const distanceNm = data.distance_nm || 0;
+    const baseXP = Math.floor(distanceNm * 2); // 2 XP per nm
+    const cargoMultiplier = (data.cargo_weight_kg || 0) > 0 ? 1.5 : 1;
+    const modifiersMultiplier = 1.3; // Max with all modifiers
+
+    const xpEstimate = {
+      base: baseXP,
+      with_cargo: Math.floor(baseXP * cargoMultiplier),
+      with_modifiers_max: Math.floor(baseXP * cargoMultiplier * modifiersMultiplier),
+      potential_grade_s: Math.floor(baseXP * cargoMultiplier * modifiersMultiplier * 1.15), // Grade S = 115%
+      potential_grade_a: Math.floor(baseXP * cargoMultiplier * modifiersMultiplier * 1.0),  // Grade A = 100%
+      cargo_multiplier: cargoMultiplier,
+      modifiers_multiplier: modifiersMultiplier,
+    };
+
     return {
       id: missionId,
       origin_icao: data.origin_icao,
@@ -186,6 +202,7 @@ class LocalMissionServiceClass {
       cargo_weight_kg: data.cargo_weight_kg,
       distance_nm: data.distance_nm,
       created_at: now,
+      xp_estimate: xpEstimate,
     };
   }
 
@@ -263,6 +280,23 @@ class LocalMissionServiceClass {
     await DatabaseManager.put("missions", mission);
     console.log(`[LocalMissionService] Created V1 mission ${missionId} with ${checkpoints.length} checkpoints`);
 
+    // Calculate XP estimate
+    const distanceNm = Math.round(distance);
+    const baseXP = Math.floor(distanceNm * 2); // 2 XP per nm
+    const cargoMultiplier = (data.cargo_weight_kg || 0) > 0 ? 1.5 : 1;
+    const modifiersCount = data.modifiers?.length || 0;
+    const modifiersMultiplier = 1 + modifiersCount * 0.1; // 10% per modifier
+
+    const xpEstimate = {
+      base: baseXP,
+      with_cargo: Math.floor(baseXP * cargoMultiplier),
+      with_modifiers_max: Math.floor(baseXP * cargoMultiplier * modifiersMultiplier),
+      potential_grade_s: Math.floor(baseXP * cargoMultiplier * modifiersMultiplier * 1.15), // Grade S = 115%
+      potential_grade_a: Math.floor(baseXP * cargoMultiplier * modifiersMultiplier * 1.0),  // Grade A = 100%
+      cargo_multiplier: cargoMultiplier,
+      modifiers_multiplier: modifiersMultiplier,
+    };
+
     return {
       id: missionId,
       origin_icao: data.origin_icao,
@@ -270,9 +304,10 @@ class LocalMissionServiceClass {
       aircraft_type: mission.aircraft_type || "Unknown",
       status: "in_progress",
       cargo_weight_kg: data.cargo_weight_kg,
-      distance_nm: Math.round(distance),
+      distance_nm: distanceNm,
       checkpoints,
       created_at: now,
+      xp_estimate: xpEstimate,
     };
   }
 
@@ -345,6 +380,28 @@ class LocalMissionServiceClass {
     // Update player XP
     player.xp += xpEarned;
     await DatabaseManager.savePlayer(player);
+
+    // V2.0: Update pilot career stats
+    const careerStats = await DatabaseManager.getOrCreatePilotCareerStats(player.id);
+    careerStats.total_missions += 1;
+    careerStats.completed_missions += 1;
+    careerStats.total_flight_time_minutes += Math.round(data.flight_time_seconds / 60);
+    careerStats.total_distance_nm += mission.distance_nm ?? 0;
+    careerStats.total_landings += 1;
+    // Update average grade (weighted average)
+    if (careerStats.completed_missions === 1) {
+      careerStats.average_grade = grade;
+    } else {
+      // Keep track of best grade seen
+      const gradeOrder = ["S", "A", "B", "C", "D", "F"];
+      const currentGradeIndex = gradeOrder.indexOf(careerStats.average_grade || "F");
+      const newGradeIndex = gradeOrder.indexOf(grade);
+      if (newGradeIndex < currentGradeIndex) {
+        careerStats.average_grade = grade; // Better grade
+      }
+    }
+    await DatabaseManager.savePilotCareerStats(careerStats);
+    console.log(`[LocalMissionService] Updated career stats: ${careerStats.total_missions} missions, ${careerStats.total_flight_time_minutes}min total`);
 
     // Update aircraft location
     await DatabaseManager.updateAircraftLocation(mission.aircraft_id, data.final_icao);

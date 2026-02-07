@@ -11,6 +11,7 @@
 export interface DatabaseCallbacks {
   onReady?: () => void;
   onError?: (error: Error) => void;
+  onDataChanged?: () => void;  // V4.1 FIX: Called when critical data changes, for NativePersistence sync
 }
 
 // ─────────────────────────────────────────────────────────
@@ -25,7 +26,10 @@ export interface Player {
   money: number;
   trust_score: number;           // 0-100, anti-cheat score
   nationality?: string;          // ISO country code
-  preferred_airport?: string;    // ICAO code
+  preferred_airport?: string;    // ICAO code (home base)
+  current_airport?: string;      // V4.1: ICAO code (current position)
+  last_latitude?: number;        // V4.1: Last known GPS latitude (for map marker fallback)
+  last_longitude?: number;       // V4.1: Last known GPS longitude (for map marker fallback)
   is_premium: boolean;
   created_at: string;
   updated_at: string;
@@ -119,6 +123,7 @@ export interface Aircraft {
   flight_hours: number;          // Total flight hours
   cycles?: number;               // Number of flights (optional for backwards compat)
   cargo_capacity_kg: number;     // Max cargo capacity from catalog
+  passenger_seats?: number;      // V4.1: Passenger capacity (default 4)
   last_flight_at?: string;
   purchase_price?: number;
   for_sale?: boolean;            // Optional for backwards compat
@@ -152,8 +157,9 @@ export interface AircraftCatalog {
   name: string;
   icaoType: string;
   manufacturer: string;
-  category: "single_prop" | "twin_prop" | "turboprop" | "jet" | "helicopter" | "airliner";
+  category: "single_piston" | "twin_piston" | "turboprop" | "jet_small" | "jet_medium" | "jet_large" | "cargo_heavy" | "helicopter" | "light" | "high_performance" | "twin" | "bush" | "utility" | "amphibious";
   cargoCapacityKg: number;
+  passengerSeats: number;           // V4.1: Passenger capacity
   maxRangeNm: number;
   cruiseSpeedKts: number;
   fuelCapacityGal?: number;
@@ -161,7 +167,10 @@ export interface AircraftCatalog {
   basePrice: number;
   operatingCostPerHour: number;
   minRunwayLengthM: number;
-  requiredLicense: string;
+  requiredLicense: "student" | "PPL" | "IR" | "CPL" | "ATPL";
+  requiresCopilot: boolean;         // V4.1: Requires copilot
+  requiresTypeRating: boolean;      // V4.1: Requires type rating
+  isActive: boolean;                // V4.1: Active in catalog
   msfsAircraftId: string;
   // Additional specs
   maxAltitudeFt?: number;
@@ -250,6 +259,7 @@ export interface InventoryItem {
   item_code: string;
   quantity: number;
   reserved_quantity?: number;    // Quantity reserved for pending orders (defaults to 0)
+  owner_type?: "player" | "company";  // V4.1: Ownership tag (default "player")
   created_at?: string;
   updated_at?: string;
 }
@@ -330,6 +340,29 @@ export interface MarketTransaction {
   unit_price: number;
   total_price: number;
   created_at: string;
+}
+
+// ─────────────────────────────────────────────────────────
+// V4.1: PLAYER SELL ORDERS
+// ─────────────────────────────────────────────────────────
+
+export interface SellOrder {
+  id: string;                      // UUID
+  seller_id: string;               // Player ID
+  seller_name: string;             // Player display name
+  item_id: string;                 // Item code (e.g., "CARGO_MAIL")
+  item_name: string;               // Item display name
+  item_tier: number;               // Item tier 0-5
+  quantity: number;                // Quantity for sale
+  price_per_unit: number;          // Price per unit
+  total_price: number;             // quantity * price_per_unit
+  owner_type: "player" | "company"; // From personal or company inventory
+  airport_icao: string;            // Airport where item is stored
+  status: "active" | "sold" | "cancelled";
+  created_at: string;              // ISO timestamp
+  sold_at?: string;                // ISO timestamp when sold
+  buyer_id?: string;               // Buyer ID (AI or player)
+  is_aircraft?: boolean;           // True if this is an aircraft sell order
 }
 
 // ─────────────────────────────────────────────────────────
@@ -634,6 +667,35 @@ export interface FreeFlightSession {
 }
 
 // ─────────────────────────────────────────────────────────
+// V4.1: TRANSACTION LOG
+// ─────────────────────────────────────────────────────────
+
+export type TransactionType =
+  | "mission_reward"
+  | "free_flight_reward"
+  | "market_buy"
+  | "market_sell"
+  | "refuel"
+  | "repair"
+  | "company_create"
+  | "transfer_in"
+  | "transfer_out"
+  | "transfer_to_company"
+  | "transfer_from_company";
+
+export interface TransactionLog {
+  id: string;              // UUID
+  timestamp: string;       // ISO8601
+  type: TransactionType;
+  amount: number;          // Positif = gain, Négatif = dépense
+  balance_after: number;   // Solde après l'opération
+  wallet: "player" | "company";
+  description: string;     // Ex: "Mission LFPG→LFBO (Grade A)", "Achat Raw Wood x50"
+  related_id?: string;     // ID mission, ID ordre market, etc.
+  airport_icao?: string;   // Où ça s'est passé
+}
+
+// ─────────────────────────────────────────────────────────
 // AIRPORTS
 // ─────────────────────────────────────────────────────────
 
@@ -685,6 +747,10 @@ type StoreName =
   | "mission_cargo"
   | "pilot_career_stats"
   | "free_flight_sessions"
+  | "flight_history"       // V2.0: Flight history for missions and free flights
+  | "transaction_log"      // V4.1: Financial transaction log
+  | "sell_orders"          // V4.1: Player sell orders
+  | "company_messages"
   | "airports"
   | "sync_log";
 
@@ -715,6 +781,10 @@ const KEY_PATHS: Record<StoreName, string> = {
   mission_cargo: "id",
   pilot_career_stats: "id",
   free_flight_sessions: "id",
+  flight_history: "id",  // V2.0: Flight history
+  transaction_log: "id", // V4.1: Transaction log
+  sell_orders: "id",     // V4.1: Player sell orders
+  company_messages: "id", // V4: Company messaging
   airports: "ident",
   sync_log: "id",
 };
@@ -736,9 +806,13 @@ const PERSISTENT_STORES: StoreName[] = [
   "missions",
   "pilot_career_stats",
   "free_flight_sessions",
+  "flight_history",       // V2.0: Flight history
+  "transaction_log",      // V4.1: Transaction log
+  "sell_orders",          // V4.1: Player sell orders
   "market_orders",
   "factories",
   "workers",
+  "company_messages",
 ];
 
 // Declare global Coherent API for DataStore
@@ -947,6 +1021,7 @@ class DatabaseManagerClass {
 
   /**
    * Schedule a save to DataStore (debounced to avoid too many writes)
+   * V4.1 FIX: Also triggers onDataChanged callback for NativePersistence sync
    */
   private schedulePersistentSave(): void {
     if (this.saveTimeout !== null) {
@@ -956,6 +1031,8 @@ class DatabaseManagerClass {
     this.saveTimeout = window.setTimeout(() => {
       this.saveTimeout = null;
       void this.saveToDataStore();
+      // V4.1 FIX: Notify that data changed so NativePersistence can save too
+      this.callbacks.onDataChanged?.();
     }, 2000);
   }
 
@@ -1217,6 +1294,11 @@ class DatabaseManagerClass {
     return missions.find((m) => m.status === "in_progress");
   }
 
+  async getActiveMissionForAircraft(aircraftId: string): Promise<Mission | undefined> {
+    const missions = await this.query<Mission>("missions", "aircraft_id", aircraftId);
+    return missions.find((m) => m.status === "in_progress");
+  }
+
   async getMissionsByStatus(status: string): Promise<Mission[]> {
     return this.query<Mission>("missions", "status", status);
   }
@@ -1366,6 +1448,153 @@ class DatabaseManagerClass {
   }
 
   // ─────────────────────────────────────────────────────────
+  // FLIGHT HISTORY (V2.0)
+  // ─────────────────────────────────────────────────────────
+
+  /**
+   * Flight history entry interface (matches types/index.ts)
+   */
+  async saveFlightHistory(entry: {
+    id: string;
+    type: "mission" | "freeflight";
+    date: number;
+    departure_icao: string;
+    arrival_icao: string;
+    distance_nm: number;
+    flight_time_minutes: number;
+    aircraft_id: string;
+    aircraft_type: string;
+    aircraft_reg: string;
+    score_total: number;
+    grade: string;
+    landing_fpm: number;
+    max_gforce: number;
+    xp_earned: number;
+    money_earned: number;
+    bonuses: {
+      real_time: boolean;
+      night: boolean;
+      atc: boolean;
+      fuel_eco: boolean;
+      no_autopilot: boolean;
+      bad_weather: boolean;
+    };
+    weather_visibility_nm: number;
+    weather_wind_kts: number;
+    atc_compliance: number;
+    atc_violations: number;
+  }): Promise<void> {
+    await this.put("flight_history", entry);
+    console.log(`[DatabaseManager] Flight history saved: ${entry.type} ${entry.departure_icao}→${entry.arrival_icao}`);
+  }
+
+  /**
+   * Get flight history sorted by date (newest first)
+   */
+  async getFlightHistory(
+    limit = 50,
+    offset = 0,
+    filter?: "all" | "mission" | "freeflight"
+  ): Promise<any[]> {
+    let entries = await this.getAll<any>("flight_history");
+
+    // Filter by type if specified
+    if (filter && filter !== "all") {
+      entries = entries.filter((e) => e.type === filter);
+    }
+
+    // Sort by date (newest first)
+    entries.sort((a, b) => b.date - a.date);
+
+    // Apply pagination
+    return entries.slice(offset, offset + limit);
+  }
+
+  /**
+   * Get total flight history count
+   */
+  async getFlightHistoryCount(filter?: "all" | "mission" | "freeflight"): Promise<number> {
+    let entries = await this.getAll<any>("flight_history");
+
+    if (filter && filter !== "all") {
+      entries = entries.filter((e) => e.type === filter);
+    }
+
+    return entries.length;
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // V4.1: TRANSACTION LOG OPERATIONS
+  // ─────────────────────────────────────────────────────────
+
+  private generateTransactionId(): string {
+    return `tx_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  /**
+   * Save a transaction log entry and prune old entries if needed
+   */
+  async saveTransaction(entry: Omit<TransactionLog, "id">): Promise<void> {
+    const transaction: TransactionLog = {
+      ...entry,
+      id: this.generateTransactionId(),
+      amount: Math.round(entry.amount),
+      balance_after: Math.round(entry.balance_after),
+    };
+    await this.put("transaction_log", transaction);
+
+    // Prune to 500 max entries
+    await this.pruneTransactionLog(500);
+
+    console.log(`[DatabaseManager] Transaction logged: ${entry.type} ${entry.amount > 0 ? "+" : ""}${entry.amount}$ (${entry.description})`);
+  }
+
+  /**
+   * Get transaction log sorted by timestamp (newest first)
+   */
+  async getTransactionLog(
+    limit = 50,
+    offset = 0,
+    walletFilter?: "player" | "company" | "all"
+  ): Promise<TransactionLog[]> {
+    let entries = await this.getAll<TransactionLog>("transaction_log");
+
+    // Filter by wallet if specified
+    if (walletFilter && walletFilter !== "all") {
+      entries = entries.filter((e) => e.wallet === walletFilter);
+    }
+
+    // Sort by timestamp (newest first)
+    entries.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    // Apply pagination
+    return entries.slice(offset, offset + limit);
+  }
+
+  /**
+   * Prune transaction log to keep only the newest N entries
+   */
+  async pruneTransactionLog(maxEntries: number): Promise<void> {
+    let entries = await this.getAll<TransactionLog>("transaction_log");
+
+    if (entries.length <= maxEntries) return;
+
+    // Sort by timestamp (newest first)
+    entries.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    // Keep only the newest entries
+    const toKeep = entries.slice(0, maxEntries);
+
+    // Clear and re-save
+    await this.clear("transaction_log");
+    for (const entry of toKeep) {
+      await this.put("transaction_log", entry, false);
+    }
+
+    console.log(`[DatabaseManager] Pruned transaction log: ${entries.length} -> ${toKeep.length}`);
+  }
+
+  // ─────────────────────────────────────────────────────────
   // SYNC OPERATIONS (for P2P)
   // ─────────────────────────────────────────────────────────
 
@@ -1436,6 +1665,8 @@ class DatabaseManagerClass {
       "mission_cargo",
       "pilot_career_stats",
       "free_flight_sessions",
+      "flight_history",
+      "company_messages",
     ];
 
     const exportData: Record<string, any[]> = {};
@@ -1483,6 +1714,10 @@ class DatabaseManagerClass {
       "mission_cargo",
       "pilot_career_stats",
       "free_flight_sessions",
+      "flight_history",
+      "transaction_log",
+      "sell_orders",
+      "company_messages",
       "sync_log",
     ];
 
@@ -1493,6 +1728,107 @@ class DatabaseManagerClass {
 
     this.initialized = false;
     console.log("[DatabaseManager] Database deleted");
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // V4.1: SELL ORDERS OPERATIONS
+  // ─────────────────────────────────────────────────────────
+
+  /**
+   * Get all active sell orders
+   */
+  async getActiveSellOrders(): Promise<SellOrder[]> {
+    const orders = await this.getAll<SellOrder>("sell_orders");
+    return orders.filter(o => o.status === "active");
+  }
+
+  /**
+   * Get sell orders by seller ID
+   */
+  async getSellOrdersBySeller(sellerId: string): Promise<SellOrder[]> {
+    return this.query<SellOrder>("sell_orders", "seller_id", sellerId);
+  }
+
+  /**
+   * Get sell orders at a specific airport
+   */
+  async getSellOrdersAtAirport(icao: string): Promise<SellOrder[]> {
+    const orders = await this.query<SellOrder>("sell_orders", "airport_icao", icao);
+    return orders.filter(o => o.status === "active");
+  }
+
+  /**
+   * Create a new sell order
+   */
+  async createSellOrder(order: SellOrder): Promise<void> {
+    await this.put("sell_orders", order);
+    console.log(`[DatabaseManager] Sell order created: ${order.quantity}x ${order.item_name} at ${order.airport_icao}`);
+  }
+
+  /**
+   * Update a sell order (status change, etc.)
+   */
+  async updateSellOrder(order: SellOrder): Promise<void> {
+    await this.put("sell_orders", order);
+  }
+
+  /**
+   * Prune old sell orders (keep only active or recent sold/cancelled)
+   */
+  async pruneSellOrders(maxDaysOld: number = 7, maxTotal: number = 100): Promise<void> {
+    const orders = await this.getAll<SellOrder>("sell_orders");
+    const cutoffDate = Date.now() - (maxDaysOld * 24 * 60 * 60 * 1000);
+
+    // Keep active orders and recent sold/cancelled
+    const toKeep = orders.filter(o => {
+      if (o.status === "active") return true;
+      const createdTime = new Date(o.created_at).getTime();
+      return createdTime > cutoffDate;
+    });
+
+    // If still too many, keep only the newest
+    if (toKeep.length > maxTotal) {
+      toKeep.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      toKeep.splice(maxTotal);
+    }
+
+    // Only rewrite if we pruned something
+    if (toKeep.length < orders.length) {
+      await this.clear("sell_orders");
+      for (const order of toKeep) {
+        await this.put("sell_orders", order, false);
+      }
+      console.log(`[DatabaseManager] Pruned sell orders: ${orders.length} -> ${toKeep.length}`);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // V4: COMPANY MESSAGES
+  // ─────────────────────────────────────────────────────────
+
+  async getCompanyMessages(companyId: string, limit = 50): Promise<any[]> {
+    const messages = await this.query<any>("company_messages", "company_id", companyId);
+    messages.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    return messages.slice(0, limit);
+  }
+
+  async saveCompanyMessage(message: any): Promise<void> {
+    await this.put("company_messages", message);
+  }
+
+  async pinCompanyMessage(messageId: string, companyId: string): Promise<void> {
+    const messages = await this.getCompanyMessages(companyId, 500);
+    for (const msg of messages) {
+      if (msg.is_pinned && msg.id !== messageId) {
+        msg.is_pinned = false;
+        await this.put("company_messages", msg);
+      }
+    }
+    const target = messages.find((m: any) => m.id === messageId);
+    if (target) {
+      target.is_pinned = !target.is_pinned;
+      await this.put("company_messages", target);
+    }
   }
 }
 

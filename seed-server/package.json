@@ -1,0 +1,19 @@
+{
+  "name": "woa-seed",
+  "version": "2.1.0",
+  "description": "World of Aircraft SEED Server - Cloudflare Worker",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "keywords": ["cloudflare", "worker", "msfs", "world-of-aircraft"],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260205.0",
+    "wrangler": "^4.62.0"
+  }
+}

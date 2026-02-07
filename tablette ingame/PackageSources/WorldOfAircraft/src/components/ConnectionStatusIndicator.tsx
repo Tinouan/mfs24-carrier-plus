@@ -22,18 +22,23 @@ export interface ConnectionStatusIndicatorProps {
   compact?: boolean; // Show only icon without text
 }
 
+// Singleton pending count - created once to avoid memory leak from repeated subscriptions
+let _sharedPendingCount: Subject<number> | null = null;
+function getSharedPendingCount(): Subject<number> {
+  if (!_sharedPendingCount) {
+    _sharedPendingCount = Subject.create(0);
+    // Subscribe once (PASSE 3 - memory leak fix)
+    NetworkState.pendingActions.sub((actions) => {
+      _sharedPendingCount!.set(actions.length);
+    });
+  }
+  return _sharedPendingCount;
+}
+
 export function renderConnectionStatusIndicator(props: ConnectionStatusIndicatorProps = {}): VNode {
   // Use props or NetworkState singleton
   const status = props.status || NetworkState.status;
-  const pendingCount = props.pendingCount || Subject.create(0);
-
-  // Subscribe to NetworkState pending actions
-  if (!props.pendingCount) {
-    // Update pending count when actions change
-    NetworkState.pendingActions.sub((actions) => {
-      pendingCount.set(actions.length);
-    });
-  }
+  const pendingCount = props.pendingCount || getSharedPendingCount();
 
   const compact = props.compact ?? false;
 

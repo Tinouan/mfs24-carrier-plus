@@ -154,8 +154,8 @@ export function renderMissionTrackingPanel(props: MissionTrackingPanelProps): VN
                 <div style="flex: 1; margin: 0 12px; position: relative; height: 4px; background: #374151; border-radius: 2px;">
                   {/* Progress fill */}
                   <div style={trackingProgressPercent.map(p => `position: absolute; left: 0; top: 0; height: 100%; background: linear-gradient(90deg, #3b82f6, #22c55e); border-radius: 2px; width: ${p}%; transition: width 0.5s ease;`)}></div>
-                  {/* Aircraft indicator */}
-                  <div style={trackingProgressPercent.map(p => `position: absolute; top: -6px; left: ${Math.max(0, Math.min(p, 100))}%; transform: translateX(-50%); font-size: 12px;`)}>✈</div>
+                  {/* Aircraft indicator (text for Coherent GT compatibility) */}
+                  <div style={trackingProgressPercent.map(p => `position: absolute; top: -8px; left: ${Math.max(0, Math.min(p, 100))}%; transform: translateX(-50%); font-size: 10px; color: #60a5fa; font-weight: 700;`)}>&gt;</div>
                 </div>
                 <span style="font-family: monospace; font-size: 14px; font-weight: 700; color: #22c55e;">
                   {activeMission.map(m => m?.destination_icao || "----")}

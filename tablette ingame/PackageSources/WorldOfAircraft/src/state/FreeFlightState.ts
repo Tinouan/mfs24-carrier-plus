@@ -1,6 +1,6 @@
 /**
  * FreeFlightState - State management for free flight (career mode)
- * Simpler than missions - just track flight time, landings, fuel usage
+ * V2.0: Enhanced with bonus tracking, scoring, and recap data
  */
 import { Subject } from "@microsoft/msfs-sdk";
 
@@ -34,6 +34,53 @@ export interface FreeFlightStats {
   sessionsToday: number;
 }
 
+// V2.0: Bonus structure for free flight recap
+export interface FreeFlightBonus {
+  active: boolean;
+  multiplier: number;
+}
+
+// V2.0: Complete recap data for free flight
+export interface FreeFlightRecapData {
+  departure_icao: string;
+  arrival_icao: string;
+  distance_nm: number;
+  flight_time_minutes: number;
+
+  // Scoring (same system as missions)
+  score_landing: number;        // Points landing (0-250)
+  score_gforce: number;         // Points G-force (0 or -100)
+  score_total: number;          // Score total (base 1000 + bonus - penalties)
+  grade: string;                // S/A/B/C/D/F
+  landing_fpm: number;
+  landing_quality: string;      // "butter" / "smooth" / "normal" / "hard" / "crash"
+  max_gforce: number;
+
+  // Bonus details (for display in recap)
+  bonuses: {
+    real_time: FreeFlightBonus;     // ×1.20
+    night: FreeFlightBonus;         // ×1.15
+    atc: FreeFlightBonus;           // ×1.15
+    fuel_eco: FreeFlightBonus;      // ×1.10
+    no_autopilot: FreeFlightBonus;  // ×1.10
+    bad_weather: FreeFlightBonus;   // ×1.15
+  };
+  bonus_multiplier_total: number;   // Product of all active bonuses
+
+  // Final result
+  xp_earned: number;
+  money_earned: 0;              // ALWAYS 0
+
+  // Weather at departure (for display)
+  weather_visibility_nm: number;
+  weather_wind_kts: number;
+  weather_precipitation: boolean;
+
+  fuel_remaining_percent: number;
+  atc_compliance: number;
+  atc_violations: number;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════════════════════════════════════
@@ -43,12 +90,9 @@ export const freeFlightState = {
   status: Subject.create<FreeFlightStatus>("idle"),
   currentSession: Subject.create<FreeFlightSession | null>(null),
 
-  // P2P persistence fields
+  // Session tracking for persistence
   sessionId: Subject.create<string>(""),
   isTracking: Subject.create<boolean>(false),
-  startAirport: Subject.create<string>(""),
-  xpEarned: Subject.create<number>(0),
-  distanceNm: Subject.create<number>(0),  // Alias for distanceFlownNm
 
   // Flight tracking (real-time)
   flightTimeMinutes: Subject.create<number>(0),
@@ -79,6 +123,40 @@ export const freeFlightState = {
 
   // Today's stats (from API)
   todayStats: Subject.create<FreeFlightStats | null>(null),
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // V2.0: Enhanced tracking for XP scoring
+  // NOTE: Some of these states (ffDistanceNm, ffFlightTimeMin, ffLandingFpm, ffMaxGforce,
+  //       ffFuelStartPercent, ffFuelEndPercent) are updated during tracking but currently
+  //       not consumed by UI. FreeFlightManager uses internal vars for final calculation.
+  //       Keeping them for potential future real-time UI display (spec-freeflight-xp-efb.md).
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // Flight data (V2.0)
+  ffArrivalIcao: Subject.create<string>(""),            // ICAO arrival (auto-detected)
+  ffDistanceNm: Subject.create<number>(0),              // Distance flown (for potential UI)
+  ffFlightTimeMin: Subject.create<number>(0),           // Flight time in minutes (for potential UI)
+  ffLandingFpm: Subject.create<number>(0),              // Landing vertical speed (for potential UI)
+  ffMaxGforce: Subject.create<number>(1),               // Max G-force during flight (for potential UI)
+  ffFuelStartPercent: Subject.create<number>(0),        // Fuel at departure (for potential UI)
+  ffFuelEndPercent: Subject.create<number>(0),          // Fuel at arrival (for potential UI)
+
+  // Bonus tracking (same values as missions)
+  ffBonusRealTime: Subject.create<boolean>(true),       // true if sim rate = 1× during all flight
+  ffBonusNight: Subject.create<boolean>(false),         // true if >50% of flight at night
+  ffBonusAtc: Subject.create<boolean>(true),            // true if ATC compliance = 100%
+  ffBonusFuelEco: Subject.create<boolean>(false),       // true if fuel efficiency > threshold
+  ffBonusNoAutopilot: Subject.create<boolean>(true),    // true if AP never activated
+  ffBonusBadWeather: Subject.create<boolean>(false),    // true if bad weather detected
+
+  // Calculated result (displayed in recap)
+  ffScore: Subject.create<number>(0),                   // Score 0-1500 (same scale as missions)
+  ffGrade: Subject.create<string>(""),                  // S/A/B/C/D/F (same scale)
+  ffXpEarned: Subject.create<number>(0),                // Final calculated XP
+  ffRecapData: Subject.create<FreeFlightRecapData | null>(null),  // Complete data for popup
+
+  // UI
+  ffShowRecap: Subject.create<boolean>(false),          // Show recap popup
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -88,6 +166,12 @@ export const freeFlightState = {
 export function resetFreeFlightState(): void {
   freeFlightState.status.set("idle");
   freeFlightState.currentSession.set(null);
+
+  // Session tracking
+  freeFlightState.sessionId.set("");
+  freeFlightState.isTracking.set(false);
+
+  // Flight tracking
   freeFlightState.flightTimeMinutes.set(0);
   freeFlightState.distanceFlownNm.set(0);
   freeFlightState.fuelUsedGallons.set(0);
@@ -99,6 +183,26 @@ export function resetFreeFlightState(): void {
   freeFlightState.currentAirport.set(null);
   freeFlightState.estimatedXp.set(0);
   freeFlightState.error.set(null);
+
+  // V2.0: Reset enhanced tracking states
+  freeFlightState.ffArrivalIcao.set("");
+  freeFlightState.ffDistanceNm.set(0);
+  freeFlightState.ffFlightTimeMin.set(0);
+  freeFlightState.ffLandingFpm.set(0);
+  freeFlightState.ffMaxGforce.set(1);
+  freeFlightState.ffFuelStartPercent.set(0);
+  freeFlightState.ffFuelEndPercent.set(0);
+  freeFlightState.ffBonusRealTime.set(true);
+  freeFlightState.ffBonusNight.set(false);
+  freeFlightState.ffBonusAtc.set(true);
+  freeFlightState.ffBonusFuelEco.set(false);
+  freeFlightState.ffBonusNoAutopilot.set(true);
+  freeFlightState.ffBonusBadWeather.set(false);
+  freeFlightState.ffScore.set(0);
+  freeFlightState.ffGrade.set("");
+  freeFlightState.ffXpEarned.set(0);
+  freeFlightState.ffRecapData.set(null);
+  freeFlightState.ffShowRecap.set(false);
 }
 
 export function formatFlightTime(minutes: number): string {

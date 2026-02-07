@@ -66,6 +66,7 @@ export interface PopupCallbacks {
   refreshCompanyData: () => Promise<void>;
   refreshMarketListings: () => void;
   refreshCargoLists: () => void;
+  refreshInventory: () => void;
 
   // Cargo operations (delegated to WorldOfAircraft for complex logic)
   transferCargo: (direction: "load" | "unload", locationId: string, itemId: string, qty: number) => void;
@@ -147,12 +148,16 @@ class PopupManagerClass {
         total: t("common", "total"),
         cancel: t("common", "cancel"),
         full: t("hangar", "full"),
+        confirmRefuel: t("hangar", "confirmRefuel"),
       },
     };
 
     el.innerHTML = renderRefuelPopupHtml(data);
 
     // Add event listeners
+    el.querySelector(".refuel-overlay")?.addEventListener("click", (e) => {
+      if ((e.target as HTMLElement).classList.contains("refuel-overlay")) this.closeRefuel();
+    });
     el.querySelector(".refuel-close-btn")?.addEventListener("click", () => this.closeRefuel());
     el.querySelector(".refuel-cancel-btn")?.addEventListener("click", () => this.closeRefuel());
     el.querySelector(".refuel-full-btn")?.addEventListener("click", () => {
@@ -666,6 +671,7 @@ class PopupManagerClass {
       this.closeMarketBuy();
       marketState.marketError.set(null);
       this.callbacks.refreshMarketListings();
+      this.callbacks.refreshInventory(); // Refresh inventory UI after purchase
     } catch (error) {
       console.error("[PopupManager] Error buying item:", error);
       marketState.marketError.set(

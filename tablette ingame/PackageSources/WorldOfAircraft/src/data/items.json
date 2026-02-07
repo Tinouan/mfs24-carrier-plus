@@ -1115,6 +1115,54 @@
       "isRaw": false,
       "stackSize": 50,
       "description": "Strong industrial glue"
+    },
+    {
+      "id": "worker",
+      "name": "Worker",
+      "tier": 0,
+      "tags": ["personnel"],
+      "icon": "person",
+      "baseValue": 0,
+      "weightKg": 80.0,
+      "isRaw": false,
+      "stackSize": 1,
+      "description": "A worker available for transport"
+    },
+    {
+      "id": "engineer",
+      "name": "Engineer",
+      "tier": 1,
+      "tags": ["personnel"],
+      "icon": "person",
+      "baseValue": 0,
+      "weightKg": 80.0,
+      "isRaw": false,
+      "stackSize": 1,
+      "description": "An engineer available for transport"
+    },
+    {
+      "id": "pilot",
+      "name": "Pilot",
+      "tier": 2,
+      "tags": ["personnel"],
+      "icon": "person",
+      "baseValue": 0,
+      "weightKg": 80.0,
+      "isRaw": false,
+      "stackSize": 1,
+      "description": "A pilot available for transport"
+    },
+    {
+      "id": "copilot",
+      "name": "Copilot",
+      "tier": 2,
+      "tags": ["personnel"],
+      "icon": "person",
+      "baseValue": 0,
+      "weightKg": 80.0,
+      "isRaw": false,
+      "stackSize": 1,
+      "description": "A copilot available for transport"
     }
   ]
 }

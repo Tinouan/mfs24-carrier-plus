@@ -16,12 +16,13 @@
 import { localFleetService } from "./LocalFleetService";
 import { localMissionService } from "./LocalMissionService";
 import { localMarketService } from "./LocalMarketService";
-import { SyncService, type FlightStats, type SeedMission, type MissionCompletionResult, type RefuelResult } from "./SyncService";
+import { SyncService, type FlightStats, type SeedMission, type MissionCompletionResult, type RefuelResult, type MarketOrder, type PlayerInventoryItem, type AirportInventoryRaw, type AircraftCargoResponse } from "./SyncService";
 import { OfflineMissionService, type OfflineMissionResult } from "./OfflineMissionService";
 import { NetworkState } from "../state/NetworkState";
 import { DatabaseManager } from "../managers/DatabaseManager";
-import type { Airport, AircraftCatalog } from "../managers/DatabaseManager";
-import { isSoloMode, isOnlineMode } from "../state/GameModeState";
+import type { Airport, AircraftCatalog, Aircraft } from "../managers/DatabaseManager";
+import { isSoloMode, isOnlineMode, isModeInitialized } from "../state/GameModeState";
+import type { MarketListing } from "../types";
 
 // Re-export types for convenience
 export type {
@@ -51,11 +52,73 @@ class ServiceAdapterClass {
       getAircraft: (aircraftId: string) => localFleetService.getAircraft(aircraftId),
       getAircraftSystems: (aircraftId: string) => localFleetService.getAircraftSystems(aircraftId),
       getAircraftCargo: (aircraftId: string) => localFleetService.getAircraftCargo(aircraftId),
-      getAircraftCargoRaw: (aircraftId: string) => localFleetService.getAircraftCargoRaw(aircraftId),
-      loadCargo: (aircraftId: string, fromLocationId: string, itemId: string, qty: number) =>
-        localFleetService.loadCargo(aircraftId, fromLocationId, itemId, qty),
-      unloadCargo: (aircraftId: string, toLocationId: string, itemId: string, qty: number) =>
-        localFleetService.unloadCargo(aircraftId, toLocationId, itemId, qty),
+
+      /**
+       * Get aircraft cargo (raw format) - routes based on game mode
+       * SOLO: Local cargo from IndexedDB
+       * ONLINE: Cargo from SEED server
+       */
+      getAircraftCargoRaw: async (aircraftId: string) => {
+        // CRITICAL: Check if mode initialization is complete
+        if (!isModeInitialized()) {
+          console.warn("[ServiceAdapter] Mode not initialized yet - returning empty aircraft cargo");
+          return { items: [], current_cargo_kg: 0, cargo_capacity_kg: 0 };
+        }
+
+        if (isOnlineMode() && NetworkState.isOnline()) {
+          console.log("[ServiceAdapter] Online mode: fetching aircraft cargo from SEED");
+          return SyncService.getAircraftCargo(aircraftId);
+        }
+        console.log("[ServiceAdapter] Solo/offline: using local aircraft cargo");
+        return localFleetService.getAircraftCargoRaw(aircraftId);
+      },
+
+      /**
+       * Load cargo onto aircraft - routes based on game mode
+       * SOLO: Local operation (IndexedDB)
+       * ONLINE: SEED validates and processes
+       */
+      loadCargo: async (aircraftId: string, fromLocationId: string, itemId: string, qty: number) => {
+        // CRITICAL: Check if mode initialization is complete
+        if (!isModeInitialized()) {
+          throw new Error("Mode not initialized - cannot load cargo yet");
+        }
+
+        if (isOnlineMode() && NetworkState.isOnline()) {
+          console.log("[ServiceAdapter] Online mode: loading cargo via SEED");
+          const success = await SyncService.loadCargo(aircraftId, fromLocationId, itemId, qty);
+          if (!success) {
+            throw new Error("SEED cargo load failed");
+          }
+          return;
+        }
+        console.log("[ServiceAdapter] Solo/offline: loading cargo locally");
+        return localFleetService.loadCargo(aircraftId, fromLocationId, itemId, qty);
+      },
+
+      /**
+       * Unload cargo from aircraft - routes based on game mode
+       * SOLO: Local operation (IndexedDB)
+       * ONLINE: SEED validates and processes
+       */
+      unloadCargo: async (aircraftId: string, toLocationId: string, itemId: string, qty: number) => {
+        // CRITICAL: Check if mode initialization is complete
+        if (!isModeInitialized()) {
+          throw new Error("Mode not initialized - cannot unload cargo yet");
+        }
+
+        if (isOnlineMode() && NetworkState.isOnline()) {
+          console.log("[ServiceAdapter] Online mode: unloading cargo via SEED");
+          const success = await SyncService.unloadCargo(aircraftId, toLocationId, itemId, qty);
+          if (!success) {
+            throw new Error("SEED cargo unload failed");
+          }
+          return;
+        }
+        console.log("[ServiceAdapter] Solo/offline: unloading cargo locally");
+        return localFleetService.unloadCargo(aircraftId, toLocationId, itemId, qty);
+      },
+
       getRepairQuote: (aircraftId: string) => localFleetService.getRepairQuote(aircraftId),
       repairAircraft: (aircraftId: string, systems: string[], payFrom: "player" | "company") =>
         localFleetService.repairAircraft(aircraftId, systems, payFrom),
@@ -156,17 +219,201 @@ class ServiceAdapterClass {
 
   // ─────────────────────────────────────────────────────────
   // MARKET OPERATIONS
+  // V3.0: Routes based on GAME MODE (Solo → local, Online → SEED)
   // ─────────────────────────────────────────────────────────
 
   get market() {
     return {
-      getPlayerInventory: () => localMarketService.getPlayerInventory(),
-      getCompanyInventory: () => localMarketService.getCompanyInventory(),
+      /**
+       * Get player inventory - routes based on game mode
+       * SOLO: Local inventory from IndexedDB (persisted via WorldOfAircraftData)
+       * ONLINE: Inventory from SEED server
+       */
+      getPlayerInventory: async () => {
+        // CRITICAL: Check if mode initialization is complete
+        const initialized = isModeInitialized();
+        const onlineMode = isOnlineMode();
+        const networkOnline = NetworkState.isOnline();
+        console.log(`[ServiceAdapter] getPlayerInventory - initialized: ${initialized}, isOnlineMode: ${onlineMode}, NetworkState.isOnline: ${networkOnline}`);
+
+        // If not initialized, return empty array to prevent loading stale data
+        if (!initialized) {
+          console.warn("[ServiceAdapter] Mode not initialized yet - returning empty inventory");
+          return [];
+        }
+
+        if (onlineMode && networkOnline) {
+          console.log("[ServiceAdapter] Online mode: fetching player inventory from SEED");
+          const items = await SyncService.getPlayerInventory();
+          console.log(`[ServiceAdapter] SEED returned ${items.length} inventory items`);
+          // Convert to local format
+          return items.map((item: PlayerInventoryItem) => ({
+            id: item.id,
+            item_type: item.item_code || item.item_id,
+            item_name: item.item_name,
+            quantity: item.quantity,
+            airport_icao: item.airport_icao,
+            weight_kg: item.weight_kg,
+            tier: item.tier,
+          }));
+        }
+        console.log("[ServiceAdapter] Solo/offline: using local player inventory (IndexedDB)");
+        const localItems = await localMarketService.getPlayerInventory();
+        console.log(`[ServiceAdapter] Local IndexedDB returned ${localItems.length} inventory items`);
+        return localItems;
+      },
+
+      /**
+       * Get company inventory - routes based on game mode
+       * SOLO: Local inventory from IndexedDB
+       * ONLINE: Inventory from SEED server
+       */
+      getCompanyInventory: async () => {
+        // CRITICAL: Check if mode initialization is complete
+        if (!isModeInitialized()) {
+          console.warn("[ServiceAdapter] Mode not initialized yet - returning empty company inventory");
+          return [];
+        }
+
+        if (isOnlineMode() && NetworkState.isOnline()) {
+          console.log("[ServiceAdapter] Online mode: fetching company inventory from SEED");
+          const items = await SyncService.getCompanyInventory();
+          // Convert to local format
+          return items.map((item: PlayerInventoryItem) => ({
+            id: item.id,
+            item_type: item.item_code || item.item_id,
+            item_name: item.item_name,
+            quantity: item.quantity,
+            airport_icao: item.airport_icao,
+            weight_kg: item.weight_kg,
+            tier: item.tier,
+          }));
+        }
+        console.log("[ServiceAdapter] Solo/offline: using local company inventory");
+        return localMarketService.getCompanyInventory();
+      },
+
       getAirportInventory: (icao: string) => localMarketService.getAirportInventory(icao),
-      getAirportInventoryRaw: (icao: string) => localMarketService.getAirportInventoryRaw(icao),
-      getMarketListings: (tier?: number | null, limit?: number) => localMarketService.getMarketListings(tier, limit),
-      buyItem: (locationId: string, itemId: string, qty: number, payFrom: "player" | "company") =>
-        localMarketService.buyItem(locationId, itemId, qty, payFrom),
+
+      /**
+       * Get airport inventory with containers (for cargo UI) - routes based on game mode
+       * SOLO: Local containers from IndexedDB
+       * ONLINE: Containers from SEED server
+       */
+      getAirportInventoryRaw: async (icao: string) => {
+        // CRITICAL: Check if mode initialization is complete
+        if (!isModeInitialized()) {
+          console.warn("[ServiceAdapter] Mode not initialized yet - returning empty airport inventory");
+          return { containers: [] };
+        }
+
+        if (isOnlineMode() && NetworkState.isOnline()) {
+          console.log("[ServiceAdapter] Online mode: fetching airport inventory from SEED");
+          return SyncService.getAirportInventoryRaw(icao);
+        }
+        console.log("[ServiceAdapter] Solo/offline: using local airport inventory");
+        return localMarketService.getAirportInventoryRaw(icao);
+      },
+
+      /**
+       * Get market listings - routes based on game mode
+       * SOLO: Local AI market (unlimited stock, fixed prices)
+       * ONLINE: SEED market (player-driven economy)
+       */
+      getMarketListings: async (tier?: number | null, limit?: number): Promise<MarketListing[]> => {
+        // CRITICAL: Check if mode initialization is complete
+        if (!isModeInitialized()) {
+          console.warn("[ServiceAdapter] Mode not initialized yet - returning empty market listings");
+          return [];
+        }
+
+        // V3.0: Online mode uses SEED market orders
+        if (isOnlineMode() && NetworkState.isOnline()) {
+          console.log("[ServiceAdapter] Online mode: fetching market from SEED");
+          const orders = await SyncService.getMarketOrders();
+
+          // Convert MarketOrder to MarketListing format
+          const listings: MarketListing[] = orders.map((order: MarketOrder) => ({
+            location_id: `seed_${order.id}`, // Prefix with seed_ for buyItem routing
+            airport_ident: order.airport_ident,
+            company_id: order.seller_id,
+            company_name: order.seller_name,
+            item_id: order.item_id,
+            item_code: order.item_id,
+            item_name: order.item_name,
+            item_tier: order.item_tier,
+            item_icon: null,
+            sale_price: order.price_per_unit,
+            sale_qty: order.quantity,
+          }));
+
+          // Apply tier filter if specified
+          let filtered = listings;
+          if (tier !== null && tier !== undefined) {
+            filtered = filtered.filter(l => l.item_tier === tier);
+          }
+
+          // Apply limit
+          if (limit) {
+            filtered = filtered.slice(0, limit);
+          }
+
+          console.log(`[ServiceAdapter] SEED market: ${filtered.length} listings`);
+          return filtered;
+        }
+
+        // Solo mode or offline: use local market (AI traders)
+        console.log("[ServiceAdapter] Solo/offline mode: using local market");
+        return localMarketService.getMarketListings(tier, limit);
+      },
+
+      /**
+       * Buy item from market - routes based on game mode
+       * SOLO: Local transaction (deduct local money, add to local inventory)
+       * ONLINE: SEED transaction (server validates and processes)
+       */
+      buyItem: async (locationId: string, itemId: string, qty: number, payFrom: "player" | "company"): Promise<void> => {
+        // CRITICAL: Check if mode initialization is complete
+        if (!isModeInitialized()) {
+          throw new Error("Mode not initialized - cannot buy items yet");
+        }
+
+        // V3.0: Online mode with seed_ prefix uses SEED directly
+        if (isOnlineMode() && locationId.startsWith("seed_") && NetworkState.isOnline()) {
+          console.log("[ServiceAdapter] Online mode: buying via SEED");
+          const seedOrderId = locationId.replace("seed_", "");
+          const player = await DatabaseManager.getPlayer();
+          if (!player) throw new Error("No player found");
+
+          const buyerId = payFrom === "player"
+            ? player.id
+            : (await DatabaseManager.getCompanyByOwner(player.id))?.id;
+          if (!buyerId) throw new Error("No buyer ID found");
+
+          const success = await SyncService.buyMarketOrder(seedOrderId, buyerId, qty);
+          if (!success) {
+            throw new Error("SEED purchase failed");
+          }
+
+          // Reload player data from SEED to get updated balance
+          const updatedPlayer = await SyncService.getPlayer();
+          if (updatedPlayer) {
+            player.money = updatedPlayer.money;
+            player.xp = updatedPlayer.xp;
+            await DatabaseManager.savePlayer(player);
+            console.log(`[ServiceAdapter] Player balance updated from SEED: ${player.money}`);
+          }
+
+          // Persist to native storage (survives MSFS restarts)
+          await DatabaseManager.forceSave();
+          return;
+        }
+
+        // Solo mode or local orders: use local market service
+        console.log("[ServiceAdapter] Solo/local mode: buying locally");
+        return localMarketService.buyItem(locationId, itemId, qty, payFrom);
+      },
+
       sellItem: (icao: string, itemCode: string, qty: number, pricePerUnit: number) =>
         localMarketService.sellItem(icao, itemCode, qty, pricePerUnit),
       getCompanyInfo: () => localMarketService.getCompanyInfo(),
@@ -174,6 +421,8 @@ class ServiceAdapterClass {
       getCompanyFleet: () => localMarketService.getCompanyFleet(),
       getPlayerBalance: () => localMarketService.getPlayerBalance(),
       getCompanyBalance: () => localMarketService.getCompanyBalance(),
+      transferToCompany: (amount: number) => localMarketService.transferToCompany(amount),
+      transferFromCompany: (amount: number) => localMarketService.transferFromCompany(amount),
     };
   }
 
@@ -493,8 +742,25 @@ class ServiceAdapterClass {
           // Update local player balance
           const player = await DatabaseManager.getPlayer();
           if (player) {
+            const previousBalance = player.money;
             player.money = result.new_balance;
             await DatabaseManager.savePlayer(player);
+
+            // V4.1: Log transaction (only if cost > 0)
+            if (result.cost > 0) {
+              const aircraft = await DatabaseManager.get<Aircraft>("aircraft", aircraftId);
+              const airportIcao = (aircraft as any)?.location_icao || "";
+              await DatabaseManager.saveTransaction({
+                timestamp: new Date().toISOString(),
+                type: "refuel",
+                amount: -result.cost,
+                balance_after: result.new_balance,
+                wallet: "player",
+                description: `Refuel ${result.gallons_added.toFixed(0)} gal`,
+                related_id: aircraftId,
+                airport_icao: airportIcao,
+              });
+            }
           }
 
           // Update local aircraft fuel
@@ -609,11 +875,23 @@ class ServiceAdapterClass {
           (session as any).ended_at = new Date().toISOString();
           await DatabaseManager.put("free_flight_sessions", session);
 
-          // Award XP
+          // Award XP - mode-aware logic
           const player = await DatabaseManager.getPlayer();
           if (player && (session as any).xp_earned > 0) {
-            player.xp += (session as any).xp_earned;
-            await DatabaseManager.savePlayer(player);
+            if (isSoloMode()) {
+              // SOLO: Add XP locally (no anti-cheat)
+              player.xp += (session as any).xp_earned;
+              await DatabaseManager.savePlayer(player);
+            } else if (isOnlineMode()) {
+              // ONLINE: XP should come from SEED server
+              // TODO [SPEC-FF-XP]: Implement SEED endpoint free-flight-end
+              // For now, add locally but mark as pending sync
+              console.warn(`[ServiceAdapter] ONLINE mode: Free flight XP added locally (${(session as any).xp_earned} XP) - pending SEED endpoint`);
+              player.xp += (session as any).xp_earned;
+              await DatabaseManager.savePlayer(player);
+              (session as any).pending_sync = true;
+              await DatabaseManager.put("free_flight_sessions", session);
+            }
           }
         }
         return session;

@@ -117,17 +117,33 @@ class PersistenceManagerClass {
     const player = await DatabaseManager.getPlayer();
 
     if (player) {
-      // Update auth state with local player info
+      // Load career stats for profile display
+      const careerStats = await DatabaseManager.getOrCreatePilotCareerStats(player.id);
+
+      // Update auth state with local player info (including career stats)
       // P2P mode: auto-login with local player data
       authState.isLoggedIn.set(true);
       authState.currentUser.set({
-        id: 0, // Local P2P mode - no server ID
+        id: player.id,
         username: player.name,
-        email: "", // No email in P2P mode
+        email: player.email || "",
+        xp: player.xp,
+        money: player.money,
+        nationality: player.nationality,
+        preferred_airport: player.preferred_airport,
+        current_airport: player.current_airport,  // V4.1: Current position
+        last_latitude: player.last_latitude,      // V4.1: Map marker fallback
+        last_longitude: player.last_longitude,    // V4.1: Map marker fallback
+        career_stats: {
+          total_missions: careerStats.total_missions,
+          total_flight_time_minutes: careerStats.total_flight_time_minutes,
+          total_distance_nm: careerStats.total_distance_nm,
+          average_grade: careerStats.average_grade,
+        },
       });
 
-      console.log(`[PersistenceManager] Loaded player: ${player.name} (XP: ${player.xp}, Money: ${player.money})`);
-      console.log(`[PersistenceManager] Auto-login enabled for P2P mode`);
+      console.log(`[PersistenceManager] Loaded player: ${player.name} (XP: ${player.xp}, Money: ${player.money}, Current: ${player.current_airport || "?"}, Pos: ${player.last_latitude?.toFixed(2) || "?"}, ${player.last_longitude?.toFixed(2) || "?"})`);
+      console.log(`[PersistenceManager] Career stats: ${careerStats.total_missions} missions, ${careerStats.total_flight_time_minutes}min flight time`);
     }
 
     return player;
@@ -230,9 +246,10 @@ class PersistenceManagerClass {
       freeFlightState.isTracking.set(true);
       freeFlightState.sessionId.set(session.id);
       freeFlightState.flightTimeMinutes.set(session.flight_time_minutes);
-      freeFlightState.distanceNm.set(session.distance_nm);
+      freeFlightState.distanceFlownNm.set(session.distance_nm);
       freeFlightState.landingsCount.set(session.landings_count);
-      freeFlightState.xpEarned.set(session.xp_earned);
+      freeFlightState.ffXpEarned.set(session.xp_earned);
+      freeFlightState.departureAirport.set(session.start_airport || "");
       console.log(`[PersistenceManager] Loaded active free flight session`);
     }
   }
@@ -266,15 +283,15 @@ class PersistenceManagerClass {
     });
     this.subscriptions.push({ destroy: () => ffSub });
 
-    // Aircraft fuel changes (save after refuel)
-    const aircraftSub = hangarState.hangarSelectedAircraft.sub((aircraft) => {
-      if (aircraft) {
-        this.debouncedSave("aircraft", async () => {
-          await this.saveAircraft(aircraft as any);
-        });
-      }
-    });
-    this.subscriptions.push({ destroy: () => aircraftSub });
+    // REMOVED: This subscription was CORRUPTING aircraft data!
+    // hangarSelectedAircraft contains AircraftDetails (UI display object),
+    // NOT Aircraft (database object). Saving it would:
+    // - Divide condition by 100 on each click (100 → 1.0 → 0.01)
+    // - Replace systems object with string status fields
+    // - Lose many required fields
+    //
+    // Aircraft fuel/location updates should be done via explicit calls to
+    // DatabaseManager.updateAircraftFuel() or DatabaseManager.put("aircraft", ...)
 
     // Company balance changes
     const companySub = companyState.companyBalance.sub((balance) => {
@@ -341,12 +358,12 @@ class PersistenceManagerClass {
       id: sessionId,
       player_id: this.currentPlayerId,
       aircraft_id: missionState.selectedAircraftId.get() || "",
-      start_airport: freeFlightState.startAirport.get() || "",
+      start_airport: freeFlightState.departureAirport.get() || "",
       end_airport: null,
       flight_time_minutes: freeFlightState.flightTimeMinutes.get(),
-      distance_nm: freeFlightState.distanceNm.get(),
+      distance_nm: freeFlightState.distanceFlownNm.get(),
       landings_count: freeFlightState.landingsCount.get(),
-      xp_earned: freeFlightState.xpEarned.get(),
+      xp_earned: freeFlightState.ffXpEarned.get(),
       started_at: new Date().toISOString(),
       ended_at: null,
     };

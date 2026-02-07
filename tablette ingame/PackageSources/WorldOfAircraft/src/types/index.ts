@@ -6,13 +6,30 @@
 // ═══════════════════════════════════════════════════════════
 // TAB NAVIGATION TYPES
 // ═══════════════════════════════════════════════════════════
-export type TabType = "map" | "profile" | "missions" | "create-mission" | "company" | "market" | "inventory" | "hangar" | "settings";
-export type ProfileSubTab = "apercu" | "licences" | "inventaire" | "transactions" | "messagerie" | "social";
+export type TabType = "map" | "profile" | "missions" | "contrats" | "company" | "market" | "hangar" | "settings";
+export type ProfileSubTab = "apercu" | "certifications" | "inventaire" | "historique" | "messagerie" | "social";
 export type MissionsSubTab = "apercu" | "creation" | "historique";
-export type CompanySubTab = "apercu" | "personnel" | "messagerie" | "flotte" | "inventaire" | "usines" | "droits";
+export type ContratsSubTab = "dashboard" | "mes-contrats" | "en-cours";
+export type CompanySubTab = "overview" | "membres" | "inventaire" | "historique" | "messagerie";
+export type MarketSubTab = "inventory" | "achats" | "mes-ventes" | "avions" | "historique";
 
 // Flight mode type (for distinguishing mission vs free flight)
 export type FlightMode = "mission" | "free_flight";
+
+// Company role types (Phase 4)
+export type CompanyRole = "ceo" | "officer" | "pilot" | "recruit";
+
+// Company message (Phase 4)
+export interface CompanyMessage {
+  id: string;
+  company_id: string;
+  sender_id: string;
+  sender_name: string;
+  content: string;
+  is_system: boolean;
+  is_pinned: boolean;
+  created_at: string;
+}
 
 // ═══════════════════════════════════════════════════════════
 // USER & AUTHENTICATION
@@ -21,6 +38,29 @@ export interface UserInfo {
   id: number | string;  // number for network mode, string (UUID) for P2P mode
   username: string;
   email: string;
+  // Extended fields for profile display
+  xp?: number;
+  money?: number;
+  nationality?: string;
+  preferred_airport?: string;   // Home base ICAO
+  current_airport?: string;     // V4.1: Current position ICAO
+  last_latitude?: number;       // V4.1: Last known GPS latitude (for map marker fallback)
+  last_longitude?: number;      // V4.1: Last known GPS longitude (for map marker fallback)
+  // Career stats (populated from PilotCareerStats)
+  career_stats?: {
+    total_missions: number;
+    total_flight_time_minutes: number;
+    total_distance_nm: number;
+    average_grade?: string;
+  };
+}
+
+// Level calculation result
+export interface LevelInfo {
+  level: number;
+  currentXp: number;
+  nextLevelXp: number;
+  progress: number;  // 0-100
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -72,6 +112,7 @@ export interface HangarAircraftItem {
   required_license: string | null;
   owner_type: string;
   thumbnail_url?: string | null;
+  for_sale?: boolean;
 }
 
 export interface MissionAircraftInfo {
@@ -247,6 +288,8 @@ export interface AirportInventoryItem {
   weight_kg: number;
   location_id: string;
   location_name: string;
+  owner_type?: "player" | "company";  // V4.1: Ownership tag
+  category?: string;                   // V4.1: Item category (e.g. "personnel")
 }
 
 export interface ProfileInventoryItem {
@@ -256,6 +299,8 @@ export interface ProfileInventoryItem {
   quantity: number;
   airport_icao: string;
   tier?: number;
+  owner_type?: "player" | "company";  // V4.1: Ownership tag (default "player")
+  category?: string;                   // V4.1: Item category (material, product, personnel)
 }
 
 export interface AircraftCargoItem {
@@ -365,7 +410,7 @@ export interface CompanyMember {
   user_id: string;
   username: string;
   email: string;
-  role: string;
+  role: CompanyRole | string;
 }
 
 export interface CompanyFleetItem {
@@ -427,3 +472,57 @@ export type MissionCreationStatus = "idle" | "loading" | "creating" | "success" 
 // INTERNATIONALIZATION
 // ═══════════════════════════════════════════════════════════
 export type Language = "en" | "fr" | "de" | "es" | "ru";
+
+// ═══════════════════════════════════════════════════════════
+// FLIGHT HISTORY (V2.0)
+// ═══════════════════════════════════════════════════════════
+
+export type FlightHistoryFilter = "all" | "mission" | "freeflight";
+
+// V4.1: Unified history filter (flights + transactions)
+export type UnifiedHistoryFilter = "all" | "flights" | "transactions" | "contracts";
+
+export interface FlightHistoryEntry {
+  id: string;                    // UUID unique
+  type: "mission" | "freeflight"; // Flight type
+  date: number;                  // Timestamp (Date.now())
+
+  // Route
+  departure_icao: string;
+  arrival_icao: string;
+  distance_nm: number;
+  flight_time_minutes: number;
+
+  // Aircraft
+  aircraft_id: string;
+  aircraft_type: string;         // Ex: "C172", "A320"
+  aircraft_reg: string;          // Ex: "F-ABCD"
+
+  // Scoring
+  score_total: number;
+  grade: string;                 // S/A/B/C/D/F
+  landing_fpm: number;
+  max_gforce: number;
+
+  // Result
+  xp_earned: number;
+  money_earned: number;          // 0 for freeflight, >0 for missions
+
+  // Active bonuses (for detailed display)
+  bonuses: {
+    real_time: boolean;
+    night: boolean;
+    atc: boolean;
+    fuel_eco: boolean;
+    no_autopilot: boolean;
+    bad_weather: boolean;
+  };
+
+  // Weather
+  weather_visibility_nm: number;
+  weather_wind_kts: number;
+
+  // ATC
+  atc_compliance: number;
+  atc_violations: number;
+}

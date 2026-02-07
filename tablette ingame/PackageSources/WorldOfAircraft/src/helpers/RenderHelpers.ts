@@ -3,6 +3,9 @@
  * Pure functions that generate HTML strings for dynamic UI updates
  */
 
+import { getRoleBadgeColor, getRoleLabel } from "./CompanyPermissions";
+import { formatMoney } from "./PlayerHelpers";
+
 // ═══════════════════════════════════════════════════════════
 // TYPES
 // ═══════════════════════════════════════════════════════════
@@ -40,6 +43,7 @@ export interface MarketListingItem {
 }
 
 export interface CompanyMemberItem {
+  user_id: string;
   username: string;
   role: string;
 }
@@ -150,7 +154,7 @@ export function renderMarketListingsHtml(
             </div>
           </div>
           <div style="text-align: right;">
-            <div style="font-size: 14px; font-weight: 700; color: #22c55e;">${item.sale_price.toLocaleString()} CR</div>
+            <div style="font-size: 14px; font-weight: 700; color: #22c55e;">${formatMoney(item.sale_price)}</div>
             <div style="font-size: 10px; color: #6b7280;">${item.sale_qty} ${availableLabel}</div>
           </div>
         </div>
@@ -161,21 +165,44 @@ export function renderMarketListingsHtml(
 
 /**
  * Render company members list HTML
+ * CSS classes for event binding:
+ * - .role-select - Role change dropdown (data-user-id, value)
  */
 export function renderCompanyMembersHtml(
   members: CompanyMemberItem[],
-  emptyMessage: string
+  emptyMessage: string,
+  currentUserId?: string,
+  isSoloMode?: boolean
 ): string {
   if (members.length === 0) {
     return `<div style="color: #6b7280; font-size: 11px; text-align: center; padding: 16px;">${emptyMessage}</div>`;
   }
 
-  return members.map(m => `
+  const isCeo = members.some(m => m.user_id === currentUserId && (m.role === "ceo" || m.role === "owner"));
+
+  return members.map(m => {
+    const badgeColor = getRoleBadgeColor(m.role);
+    const badgeLabel = getRoleLabel(m.role);
+    const isSelf = m.user_id === currentUserId;
+
+    let roleHtml: string;
+    if (isCeo && !isSelf && !isSoloMode) {
+      roleHtml = `
+        <select class="role-select" data-user-id="${m.user_id}" style="background: #0d0d14; color: ${badgeColor}; border: 1px solid ${badgeColor}40; border-radius: 4px; font-size: 10px; padding: 2px 4px; text-transform: uppercase; cursor: pointer;">
+          <option value="officer" ${m.role === "officer" ? 'selected' : ''} style="color: #3b82f6;">OFFICER</option>
+          <option value="pilot" ${m.role === "pilot" ? 'selected' : ''} style="color: #22c55e;">PILOT</option>
+          <option value="recruit" ${m.role === "recruit" ? 'selected' : ''} style="color: #6b7280;">RECRUIT</option>
+        </select>`;
+    } else {
+      roleHtml = `<span style="font-size: 10px; color: ${badgeColor}; background: ${badgeColor}20; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; font-weight: 600;">${badgeLabel}</span>`;
+    }
+
+    return `
     <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: #1a1a24; border-radius: 6px; margin-bottom: 6px;">
-      <span style="font-size: 12px; color: white;">${m.username}</span>
-      <span style="font-size: 10px; color: ${m.role === "owner" ? "#f59e0b" : "#6b7280"}; text-transform: uppercase;">${m.role}</span>
-    </div>
-  `).join("");
+      <span style="font-size: 12px; color: white;">${m.username}${isSelf ? ' <span style="color: #6b7280; font-size: 10px;">(vous)</span>' : ''}</span>
+      ${roleHtml}
+    </div>`;
+  }).join("");
 }
 
 /**

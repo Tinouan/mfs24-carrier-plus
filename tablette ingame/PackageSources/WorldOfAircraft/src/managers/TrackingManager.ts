@@ -13,7 +13,7 @@
 import { Subject } from "@microsoft/msfs-sdk";
 import { FLIGHT_TRACKING_INTERVAL_MS, BACKGROUND_TRACKING_INTERVAL_MS } from "../constants";
 import { MissionRouter } from "../services";
-import { authState } from "../state/AuthState";
+import { isGameReady } from "../state/GameModeState";
 import type { ActiveMission, MissionCheckpoint, MissionAircraftInfo, LandingRating } from "../types";
 
 // Declare SimVar for TypeScript
@@ -80,7 +80,6 @@ export interface BackgroundTrackingState {
 }
 
 export interface TrackingCallbacks {
-  getAuthToken: () => string | null;
   getActiveMission: () => ActiveMission | null;
   getMissionCheckpoints: () => MissionCheckpoint[];
   getMissionAircraft: () => MissionAircraftInfo | null;
@@ -635,25 +634,26 @@ class TrackingManager {
       this.currentProgressPercent = Math.min(Math.max(0, progressPct), 100);
 
       // ========== FLIGHT PHASE DETECTION (V2.2) ==========
+      // Text labels for Coherent GT compatibility (emojis render as black squares)
       let phase: "taxi_out" | "climb" | "cruise" | "descent" | "taxi_in" = "cruise";
-      let phaseIcon = "✈️";
+      let phaseIcon = "[CRS]";
       let phaseText = this.callbacks.t("missions", "cruising");
       let phaseColor = "#22c55e";
 
       if (onGround && this.currentProgressPercent < 10) {
-        phase = "taxi_out"; phaseIcon = "🛫";
+        phase = "taxi_out"; phaseIcon = "[DEP]";
         phaseText = this.callbacks.t("missions", "taxiing"); phaseColor = "#22c55e";
       } else if (onGround && this.currentProgressPercent >= 10) {
-        phase = "taxi_in"; phaseIcon = "🛬";
+        phase = "taxi_in"; phaseIcon = "[ARR]";
         phaseText = this.callbacks.t("missions", "taxiing"); phaseColor = "#22c55e";
       } else if (vs > 300 && this.currentProgressPercent < 30) {
-        phase = "climb"; phaseIcon = "🛫";
+        phase = "climb"; phaseIcon = "[DEP]";
         phaseText = this.callbacks.t("missions", "climbing"); phaseColor = "#f59e0b";
       } else if (vs < -300 && this.currentProgressPercent > 70) {
-        phase = "descent"; phaseIcon = "🛬";
+        phase = "descent"; phaseIcon = "[ARR]";
         phaseText = this.callbacks.t("missions", "descending"); phaseColor = "#f59e0b";
       } else if (this.currentProgressPercent > 90) {
-        phase = "descent"; phaseIcon = "🛬";
+        phase = "descent"; phaseIcon = "[ARR]";
         phaseText = this.callbacks.t("missions", "descending"); phaseColor = "#f59e0b";
       }
 
@@ -833,9 +833,7 @@ class TrackingManager {
     if (!this.callbacks) return;
 
     const mission = this.callbacks.getActiveMission();
-    const token = this.callbacks.getAuthToken();
-    // P2P mode doesn't require token
-    if (!mission || (!authState.isP2PMode.get() && !token)) return;
+    if (!mission || !isGameReady()) return;
 
     const checkpoints = this.callbacks.getMissionCheckpoints();
     if (!checkpoints || checkpoints.length === 0) return;
@@ -965,10 +963,7 @@ class TrackingManager {
 
     const mission = this.callbacks.getActiveMission();
     if (mission) return;
-
-    const token = this.callbacks.getAuthToken();
-    // P2P mode doesn't require token
-    if (!authState.isP2PMode.get() && !token) return;
+    if (!isGameReady()) return;
 
     try {
       // Read SimVars

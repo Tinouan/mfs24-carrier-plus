@@ -4,7 +4,10 @@
  */
 import { FSComponent, VNode, Subject, MappedSubject, NodeReference } from "@microsoft/msfs-sdk";
 import { Button } from "@efb/efb-api";
-import type { Language, MarketListing, MarketBuyItem, CompanyInfo } from "../types";
+import type { Language, MarketListing, MarketBuyItem, CompanyInfo, MarketSubTab, CompanyRole } from "../types";
+import type { SellableItem, SellAircraftData } from "../state/MarketState";
+import { hasCompanyPermission } from "../helpers/CompanyPermissions";
+import { formatMoney } from "../helpers/PlayerHelpers";
 
 // Import translations
 import frTranslations from "../locales/fr.json";
@@ -28,8 +31,10 @@ export interface MarketViewProps {
   activeTab: Subject<string>;
   currentLanguage: Subject<Language>;
   isLoggedIn: Subject<boolean>;
+  marketSubTab: Subject<MarketSubTab>;
   walletPersonal: Subject<number>;
   companyData: Subject<CompanyInfo | null>;
+  playerRole: Subject<CompanyRole>;
   marketTierFilter: Subject<number | null>;
   marketIcaoFilter: Subject<string>;
   marketIcaoFilterRef: NodeReference<HTMLInputElement>;
@@ -50,6 +55,39 @@ export interface MarketViewProps {
   onUpdateMarketBuyQty: (qty: number) => void;
   onCloseMarketBuyPopup: () => void;
   onConfirmMarketBuy: () => void;
+  // V4.1: Sell orders props
+  mySellOrdersRef: NodeReference<HTMLDivElement>;
+  onFetchMySellOrders: () => void;
+  onCancelSellOrder: (orderId: string) => void;
+  // V4.1: Aircraft catalog props
+  aircraftCatalogRef: NodeReference<HTMLDivElement>;
+  myAircraftForSaleRef: NodeReference<HTMLDivElement>;
+  aircraftCategoryFilter: Subject<string>;
+  onFetchAircraftCatalog: () => void;
+  onPurchaseAircraft: (catalogId: string, ownerType: "player" | "company") => void;
+  onSellAircraft: (aircraftId: string) => void;
+  // V4.1: Market inventory props
+  marketInventoryListRef: NodeReference<HTMLDivElement>;
+  marketInvIcaoFilterRef: NodeReference<HTMLInputElement>;
+  marketInvItemFilterRef: NodeReference<HTMLInputElement>;
+  marketInvIcaoFilter: Subject<string>;
+  marketInvItemFilter: Subject<string>;
+  marketInvTierFilter: Subject<number | null>;
+  marketInvOwnerFilter: Subject<"all" | "player" | "company">;
+  onFetchMarketInventory: () => void;
+  // V4.1: Sell item popup
+  showSellItemPopup: Subject<boolean>;
+  sellItemPopupRef: NodeReference<HTMLDivElement>;
+  onOpenSellItemPopup: (itemCode?: string, airportIcao?: string) => void;
+  onCloseSellItemPopup: () => void;
+  // V4.1: Aircraft sell choice popup
+  showSellAircraftPopup: Subject<boolean>;
+  sellAircraftPopupRef: NodeReference<HTMLDivElement>;
+  onCloseSellAircraftPopup: () => void;
+  // V4.1: History (moved from Profile)
+  flightHistoryRef: NodeReference<HTMLDivElement>;
+  flightHistoryLoading: Subject<boolean>;
+  onFetchFlightHistory: () => void;
 }
 
 /**
@@ -60,8 +98,10 @@ export function renderMarketTab(props: MarketViewProps): VNode {
     activeTab,
     currentLanguage,
     isLoggedIn,
+    marketSubTab,
     walletPersonal,
     companyData,
+    playerRole,
     marketTierFilter,
     marketIcaoFilter,
     marketIcaoFilterRef,
@@ -82,16 +122,230 @@ export function renderMarketTab(props: MarketViewProps): VNode {
     onUpdateMarketBuyQty,
     onCloseMarketBuyPopup,
     onConfirmMarketBuy,
+    // V4.1: Sell orders
+    mySellOrdersRef,
+    onFetchMySellOrders,
+    onCancelSellOrder,
+    // V4.1: Aircraft catalog
+    aircraftCatalogRef,
+    myAircraftForSaleRef,
+    aircraftCategoryFilter,
+    onFetchAircraftCatalog,
+    onPurchaseAircraft,
+    onSellAircraft,
+    // V4.1: Market inventory
+    marketInventoryListRef,
+    marketInvIcaoFilterRef,
+    marketInvItemFilterRef,
+    marketInvIcaoFilter,
+    marketInvItemFilter,
+    marketInvTierFilter,
+    marketInvOwnerFilter,
+    onFetchMarketInventory,
+    // V4.1: Sell item popup
+    showSellItemPopup,
+    sellItemPopupRef,
+    onOpenSellItemPopup,
+    onCloseSellItemPopup,
+    // V4.1: Aircraft sell choice popup
+    showSellAircraftPopup,
+    sellAircraftPopupRef,
+    onCloseSellAircraftPopup,
+    // V4.1: History (moved from Profile)
+    flightHistoryRef,
+    flightHistoryLoading,
+    onFetchFlightHistory,
   } = props;
 
   return (
     <div>
       {/* Market (HV) Tab Content */}
       <div style={activeTab.map(t => t === "market"
-        ? "position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow-y: auto; display: flex; flex-direction: column;"
+        ? "position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden; display: flex; flex-direction: column;"
         : "display: none;")}>
-        <div style="padding: 16px; color: white; overflow-y: auto;">
-          <h2 style="font-size: 16px; font-weight: 600; color: #60a5fa; margin: 0 0 16px 0;">Hotel des Ventes</h2>
+
+        {/* Market Sub-Tabs Header (centered) */}
+        <div style="display: flex; justify-content: center; align-items: center; padding: 10px 12px; background: #252532; border-bottom: 1px solid #374151; flex-shrink: 0;">
+          <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+            <Button callback={(): void => marketSubTab.set("inventory")}>
+              <div style={marketSubTab.map(t => t === "inventory"
+                ? "padding: 6px 12px; background: #3b82f6; border: 1px solid #3b82f6; border-radius: 6px; font-size: 11px; color: white; font-weight: 600;"
+                : "padding: 6px 12px; background: rgba(59, 130, 246, 0.2); border: 1px solid #3b82f6; border-radius: 6px; font-size: 11px; color: white;")}>
+                {currentLanguage.map(l => translations[l].inventory.title)}
+              </div>
+            </Button>
+            <Button callback={(): void => marketSubTab.set("achats")}>
+              <div style={marketSubTab.map(t => t === "achats"
+                ? "padding: 6px 12px; background: #3b82f6; border: 1px solid #3b82f6; border-radius: 6px; font-size: 11px; color: white; font-weight: 600;"
+                : "padding: 6px 12px; background: rgba(59, 130, 246, 0.2); border: 1px solid #3b82f6; border-radius: 6px; font-size: 11px; color: white;")}>
+                {currentLanguage.map(l => l === "fr" ? "Achats" : "Buy")}
+              </div>
+            </Button>
+            <Button callback={(): void => marketSubTab.set("mes-ventes")}>
+              <div style={marketSubTab.map(t => t === "mes-ventes"
+                ? "padding: 6px 12px; background: #3b82f6; border: 1px solid #3b82f6; border-radius: 6px; font-size: 11px; color: white; font-weight: 600;"
+                : "padding: 6px 12px; background: rgba(59, 130, 246, 0.2); border: 1px solid #3b82f6; border-radius: 6px; font-size: 11px; color: white;")}>
+                {currentLanguage.map(l => translations[l].market.mySales)}
+              </div>
+            </Button>
+            <Button callback={(): void => marketSubTab.set("avions")}>
+              <div style={marketSubTab.map(t => t === "avions"
+                ? "padding: 6px 12px; background: #3b82f6; border: 1px solid #3b82f6; border-radius: 6px; font-size: 11px; color: white; font-weight: 600;"
+                : "padding: 6px 12px; background: rgba(59, 130, 246, 0.2); border: 1px solid #3b82f6; border-radius: 6px; font-size: 11px; color: white;")}>
+                {currentLanguage.map(l => l === "fr" ? "Avions" : "Aircraft")}
+              </div>
+            </Button>
+            <Button callback={(): void => { marketSubTab.set("historique"); onFetchFlightHistory(); }}>
+              <div style={marketSubTab.map(t => t === "historique"
+                ? "padding: 6px 12px; background: #3b82f6; border: 1px solid #3b82f6; border-radius: 6px; font-size: 11px; color: white; font-weight: 600;"
+                : "padding: 6px 12px; background: rgba(59, 130, 246, 0.2); border: 1px solid #3b82f6; border-radius: 6px; font-size: 11px; color: white;")}>
+                {currentLanguage.map(l => translations[l].history.title)}
+              </div>
+            </Button>
+          </div>
+        </div>
+
+        {/* Market Sub-Tab Content */}
+        <div style="flex: 1; overflow-y: auto;">
+
+        {/* Inventory Sub-Tab */}
+        <div style={marketSubTab.map(t => t === "inventory" ? "padding: 16px; color: white;" : "display: none;")}>
+          {/* Not logged in */}
+          <div style={isLoggedIn.map(l => l ? "display: none;" : "display: block;")}>
+            <div style="background: rgba(245, 158, 11, 0.15); border: 1px solid #f59e0b; border-radius: 8px; padding: 16px; text-align: center;">
+              <div style="color: #f59e0b; font-size: 13px; font-weight: 600;">{currentLanguage.map(l => translations[l].missions.loginRequired)}</div>
+            </div>
+          </div>
+
+          {/* Logged in content */}
+          <div style={isLoggedIn.map(l => l ? "display: block;" : "display: none;")}>
+            {/* Wallets Header */}
+            <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+              <div style="flex: 1; background: #252532; border-radius: 8px; padding: 10px;">
+                <div style="font-size: 10px; color: #6b7280; text-transform: uppercase; margin-bottom: 4px;">{currentLanguage.map(l => translations[l].inventory.personal)}</div>
+                <div style="font-size: 14px; font-weight: 700; color: #22c55e;">
+                  {walletPersonal.map(w => formatMoney(w))}
+                </div>
+              </div>
+              <div style="flex: 1; background: #252532; border-radius: 8px; padding: 10px;">
+                <div style="font-size: 10px; color: #6b7280; text-transform: uppercase; margin-bottom: 4px;">{currentLanguage.map(l => translations[l].inventory.company)}</div>
+                <div style="font-size: 14px; font-weight: 700; color: #3b82f6;">
+                  {companyData.map(c => c ? formatMoney(c.balance) : "0 CR")}
+                </div>
+              </div>
+            </div>
+
+            {/* Filters */}
+            <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+              <div style="flex: 1;">
+                <input
+                  ref={marketInvIcaoFilterRef}
+                  type="text"
+                  placeholder={currentLanguage.map(l => l === "fr" ? "Aeroport (ICAO)..." : "Airport (ICAO)...")}
+                  value={marketInvIcaoFilter}
+                  maxLength={4}
+                  style="width: 100%; padding: 8px 12px; background: #252532; border: 1px solid #374151; border-radius: 6px; color: white; font-size: 12px; font-family: monospace; text-transform: uppercase; outline: none; box-sizing: border-box;"
+                  onkeydown={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+                  onkeyup={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+                  onkeypress={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+                />
+              </div>
+              <div style="flex: 1;">
+                <input
+                  ref={marketInvItemFilterRef}
+                  type="text"
+                  placeholder={currentLanguage.map(l => l === "fr" ? "Nom d'item..." : "Item name...")}
+                  value={marketInvItemFilter}
+                  style="width: 100%; padding: 8px 12px; background: #252532; border: 1px solid #374151; border-radius: 6px; color: white; font-size: 12px; outline: none; box-sizing: border-box;"
+                  onkeydown={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+                  onkeyup={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+                  onkeypress={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+                />
+              </div>
+            </div>
+
+            {/* Owner filter */}
+            <div style="display: flex; gap: 4px; margin-bottom: 8px; flex-wrap: wrap;">
+              <Button callback={(): void => { marketInvOwnerFilter.set("all"); onFetchMarketInventory(); }}>
+                <div style={marketInvOwnerFilter.map(o => o === "all"
+                  ? "padding: 6px 10px; background: #3b82f6; color: white; border-radius: 6px; font-size: 10px; font-weight: 600;"
+                  : "padding: 6px 10px; background: #252532; color: #6b7280; border-radius: 6px; font-size: 10px;")}>
+                  {currentLanguage.map(l => translations[l].common.all)}
+                </div>
+              </Button>
+              <Button callback={(): void => { marketInvOwnerFilter.set("player"); onFetchMarketInventory(); }}>
+                <div style={marketInvOwnerFilter.map(o => o === "player"
+                  ? "padding: 6px 10px; background: #22c55e; color: white; border-radius: 6px; font-size: 10px; font-weight: 600;"
+                  : "padding: 6px 10px; background: #252532; color: #22c55e; border-radius: 6px; font-size: 10px;")}>
+                  {currentLanguage.map(l => translations[l].inventory.personal)}
+                </div>
+              </Button>
+              <Button callback={(): void => { marketInvOwnerFilter.set("company"); onFetchMarketInventory(); }}>
+                <div style={marketInvOwnerFilter.map(o => o === "company"
+                  ? "padding: 6px 10px; background: #f59e0b; color: white; border-radius: 6px; font-size: 10px; font-weight: 600;"
+                  : "padding: 6px 10px; background: #252532; color: #f59e0b; border-radius: 6px; font-size: 10px;")}>
+                  {currentLanguage.map(l => translations[l].inventory.company)}
+                </div>
+              </Button>
+            </div>
+
+            {/* Tier filters */}
+            <div style="display: flex; gap: 4px; margin-bottom: 12px; flex-wrap: wrap;">
+              <Button callback={(): void => { marketInvTierFilter.set(null); onFetchMarketInventory(); }}>
+                <div style={marketInvTierFilter.map(t => t === null
+                  ? "padding: 6px 10px; background: #3b82f6; color: white; border-radius: 6px; font-size: 10px; font-weight: 600;"
+                  : "padding: 6px 10px; background: #252532; color: #6b7280; border-radius: 6px; font-size: 10px;")}>
+                  {currentLanguage.map(l => translations[l].common.all)}
+                </div>
+              </Button>
+              <Button callback={(): void => { marketInvTierFilter.set(0); onFetchMarketInventory(); }}>
+                <div style={marketInvTierFilter.map(t => t === 0
+                  ? "padding: 6px 10px; background: #6b7280; color: white; border-radius: 6px; font-size: 10px; font-weight: 600;"
+                  : "padding: 6px 10px; background: #252532; color: #6b7280; border-radius: 6px; font-size: 10px;")}>
+                  T0
+                </div>
+              </Button>
+              <Button callback={(): void => { marketInvTierFilter.set(1); onFetchMarketInventory(); }}>
+                <div style={marketInvTierFilter.map(t => t === 1
+                  ? "padding: 6px 10px; background: #22c55e; color: white; border-radius: 6px; font-size: 10px; font-weight: 600;"
+                  : "padding: 6px 10px; background: #252532; color: #22c55e; border-radius: 6px; font-size: 10px;")}>
+                  T1
+                </div>
+              </Button>
+              <Button callback={(): void => { marketInvTierFilter.set(2); onFetchMarketInventory(); }}>
+                <div style={marketInvTierFilter.map(t => t === 2
+                  ? "padding: 6px 10px; background: #3b82f6; color: white; border-radius: 6px; font-size: 10px; font-weight: 600;"
+                  : "padding: 6px 10px; background: #252532; color: #3b82f6; border-radius: 6px; font-size: 10px;")}>
+                  T2
+                </div>
+              </Button>
+              <Button callback={(): void => { marketInvTierFilter.set(3); onFetchMarketInventory(); }}>
+                <div style={marketInvTierFilter.map(t => t === 3
+                  ? "padding: 6px 10px; background: #a855f7; color: white; border-radius: 6px; font-size: 10px; font-weight: 600;"
+                  : "padding: 6px 10px; background: #252532; color: #a855f7; border-radius: 6px; font-size: 10px;")}>
+                  T3
+                </div>
+              </Button>
+            </div>
+
+            {/* Inventory list (dynamic via ref) */}
+            <div ref={marketInventoryListRef} style="margin-bottom: 16px;">
+              <div style="background: #252532; border-radius: 8px; padding: 16px; text-align: center;">
+                <div style="color: #6b7280; font-size: 11px;">{currentLanguage.map(l => translations[l].common.loading)}</div>
+              </div>
+            </div>
+
+            {/* Refresh button */}
+            <Button callback={(): void => { onFetchMarketInventory(); }}>
+              <div style="background: #3b82f6; color: white; padding: 10px; border-radius: 8px; text-align: center; font-size: 11px; font-weight: 500;">
+                {currentLanguage.map(l => translations[l].common.refresh)}
+              </div>
+            </Button>
+          </div>
+        </div>
+
+        {/* Achats Sub-Tab */}
+        <div style={marketSubTab.map(t => t === "achats" ? "padding: 16px; color: white;" : "display: none;")}>
 
           {/* Not logged in message */}
           <div style={isLoggedIn.map(l => l ? "display: none;" : "display: block;")}>
@@ -113,13 +367,13 @@ export function renderMarketTab(props: MarketViewProps): VNode {
               <div style="flex: 1; background: #252532; border-radius: 8px; padding: 10px;">
                 <div style="font-size: 10px; color: #6b7280; text-transform: uppercase; margin-bottom: 4px;">{currentLanguage.map(l => translations[l].inventory.personal)}</div>
                 <div style="font-size: 14px; font-weight: 700; color: #22c55e;">
-                  {walletPersonal.map(w => `${w.toLocaleString()} CR`)}
+                  {walletPersonal.map(w => formatMoney(w))}
                 </div>
               </div>
               <div style="flex: 1; background: #252532; border-radius: 8px; padding: 10px;">
                 <div style="font-size: 10px; color: #6b7280; text-transform: uppercase; margin-bottom: 4px;">{currentLanguage.map(l => translations[l].inventory.company)}</div>
                 <div style="font-size: 14px; font-weight: 700; color: #3b82f6;">
-                  {companyData.map(c => c ? `${c.balance.toLocaleString()} CR` : "0 CR")}
+                  {companyData.map(c => c ? formatMoney(c.balance) : "0 CR")}
                 </div>
               </div>
             </div>
@@ -232,6 +486,185 @@ export function renderMarketTab(props: MarketViewProps): VNode {
             </div>
           </div>
         </div>
+
+        {/* Mes Ventes Sub-Tab */}
+        <div style={marketSubTab.map(t => t === "mes-ventes" ? "padding: 16px; color: white;" : "display: none;")}>
+          {/* Not logged in */}
+          <div style={isLoggedIn.map(l => l ? "display: none;" : "display: block;")}>
+            <div style="background: rgba(245, 158, 11, 0.15); border: 1px solid #f59e0b; border-radius: 8px; padding: 16px; text-align: center;">
+              <div style="color: #f59e0b; font-size: 13px; font-weight: 600;">{currentLanguage.map(l => translations[l].missions.loginRequired)}</div>
+            </div>
+          </div>
+
+          {/* Logged in content */}
+          <div style={isLoggedIn.map(l => l ? "display: block;" : "display: none;")}>
+            {/* Wallets Header */}
+            <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+              <div style="flex: 1; background: #252532; border-radius: 8px; padding: 10px;">
+                <div style="font-size: 10px; color: #6b7280; text-transform: uppercase; margin-bottom: 4px;">{currentLanguage.map(l => translations[l].inventory.personal)}</div>
+                <div style="font-size: 14px; font-weight: 700; color: #22c55e;">
+                  {walletPersonal.map(w => formatMoney(w))}
+                </div>
+              </div>
+              <div style="flex: 1; background: #252532; border-radius: 8px; padding: 10px;">
+                <div style="font-size: 10px; color: #6b7280; text-transform: uppercase; margin-bottom: 4px;">{currentLanguage.map(l => translations[l].inventory.company)}</div>
+                <div style="font-size: 14px; font-weight: 700; color: #3b82f6;">
+                  {companyData.map(c => c ? formatMoney(c.balance) : "0 CR")}
+                </div>
+              </div>
+            </div>
+
+            {/* Active orders section */}
+            <div style="font-size: 11px; font-weight: 600; color: #9ca3af; text-transform: uppercase; margin-bottom: 8px;">
+              {currentLanguage.map(l => translations[l].market.activeOrders)}
+            </div>
+
+            {/* Sell orders list (dynamic via ref) */}
+            <div ref={mySellOrdersRef} style="margin-bottom: 16px;">
+              <div style="background: #252532; border-radius: 8px; padding: 16px; text-align: center;">
+                <div style="color: #6b7280; font-size: 11px;">{currentLanguage.map(l => translations[l].common.loading)}</div>
+              </div>
+            </div>
+
+            {/* Refresh button */}
+            <Button callback={(): void => { onFetchMySellOrders(); }}>
+              <div style="background: #3b82f6; color: white; padding: 10px; border-radius: 8px; text-align: center; font-size: 11px; font-weight: 500;">
+                {currentLanguage.map(l => translations[l].common.refresh)}
+              </div>
+            </Button>
+          </div>
+        </div>
+
+        {/* Avions Sub-Tab */}
+        <div style={marketSubTab.map(t => t === "avions" ? "padding: 16px; color: white;" : "display: none;")}>
+          {/* Not logged in */}
+          <div style={isLoggedIn.map(l => l ? "display: none;" : "display: block;")}>
+            <div style="background: rgba(245, 158, 11, 0.15); border: 1px solid #f59e0b; border-radius: 8px; padding: 16px; text-align: center;">
+              <div style="color: #f59e0b; font-size: 13px; font-weight: 600;">{currentLanguage.map(l => translations[l].missions.loginRequired)}</div>
+            </div>
+          </div>
+
+          {/* Logged in content */}
+          <div style={isLoggedIn.map(l => l ? "display: block;" : "display: none;")}>
+            {/* Wallets Header */}
+            <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+              <div style="flex: 1; background: #252532; border-radius: 8px; padding: 10px;">
+                <div style="font-size: 10px; color: #6b7280; text-transform: uppercase; margin-bottom: 4px;">{currentLanguage.map(l => translations[l].inventory.personal)}</div>
+                <div style="font-size: 14px; font-weight: 700; color: #22c55e;">
+                  {walletPersonal.map(w => formatMoney(w))}
+                </div>
+              </div>
+              <div style="flex: 1; background: #252532; border-radius: 8px; padding: 10px;">
+                <div style="font-size: 10px; color: #6b7280; text-transform: uppercase; margin-bottom: 4px;">{currentLanguage.map(l => translations[l].inventory.company)}</div>
+                <div style="font-size: 14px; font-weight: 700; color: #3b82f6;">
+                  {companyData.map(c => c ? formatMoney(c.balance) : "0 CR")}
+                </div>
+              </div>
+            </div>
+
+            {/* Category filter */}
+            <div style="display: flex; gap: 4px; margin-bottom: 12px; flex-wrap: wrap;">
+              <Button callback={(): void => { aircraftCategoryFilter.set("all"); onFetchAircraftCatalog(); }}>
+                <div style={aircraftCategoryFilter.map(c => c === "all"
+                  ? "padding: 6px 10px; background: #3b82f6; color: white; border-radius: 6px; font-size: 10px; font-weight: 600;"
+                  : "padding: 6px 10px; background: #252532; color: #6b7280; border-radius: 6px; font-size: 10px;")}>
+                  {currentLanguage.map(l => translations[l].common.all)}
+                </div>
+              </Button>
+              <Button callback={(): void => { aircraftCategoryFilter.set("single_piston"); onFetchAircraftCatalog(); }}>
+                <div style={aircraftCategoryFilter.map(c => c === "single_piston"
+                  ? "padding: 6px 10px; background: #22c55e; color: white; border-radius: 6px; font-size: 10px; font-weight: 600;"
+                  : "padding: 6px 10px; background: #252532; color: #22c55e; border-radius: 6px; font-size: 10px;")}>
+                  PPL
+                </div>
+              </Button>
+              <Button callback={(): void => { aircraftCategoryFilter.set("turboprop"); onFetchAircraftCatalog(); }}>
+                <div style={aircraftCategoryFilter.map(c => c === "turboprop"
+                  ? "padding: 6px 10px; background: #f59e0b; color: white; border-radius: 6px; font-size: 10px; font-weight: 600;"
+                  : "padding: 6px 10px; background: #252532; color: #f59e0b; border-radius: 6px; font-size: 10px;")}>
+                  Turbo
+                </div>
+              </Button>
+              <Button callback={(): void => { aircraftCategoryFilter.set("jet_small"); onFetchAircraftCatalog(); }}>
+                <div style={aircraftCategoryFilter.map(c => c === "jet_small"
+                  ? "padding: 6px 10px; background: #a855f7; color: white; border-radius: 6px; font-size: 10px; font-weight: 600;"
+                  : "padding: 6px 10px; background: #252532; color: #a855f7; border-radius: 6px; font-size: 10px;")}>
+                  Jet
+                </div>
+              </Button>
+              <Button callback={(): void => { aircraftCategoryFilter.set("helicopter"); onFetchAircraftCatalog(); }}>
+                <div style={aircraftCategoryFilter.map(c => c === "helicopter"
+                  ? "padding: 6px 10px; background: #ef4444; color: white; border-radius: 6px; font-size: 10px; font-weight: 600;"
+                  : "padding: 6px 10px; background: #252532; color: #ef4444; border-radius: 6px; font-size: 10px;")}>
+                  Heli
+                </div>
+              </Button>
+            </div>
+
+            {/* Aircraft catalog section */}
+            <div style="font-size: 11px; font-weight: 600; color: #9ca3af; text-transform: uppercase; margin-bottom: 8px;">
+              {currentLanguage.map(l => translations[l].market.aircraftCatalog)}
+            </div>
+
+            {/* Aircraft catalog list (dynamic via ref) */}
+            <div ref={aircraftCatalogRef} style="margin-bottom: 16px; max-height: 300px; overflow-y: auto;">
+              <div style="background: #252532; border-radius: 8px; padding: 16px; text-align: center;">
+                <div style="color: #6b7280; font-size: 11px;">{currentLanguage.map(l => translations[l].common.loading)}</div>
+              </div>
+            </div>
+
+            {/* My aircraft for sale section */}
+            <div style="font-size: 11px; font-weight: 600; color: #9ca3af; text-transform: uppercase; margin-bottom: 8px; margin-top: 16px;">
+              {currentLanguage.map(l => translations[l].market.myAircraftForSale)}
+            </div>
+
+            {/* My aircraft list (dynamic via ref) */}
+            <div ref={myAircraftForSaleRef} style="margin-bottom: 16px;">
+              <div style="background: #252532; border-radius: 8px; padding: 16px; text-align: center;">
+                <div style="color: #6b7280; font-size: 11px;">{currentLanguage.map(l => translations[l].common.loading)}</div>
+              </div>
+            </div>
+
+            {/* Refresh button */}
+            <Button callback={(): void => { onFetchAircraftCatalog(); }}>
+              <div style="background: #3b82f6; color: white; padding: 10px; border-radius: 8px; text-align: center; font-size: 11px; font-weight: 500;">
+                {currentLanguage.map(l => translations[l].common.refresh)}
+              </div>
+            </Button>
+          </div>
+        </div>
+
+        {/* Historique Sub-Tab (moved from Profile) */}
+        <div style={marketSubTab.map(t => t === "historique" ? "padding: 16px; color: white;" : "display: none;")}>
+          {/* Not logged in */}
+          <div style={isLoggedIn.map(l => l ? "display: none;" : "display: block;")}>
+            <div style="background: rgba(245, 158, 11, 0.15); border: 1px solid #f59e0b; border-radius: 8px; padding: 16px; text-align: center;">
+              <div style="color: #f59e0b; font-size: 13px; font-weight: 600;">{currentLanguage.map(l => translations[l].missions.loginRequired)}</div>
+            </div>
+          </div>
+
+          {/* Logged in content */}
+          <div style={isLoggedIn.map(l => l ? "display: block;" : "display: none;")}>
+            {/* Title */}
+            <div style="font-size: 12px; font-weight: 600; color: #9ca3af; text-transform: uppercase; margin-bottom: 12px;">
+              {currentLanguage.map(l => translations[l].history.title)}
+            </div>
+
+            {/* Loading state */}
+            <div style={flightHistoryLoading.map(l => l ? "display: flex; justify-content: center; padding: 24px;" : "display: none;")}>
+              <div style="color: #9ca3af; font-size: 12px;">{currentLanguage.map(l => translations[l].common.loading)}</div>
+            </div>
+
+            {/* History List (rendered via innerHTML) */}
+            <div style={flightHistoryLoading.map(l => l ? "display: none;" : "display: block;")}>
+              <div ref={flightHistoryRef}>
+                {/* Content will be rendered via innerHTML */}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        </div>{/* End Market Sub-Tab Content */}
       </div>
 
       {/* Market Buy Popup */}
@@ -258,7 +691,7 @@ export function renderMarketTab(props: MarketViewProps): VNode {
             </div>
             <div style="display: flex; justify-content: space-between; margin-top: 8px;">
               <span style="font-size: 12px; color: #9ca3af;">{currentLanguage.map(l => translations[l].market.unitPrice)}:</span>
-              <span style="font-size: 12px; font-weight: 600; color: #22c55e;">{marketBuyItem.map(i => i ? `${i.sale_price.toLocaleString()} CR` : "")}</span>
+              <span style="font-size: 12px; font-weight: 600; color: #22c55e;">{marketBuyItem.map(i => i ? formatMoney(i.sale_price) : "")}</span>
             </div>
             <div style="display: flex; justify-content: space-between;">
               <span style="font-size: 12px; color: #9ca3af;">{currentLanguage.map(l => translations[l].common.available)}:</span>
@@ -285,30 +718,21 @@ export function renderMarketTab(props: MarketViewProps): VNode {
             </div>
           </div>
 
-          {/* Wallet selector */}
+          {/* V4.1: Wallet balances display */}
           <div style="margin-bottom: 16px;">
-            <div style="font-size: 11px; color: #6b7280; margin-bottom: 6px;">{currentLanguage.map(l => translations[l].market.payWith)}</div>
             <div style="display: flex; gap: 8px;">
-              <Button callback={(): void => { marketBuyWallet.set("company"); }}>
-                <div style={marketBuyWallet.map(w => w === "company"
-                  ? "flex: 1; padding: 10px; background: rgba(59, 130, 246, 0.2); border: 1px solid #3b82f6; border-radius: 6px; text-align: center;"
-                  : "flex: 1; padding: 10px; background: #1a1a24; border: 1px solid #374151; border-radius: 6px; text-align: center;")}>
-                  <div style="font-size: 10px; color: #6b7280;">{currentLanguage.map(l => translations[l].hangar.companyOwned)}</div>
-                  <div style={marketBuyWallet.map(w => w === "company" ? "font-size: 12px; font-weight: 600; color: #3b82f6;" : "font-size: 12px; color: #9ca3af;")}>
-                    {companyData.map(c => c ? `${c.balance.toLocaleString()} CR` : "0 CR")}
-                  </div>
+              <div style="flex: 1; padding: 10px; background: #1a1a24; border: 1px solid #3b82f6; border-radius: 6px; text-align: center;">
+                <div style="font-size: 10px; color: #6b7280;">{currentLanguage.map(l => l === "fr" ? "Perso" : "Personal")}</div>
+                <div style="font-size: 12px; font-weight: 600; color: #3b82f6;">
+                  {walletPersonal.map(w => formatMoney(w))}
                 </div>
-              </Button>
-              <Button callback={(): void => { marketBuyWallet.set("player"); }}>
-                <div style={marketBuyWallet.map(w => w === "player"
-                  ? "flex: 1; padding: 10px; background: rgba(34, 197, 94, 0.2); border: 1px solid #22c55e; border-radius: 6px; text-align: center;"
-                  : "flex: 1; padding: 10px; background: #1a1a24; border: 1px solid #374151; border-radius: 6px; text-align: center;")}>
-                  <div style="font-size: 10px; color: #6b7280;">{currentLanguage.map(l => translations[l].hangar.personal)}</div>
-                  <div style={marketBuyWallet.map(w => w === "player" ? "font-size: 12px; font-weight: 600; color: #22c55e;" : "font-size: 12px; color: #9ca3af;")}>
-                    {walletPersonal.map(w => `${w.toLocaleString()} CR`)}
-                  </div>
+              </div>
+              <div style="flex: 1; padding: 10px; background: #1a1a24; border: 1px solid #f59e0b; border-radius: 6px; text-align: center;">
+                <div style="font-size: 10px; color: #6b7280;">{currentLanguage.map(l => l === "fr" ? "Company" : "Company")}</div>
+                <div style="font-size: 12px; font-weight: 600; color: #f59e0b;">
+                  {companyData.map(c => c ? formatMoney(c.balance) : "- CR")}
                 </div>
-              </Button>
+              </div>
             </div>
           </div>
 
@@ -317,23 +741,78 @@ export function renderMarketTab(props: MarketViewProps): VNode {
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <span style="font-size: 12px; color: #9ca3af;">{currentLanguage.map(l => translations[l].common.total)}:</span>
               <span style="font-size: 16px; font-weight: 700; color: #f59e0b;">
-                {marketBuyTotal.map(t => `${t.toLocaleString()} CR`)}
+                {marketBuyTotal.map(t => formatMoney(t))}
               </span>
             </div>
           </div>
 
-          {/* Buttons */}
-          <div style="display: flex; gap: 8px;">
+          {/* V4.1: Two buy buttons (perso/company) */}
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; gap: 8px;">
+              {/* Buy Personal - always enabled if enough funds */}
+              <Button callback={(): void => { marketBuyWallet.set("player"); onConfirmMarketBuy(); }}>
+                <div style={MappedSubject.create(([total, wallet]) => wallet >= total
+                  ? "flex: 1; padding: 12px; background: #3b82f6; color: white; border-radius: 8px; text-align: center; font-size: 12px; font-weight: 600;"
+                  : "flex: 1; padding: 12px; background: #374151; color: #6b7280; border-radius: 8px; text-align: center; font-size: 12px; opacity: 0.5; pointer-events: none;",
+                  marketBuyTotal, walletPersonal)}>
+                  {currentLanguage.map(l => l === "fr" ? "Acheter perso" : "Buy personal")}
+                </div>
+              </Button>
+              {/* Buy Company - disabled if no company, insufficient funds, or no permission */}
+              <Button callback={(): void => { marketBuyWallet.set("company"); onConfirmMarketBuy(); }}>
+                <div style={MappedSubject.create(([total, company, role]) => {
+                  const canBuy = company && company.balance >= total && hasCompanyPermission(role, "market_buy");
+                  return canBuy
+                    ? "flex: 1; padding: 12px; background: #f59e0b; color: #1a1a24; border-radius: 8px; text-align: center; font-size: 12px; font-weight: 600;"
+                    : "flex: 1; padding: 12px; background: #374151; color: #6b7280; border-radius: 8px; text-align: center; font-size: 12px; opacity: 0.4; pointer-events: none;";
+                }, marketBuyTotal, companyData, playerRole)}>
+                  {currentLanguage.map(l => l === "fr" ? "Acheter company" : "Buy company")}
+                </div>
+              </Button>
+            </div>
             <Button callback={(): void => { onCloseMarketBuyPopup(); }}>
-              <div style="flex: 1; padding: 12px; background: #374151; color: #9ca3af; border-radius: 8px; text-align: center; font-size: 12px;">
+              <div style="width: 100%; padding: 10px; background: #374151; color: #9ca3af; border-radius: 8px; text-align: center; font-size: 11px;">
                 {currentLanguage.map(l => translations[l].common.cancel)}
               </div>
             </Button>
-            <Button callback={(): void => { onConfirmMarketBuy(); }}>
-              <div style="flex: 1; padding: 12px; background: #22c55e; color: white; border-radius: 8px; text-align: center; font-size: 12px; font-weight: 600;">
-                {currentLanguage.map(l => translations[l].common.confirm)}
+          </div>
+        </div>
+      </div>
+
+      {/* Sell Item Popup */}
+      <div style={showSellItemPopup.map(s => s
+        ? "position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px;"
+        : "display: none;")}>
+        <div style="background: #252532; border-radius: 12px; padding: 20px; width: 100%; max-width: 320px; max-height: 90vh; overflow-y: auto;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3 style="font-size: 14px; font-weight: 600; color: white; margin: 0;">{currentLanguage.map(l => translations[l].market.postSale)}</h3>
+            <Button callback={(): void => { onCloseSellItemPopup(); }}>
+              <div style="width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; color: #6b7280; font-size: 18px;">
+                x
               </div>
             </Button>
+          </div>
+          <div ref={sellItemPopupRef}>
+            {/* Dynamic content rendered via innerHTML */}
+          </div>
+        </div>
+      </div>
+
+      {/* Aircraft Sell Choice Popup */}
+      <div style={showSellAircraftPopup.map(s => s
+        ? "position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px;"
+        : "display: none;")}>
+        <div style="background: #252532; border-radius: 12px; padding: 20px; width: 100%; max-width: 320px; max-height: 90vh; overflow-y: auto;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3 style="font-size: 14px; font-weight: 600; color: white; margin: 0;">{currentLanguage.map(l => translations[l].market.sellAircraft)}</h3>
+            <Button callback={(): void => { onCloseSellAircraftPopup(); }}>
+              <div style="width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; color: #6b7280; font-size: 18px;">
+                x
+              </div>
+            </Button>
+          </div>
+          <div ref={sellAircraftPopupRef}>
+            {/* Dynamic content rendered via innerHTML */}
           </div>
         </div>
       </div>

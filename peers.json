@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "lastUpdated": "2026-02-02",
+  "shards": [
+    {
+      "id": "seed",
+      "name": "SEED (Backup)",
+      "host": "carrier-plus.synology.me",
+      "port": 7777,
+      "region": "EU",
+      "permanent": true,
+      "priority": 999,
+      "description": "NAS seed server - always online backup"
+    },
+    {
+      "id": "eu-1",
+      "name": "Europe 1",
+      "host": "dynamic",
+      "port": 7777,
+      "region": "EU",
+      "permanent": false,
+      "priority": 1,
+      "description": "Dynamic host elected from EU players"
+    },
+    {
+      "id": "us-1",
+      "name": "North America 1",
+      "host": "dynamic",
+      "port": 7777,
+      "region": "US",
+      "permanent": false,
+      "priority": 2,
+      "description": "Dynamic host elected from US players"
+    },
+    {
+      "id": "asia-1",
+      "name": "Asia Pacific 1",
+      "host": "dynamic",
+      "port": 7777,
+      "region": "ASIA",
+      "permanent": false,
+      "priority": 3,
+      "description": "Dynamic host elected from ASIA players"
+    }
+  ],
+  "regionPriority": {
+    "EU": ["eu-1", "us-1", "seed"],
+    "US": ["us-1", "eu-1", "seed"],
+    "ASIA": ["asia-1", "us-1", "eu-1", "seed"]
+  },
+  "config": {
+    "maxPlayersPerShard": 100,
+    "syncIntervalMs": 5000,
+    "pingTimeoutMs": 5000,
+    "reconnectDelayMs": 10000,
+    "electionTimeoutMs": 30000
+  }
+}

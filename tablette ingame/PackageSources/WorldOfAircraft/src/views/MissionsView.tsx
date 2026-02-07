@@ -95,6 +95,17 @@ export interface MissionsViewProps {
   airportInventoryRef: NodeReference<HTMLDivElement>;
   aircraftCargoRef: NodeReference<HTMLDivElement>;
 
+  // V4.1: Cargo source filter
+  cargoSourceFilter: Subject<"player" | "company">;
+  onSetCargoSourceFilter: (filter: "player" | "company") => void;
+
+  // V4.1: Passengers
+  aircraftPassengerSeats: Subject<number>;
+  aircraftPassengerCount: Subject<number>;
+  aircraftPassengerWeight: Subject<number>;
+  airportPassengersRef: NodeReference<HTMLDivElement>;
+  aircraftPassengersRef: NodeReference<HTMLDivElement>;
+
   // Mission creation - Step 3 (Flight Plan)
   creationStep3Valid: Subject<boolean>;
   fpValidated: Subject<boolean>;
@@ -122,6 +133,11 @@ export interface MissionsViewProps {
   // Mission recap popup
   showMissionRecap: Subject<boolean>;
   missionRecapData: Subject<MissionRecapData | null>;
+
+  // Mission history
+  missionHistoryRef: NodeReference<HTMLDivElement>;
+  missionHistoryLoading: Subject<boolean>;
+  onFetchMissionHistory: () => void;
 
   // Callbacks
   onCancelMission: () => Promise<void>;
@@ -186,6 +202,13 @@ export function renderMissionsTab(props: MissionsViewProps): VNode {
     cargoLoading,
     airportInventoryRef,
     aircraftCargoRef,
+    cargoSourceFilter,
+    onSetCargoSourceFilter,
+    aircraftPassengerSeats,
+    aircraftPassengerCount,
+    aircraftPassengerWeight,
+    airportPassengersRef,
+    aircraftPassengersRef,
     creationStep3Valid,
     fpValidated,
     fpHasActivePlan,
@@ -206,6 +229,9 @@ export function renderMissionsTab(props: MissionsViewProps): VNode {
     cargoPopupQtyRef,
     showMissionRecap,
     missionRecapData,
+    missionHistoryRef,
+    missionHistoryLoading,
+    onFetchMissionHistory,
     onCancelMission,
     onValidateCargoStep,
     onModifyCargoStep,
@@ -320,7 +346,7 @@ export function renderMissionsTab(props: MissionsViewProps): VNode {
                 <div style={creationStep1Valid.map(v => v
                   ? "font-size: 14px; color: #22c55e;"
                   : "font-size: 14px; color: #6b7280;")}>
-                  {creationStep1Valid.map(v => v ? "✓" : "○")}
+                  {creationStep1Valid.map(v => v ? "[OK]" : "[ ]")}
                 </div>
               </div>
 
@@ -465,7 +491,7 @@ export function renderMissionsTab(props: MissionsViewProps): VNode {
                 <div style={creationStep2Valid.map(v => v
                   ? "font-size: 14px; color: #22c55e;"
                   : "font-size: 14px; color: #6b7280;")}>
-                  {creationStep2Valid.map(v => v ? "✓" : "○")}
+                  {creationStep2Valid.map(v => v ? "[OK]" : "[ ]")}
                 </div>
               </div>
 
@@ -485,6 +511,27 @@ export function renderMissionsTab(props: MissionsViewProps): VNode {
                   {/* Loading indicator */}
                   <div style={cargoLoading.map(l => l ? "text-align: center; padding: 8px; color: #60a5fa; font-size: 11px;" : "display: none;")}>
                     {currentLanguage.map(l => translations[l].common.loading)}
+                  </div>
+
+                  {/* V4.1: Cargo source filter toggle */}
+                  <div style={cargoLoading.map(l => l ? "display: none;" : "display: flex; align-items: center; gap: 8px; margin-bottom: 8px;")}>
+                    <div style="font-size: 9px; color: #6b7280;">{currentLanguage.map(l => translations[l].inventory?.loadFrom || "Load from")}</div>
+                    <div style="display: flex; gap: 4px;">
+                      <Button callback={(): void => onSetCargoSourceFilter("player")}>
+                        <div style={cargoSourceFilter.map(f => f === "player"
+                          ? "padding: 4px 10px; background: #3b82f6; border-radius: 4px; font-size: 10px; color: white; font-weight: 600;"
+                          : "padding: 4px 10px; background: rgba(59, 130, 246, 0.2); border: 1px solid #3b82f6; border-radius: 4px; font-size: 10px; color: #3b82f6;")}>
+                          {currentLanguage.map(l => translations[l].inventory?.personal || "Personal")}
+                        </div>
+                      </Button>
+                      <Button callback={(): void => onSetCargoSourceFilter("company")}>
+                        <div style={cargoSourceFilter.map(f => f === "company"
+                          ? "padding: 4px 10px; background: #f59e0b; border-radius: 4px; font-size: 10px; color: #1a1a24; font-weight: 600;"
+                          : "padding: 4px 10px; background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; border-radius: 4px; font-size: 10px; color: #f59e0b;")}>
+                          {currentLanguage.map(l => translations[l].company?.tabTitle || "Company")}
+                        </div>
+                      </Button>
+                    </div>
                   </div>
 
                   {/* Two column layout */}
@@ -522,6 +569,51 @@ export function renderMissionsTab(props: MissionsViewProps): VNode {
                       const color = pct > 90 ? "#ef4444" : pct > 70 ? "#f59e0b" : "#22c55e";
                       return `width: ${pct}%; height: 100%; background: ${color}; transition: width 0.3s;`;
                     })}>
+                    </div>
+                  </div>
+
+                  {/* V4.1: PASSENGERS SECTION */}
+                  <div style={cargoLoading.map(l => l ? "display: none;" : "margin-top: 12px; border-top: 1px solid #374151; padding-top: 12px;")}>
+                    {/* Section header with seats count */}
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                      <div style="font-size: 10px; font-weight: 600; color: #a855f7;">
+                        {currentLanguage.map(l => translations[l].missions?.passengers || "Passengers")}
+                      </div>
+                      <div style="font-size: 10px; color: #a855f7;">
+                        {currentLanguage.map(l => translations[l].missions?.seats || "Seats")}: {aircraftPassengerCount} / {aircraftPassengerSeats}
+                      </div>
+                    </div>
+
+                    {/* Two column layout for passengers */}
+                    <div style="display: flex; gap: 8px;">
+                      {/* Left: Airport personnel */}
+                      <div style="flex: 1; background: #1a1a24; border-radius: 6px; padding: 8px; max-height: 80px; overflow-y: auto;">
+                        <div style="font-size: 9px; color: #6b7280; text-transform: uppercase; margin-bottom: 6px; text-align: center;">
+                          {currentLanguage.map(l => translations[l].missions?.atAirport || "At airport")}
+                        </div>
+                        <div ref={airportPassengersRef}>
+                          <div style="color: #9ca3af; font-size: 10px; text-align: center; padding: 4px;">
+                            -
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right: Aircraft passengers */}
+                      <div style="flex: 1; background: #1a1a24; border-radius: 6px; padding: 8px; max-height: 80px; overflow-y: auto;">
+                        <div style="font-size: 9px; color: #6b7280; text-transform: uppercase; margin-bottom: 6px; text-align: center;">
+                          {currentLanguage.map(l => translations[l].missions?.inAircraft || "In aircraft")}
+                        </div>
+                        <div ref={aircraftPassengersRef}>
+                          <div style="color: #9ca3af; font-size: 10px; text-align: center; padding: 4px;">
+                            -
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Passenger weight */}
+                    <div style="margin-top: 6px; text-align: right; font-size: 9px; color: #9ca3af;">
+                      {currentLanguage.map(l => translations[l].missions?.passengerWeight || "Pax weight")}: {aircraftPassengerWeight.map(w => w.toFixed(0))} kg
                     </div>
                   </div>
 
@@ -569,7 +661,7 @@ export function renderMissionsTab(props: MissionsViewProps): VNode {
                 <div style={creationStep3Valid.map(v => v
                   ? "font-size: 14px; color: #22c55e;"
                   : "font-size: 14px; color: #6b7280;")}>
-                  {creationStep3Valid.map(v => v ? "✓" : "○")}
+                  {creationStep3Valid.map(v => v ? "[OK]" : "[ ]")}
                 </div>
               </div>
 
@@ -793,15 +885,42 @@ export function renderMissionsTab(props: MissionsViewProps): VNode {
 
           {/* Logged in content */}
           <div style={isLoggedIn.map(l => l ? "display: block;" : "display: none;")}>
-            <div style="background: #252532; border-radius: 12px; padding: 24px; text-align: center;">
-              <svg style="width: 40px; height: 40px; margin-bottom: 12px; opacity: 0.4;" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="1.5">
-                <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/>
-                <rect x="9" y="3" width="6" height="4" rx="1"/>
-                <path d="M9 12h6"/>
-                <path d="M9 16h6"/>
-              </svg>
-              <div style="color: #6b7280; font-size: 12px;">{currentLanguage.map(l => translations[l].company.missionHistory)}</div>
-              <div style="color: #4b5563; font-size: 10px; margin-top: 4px;">{t("profile", "comingSoon")}</div>
+            {/* Title */}
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <div style="font-size: 12px; font-weight: 600; color: #9ca3af; text-transform: uppercase;">
+                {currentLanguage.map(l => translations[l].company.missionHistory)}
+              </div>
+            </div>
+
+            {/* Loading state */}
+            <div style={missionHistoryLoading.map(l => l ? "display: flex; justify-content: center; padding: 24px;" : "display: none;")}>
+              <div style="color: #9ca3af; font-size: 12px;">{currentLanguage.map(l => translations[l].common.loading)}</div>
+            </div>
+
+            {/* History list */}
+            <div style={missionHistoryLoading.map(l => l ? "display: none;" : "display: block;")}>
+              <div ref={missionHistoryRef}>
+                <div style="background: #252532; border-radius: 12px; padding: 24px; text-align: center;">
+                  <svg style="width: 40px; height: 40px; margin-bottom: 12px; opacity: 0.4;" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="1.5">
+                    <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/>
+                    <rect x="9" y="3" width="6" height="4" rx="1"/>
+                    <path d="M9 12h6"/>
+                    <path d="M9 16h6"/>
+                  </svg>
+                  <div style="color: #6b7280; font-size: 12px;">{currentLanguage.map(l => translations[l].common.loading)}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Refresh button */}
+            <div style="margin-top: 12px;">
+              <Button callback={(): void => { onFetchMissionHistory(); }} disabled={missionHistoryLoading}>
+                <div style={missionHistoryLoading.map(l => l
+                  ? "background: #374151; color: #6b7280; padding: 10px; border-radius: 8px; text-align: center; font-size: 11px;"
+                  : "background: #3b82f6; color: white; padding: 10px; border-radius: 8px; text-align: center; font-size: 11px; font-weight: 500;")}>
+                  {MappedSubject.create(([loading, lang]) => loading ? translations[lang].common.loading : translations[lang].common.refresh, missionHistoryLoading, currentLanguage)}
+                </div>
+              </Button>
             </div>
           </div>
         </div>

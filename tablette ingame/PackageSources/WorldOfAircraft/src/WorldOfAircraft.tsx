@@ -48,13 +48,14 @@ import type {
   CompanyMember,
   RepairQuote,
   MissionCompleteResponse,
+  FlightHistoryEntry,
 } from "./types";
 import {
   REFUEL_PRICE_PER_GALLON,
   FLIGHT_TRACKING_INTERVAL_MS,
   SIMVAR_UPDATE_INTERVAL_MS,
 } from "./constants";
-// V3.0: Service Routers - P2P local mode only
+// V3.0: Service Routers - route to IndexedDB (Solo) or SEED (Online)
 import { FleetRouter, MissionRouter, MarketRouter, WorldRouter, PlayerRouter, FreeFlightRouter } from "./services";
 
 // V2.0: Managers for business logic
@@ -69,12 +70,12 @@ import { DatabaseManager } from "./managers/DatabaseManager";
 import { SyncService } from "./services/SyncService";
 import { SyncManager } from "./services/SyncManager";
 import { NetworkState } from "./state/NetworkState";
+import { isGameReady, isSoloMode } from "./state/GameModeState";
 import { NativePersistence } from "./services/NativePersistence";
 
 // Render helpers for DOM updates
 import {
   renderAirportsListHtml,
-  renderInventoryListHtml,
   renderMarketListingsHtml,
   renderCompanyMembersHtml,
   renderCompanyFleetHtml,
@@ -93,11 +94,29 @@ import {
   renderAircraftCargoHtml,
   type AirportInventoryItem,
   type AircraftCargoItem,
+  // V4.1: Passengers render helpers
+  renderAirportPassengersHtml,
+  renderAircraftPassengersHtml,
+  type PassengerItem,
   // V2.3: Mission render helpers
   renderMissionAircraftInfoHtml,
   type MissionAircraftData,
   type MissionAircraftTranslations,
   type MissionAircraftInfoState,
+  // V2.4: Free flight render helpers
+  renderFreeFlightRecapHtml,
+  renderFlightHistoryHtml,
+  type FreeFlightRecapTranslations,
+  type FlightHistoryTranslations,
+  // V4.1: Specialized history renderers
+  renderTransactionsHistoryHtml,
+  renderFlightsHistoryHtml,
+  type UnifiedTimelineEntry,
+  type UnifiedHistoryTranslations,
+  // V4.2: Company render helpers
+  renderCompanyMessagesHtml,
+  hasCompanyPermission,
+  formatMoney,
 } from "./helpers";
 
 // Popup HTML generators and UI components
@@ -120,13 +139,13 @@ import {
 // V1.8: All tab views extracted for maintainability
 import { renderSettingsTab } from "./views/SettingsView";
 import { renderProfileTab } from "./views/ProfileView";
-import { renderInventoryTab } from "./views/InventoryView";
 import { renderMarketTab } from "./views/MarketView";
 import { renderHangarTab } from "./views/HangarView";
 import { renderMapTab } from "./views/MapView";
 import { renderCompanyTab } from "./views/CompanyView";
 import { renderMissionsTab } from "./views/MissionsView";
 import type { CargoPopupItem } from "./views/MissionsView";
+import { renderContratsTab } from "./views/ContratsView";
 
 // V2.3: State modules for reactive state management
 import {
@@ -147,9 +166,18 @@ import {
   inventoryState,
   gameModeState,
   showModeSelector,
+  freeFlightState,
   type FlightPhaseId,
+  type FreeFlightRecapData,
+  openSellItemPopup,
+  closeSellItemPopup,
+  openSellAircraftPopup,
+  closeSellAircraftPopup,
+  type SellableItem,
+  type SellAircraftData,
 } from "./state";
 
+// BASE_URL = path to app assets (icons, CSS), NOT an API endpoint
 declare const BASE_URL: string;
 
 // Declare global SimVar API
@@ -209,10 +237,6 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
   private nearbyAirports: Array<{ icao: string; name: string; distance_nm: number }> = [];
   private nearbyAirportsListRef = FSComponent.createRef<HTMLDivElement>();
 
-  // Inventory state
-  private inventoryItems: Array<{ id: number; item_type: string; quantity: number; airport_icao: string }> = [];
-  private inventoryListRef = FSComponent.createRef<HTMLDivElement>();
-
   // OpenLayers map (V2.1: Most state now in MapManager)
   private mapContainerRef = FSComponent.createRef<HTMLDivElement>();
   private olMap: Map | null = null;  // Local reference for Coherent GT click handling
@@ -253,6 +277,10 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
   }> = [];
   private airportInventoryRef = FSComponent.createRef<HTMLDivElement>();
   private aircraftCargoRef = FSComponent.createRef<HTMLDivElement>();
+
+  // V4.1: Passengers refs
+  private airportPassengersRef = FSComponent.createRef<HTMLDivElement>();
+  private aircraftPassengersRef = FSComponent.createRef<HTMLDivElement>();
 
   // Cargo transfer popup refs
   private cargoPopupSliderRef = FSComponent.createRef<HTMLInputElement>();
@@ -305,6 +333,11 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
   // Company DOM refs
   private companyMembersRef = FSComponent.createRef<HTMLDivElement>();
   private companyFleetRef = FSComponent.createRef<HTMLDivElement>();
+  private companyMembersFullRef = FSComponent.createRef<HTMLDivElement>();
+  private companyHistoryRef = FSComponent.createRef<HTMLDivElement>();
+  private companyMessagesRef = FSComponent.createRef<HTMLDivElement>();
+  private companyMessageInputRef = FSComponent.createRef<HTMLInputElement>();
+  private transferAmountInputRef = FSComponent.createRef<HTMLInputElement>();
 
   // Market DOM refs
   private marketListingsRef = FSComponent.createRef<HTMLDivElement>();
@@ -312,11 +345,37 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
   private marketBuyQtyDisplayRef = FSComponent.createRef<HTMLSpanElement>();
   private marketIcaoFilterRef = FSComponent.createRef<HTMLInputElement>();
   private marketItemFilterRef = FSComponent.createRef<HTMLInputElement>();
+  // V4.1: Sell orders and aircraft catalog refs
+  private mySellOrdersRef = FSComponent.createRef<HTMLDivElement>();
+  private aircraftCatalogRef = FSComponent.createRef<HTMLDivElement>();
+  private myAircraftForSaleRef = FSComponent.createRef<HTMLDivElement>();
+  // V4.1: Market inventory refs
+  private marketInventoryListRef = FSComponent.createRef<HTMLDivElement>();
+  private marketInvIcaoFilterRef = FSComponent.createRef<HTMLInputElement>();
+  private marketInvItemFilterRef = FSComponent.createRef<HTMLInputElement>();
+  // V4.1: Sell popups refs
+  private sellItemPopupRef = FSComponent.createRef<HTMLDivElement>();
+  private sellAircraftPopupRef = FSComponent.createRef<HTMLDivElement>();
 
   // Profile inventory refs
   private profileIcaoFilterRef = FSComponent.createRef<HTMLInputElement>();
   private profileItemFilterRef = FSComponent.createRef<HTMLInputElement>();
   private profileInventoryListRef = FSComponent.createRef<HTMLDivElement>();
+
+  // V2.4: Flight history refs and state
+  private flightHistoryRef = FSComponent.createRef<HTMLDivElement>();
+  private flightHistoryLoading = Subject.create<boolean>(false);
+  private flightHistoryEntries: FlightHistoryEntry[] = [];
+
+  // V4.1: Specialized history refs
+  private missionHistoryRef = FSComponent.createRef<HTMLDivElement>();
+  private missionHistoryLoading = Subject.create<boolean>(false);
+  private profileFlightHistoryRef = FSComponent.createRef<HTMLDivElement>();
+  private profileFlightHistoryLoading = Subject.create<boolean>(false);
+  private transactionLogEntries: import("./managers/DatabaseManager").TransactionLog[] = [];
+
+  // V2.4: Free flight recap popup ref
+  private freeFlightRecapRef = FSComponent.createRef<HTMLDivElement>();
 
   // Company inventory refs
   private companyIcaoFilterRef = FSComponent.createRef<HTMLInputElement>();
@@ -324,6 +383,9 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
   private companyInventoryListRef = FSComponent.createRef<HTMLDivElement>();
 
   private updateInterval: number | null = null;
+
+  // Subscriptions array for cleanup (PASSE 3 - memory leak fix)
+  private stateSubscriptions: Array<{ destroy: () => void }> = [];
 
   public onOpen(): void {
     this.startSimVarUpdates();
@@ -363,7 +425,7 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
     }
 
     // Auto-initialize map when switching to map tab
-    navigationState.activeTab.sub((tab) => {
+    this.stateSubscriptions.push(navigationState.activeTab.sub((tab) => {
       if (tab === "map") {
         if (!this.mapInitialized) {
           // Small delay to ensure DOM is rendered
@@ -375,11 +437,11 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
         }, 150);
       }
       // Auto-refresh aircraft when switching to create-mission tab
-      if (tab === "create-mission" && (authState.isLoggedIn.get() || authState.isP2PMode.get())) {
+      if (tab === "create-mission" && (isGameReady())) {
         void this.refreshMissionOrigin();
       }
       // Auto-fetch company data when switching to company tab
-      if (tab === "company" && (authState.isLoggedIn.get() || authState.isP2PMode.get())) {
+      if (tab === "company" && (isGameReady())) {
         void this.fetchCompanyData();
         // Setup keyboard capture AND input listener for company name input (after DOM renders)
         // JSX oninput doesn't work reliably in Coherent GT, so we add manual listener
@@ -405,7 +467,7 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
         }, 150);
       }
       // Auto-fetch market data when switching to market tab
-      if (tab === "market" && (authState.isLoggedIn.get() || authState.isP2PMode.get())) {
+      if (tab === "market" && (isGameReady())) {
         void this.fetchMarketData();
         // Setup ICAO filter input after DOM renders
         setTimeout(() => {
@@ -432,21 +494,21 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
         }, 150);
       }
       // V2.1: Auto-refresh active mission when switching to missions tab
-      if (tab === "missions" && (authState.isLoggedIn.get() || authState.isP2PMode.get())) {
+      if (tab === "missions" && (isGameReady())) {
         void this.fetchActiveMission();
         void this.autoSyncCurrentAircraft();
       }
       // V2.2: Auto-fetch hangar aircraft list when switching to hangar tab
-      if (tab === "hangar" && (authState.isLoggedIn.get() || authState.isP2PMode.get())) {
+      if (tab === "hangar" && (isGameReady())) {
         void this.fetchHangarAircraftList();
         void this.autoSyncCurrentAircraft();
       }
       // P2P: Settings tab no longer needs credentials setup
-    });
+    }));
 
     // V1.1: Auto-refresh when switching to missions sub-tabs
-    navigationState.missionsSubTab.sub((subTab) => {
-      if (subTab === "creation" && (authState.isLoggedIn.get() || authState.isP2PMode.get())) {
+    this.stateSubscriptions.push(navigationState.missionsSubTab.sub((subTab) => {
+      if (subTab === "creation" && (isGameReady())) {
         void this.refreshMissionOrigin();
         // V1.4: Auto-sync current aircraft fuel (anti-cheat)
         void this.autoSyncCurrentAircraft();
@@ -456,14 +518,55 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
         }, 150);
       }
       // V2.1: Auto-refresh apercu when switching to it
-      if (subTab === "apercu" && (authState.isLoggedIn.get() || authState.isP2PMode.get())) {
+      if (subTab === "apercu" && (isGameReady())) {
         void this.fetchActiveMission();
       }
-    });
+      // V4.1: Auto-fetch mission history when switching to historique
+      if (subTab === "historique" && (isGameReady())) {
+        void this.fetchFlightHistory();
+      }
+    }));
+
+    // V4.1: Auto-fetch when switching to market sub-tabs
+    this.stateSubscriptions.push(navigationState.marketSubTab.sub((subTab) => {
+      if (subTab === "inventory" && (isGameReady())) {
+        void this.fetchMarketInventory();
+        // Setup filter inputs after DOM renders
+        setTimeout(() => {
+          const icaoInput = this.marketInvIcaoFilterRef.getOrDefault();
+          if (icaoInput) {
+            this.setupInputEventBlocker(icaoInput);
+            icaoInput.addEventListener("input", () => {
+              const value = icaoInput.value.toUpperCase();
+              icaoInput.value = value;
+              inventoryState.marketInvIcaoFilter.set(value);
+              this.renderMarketInventory();
+            });
+          }
+          const itemInput = this.marketInvItemFilterRef.getOrDefault();
+          if (itemInput) {
+            this.setupInputEventBlocker(itemInput);
+            itemInput.addEventListener("input", () => {
+              inventoryState.marketInvItemFilter.set(itemInput.value);
+              this.renderMarketInventory();
+            });
+          }
+        }, 150);
+      }
+      if (subTab === "mes-ventes" && (isGameReady())) {
+        void this.fetchMySellOrders();
+      }
+      if (subTab === "avions" && (isGameReady())) {
+        void this.fetchAircraftCatalog();
+      }
+      if (subTab === "historique" && (isGameReady())) {
+        void this.fetchFlightHistory();
+      }
+    }));
 
     // Auto-fetch profile inventory when switching to inventaire sub-tab
-    navigationState.profileSubTab.sub((subTab) => {
-      if (subTab === "inventaire" && (authState.isLoggedIn.get() || authState.isP2PMode.get())) {
+    this.stateSubscriptions.push(navigationState.profileSubTab.sub((subTab) => {
+      if (subTab === "inventaire" && (isGameReady())) {
         void this.fetchProfileInventory();
         // Setup filter inputs after DOM renders
         setTimeout(() => {
@@ -487,11 +590,15 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
           }
         }, 150);
       }
-    });
+      // V4.1: Auto-fetch flight history when switching to historique
+      if (subTab === "historique" && (isGameReady())) {
+        void this.fetchFlightHistory();
+      }
+    }));
 
     // Auto-fetch company inventory when switching to inventaire sub-tab in company
-    navigationState.companySubTab.sub((subTab) => {
-      if (subTab === "inventaire" && (authState.isLoggedIn.get() || authState.isP2PMode.get())) {
+    this.stateSubscriptions.push(navigationState.companySubTab.sub((subTab) => {
+      if (subTab === "inventaire" && (isGameReady())) {
         void this.fetchCompanyInventory();
         // Setup filter inputs after DOM renders
         setTimeout(() => {
@@ -515,17 +622,36 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
           }
         }, 150);
       }
-    });
+      if (subTab === "membres" && (isGameReady())) {
+        this.renderCompanyTab();
+      }
+      if (subTab === "historique" && (isGameReady())) {
+        void this.fetchCompanyHistory();
+      }
+      if (subTab === "messagerie" && (isGameReady())) {
+        void this.fetchCompanyMessages();
+        setTimeout(() => {
+          const msgInput = this.companyMessageInputRef.getOrDefault();
+          if (msgInput) {
+            this.setupInputEventBlocker(msgInput);
+          }
+          const transferInput = this.transferAmountInputRef.getOrDefault();
+          if (transferInput) {
+            this.setupInputEventBlocker(transferInput);
+          }
+        }, 150);
+      }
+    }));
 
     // Auto-update fpCanValidate when fpHasActivePlan or fpDestinationInput changes
-    missionCreationState.fpHasActivePlan.sub(() => this.updateFpCanValidate());
-    missionCreationState.fpDestinationInput.sub(() => this.updateFpCanValidate());
+    this.stateSubscriptions.push(missionCreationState.fpHasActivePlan.sub(() => this.updateFpCanValidate()));
+    this.stateSubscriptions.push(missionCreationState.fpDestinationInput.sub(() => this.updateFpCanValidate()));
 
     // V1.2: Update creation steps when current aircraft changes
-    missionState.missionCurrentAircraft.sub(() => this.updateCreationSteps());
+    this.stateSubscriptions.push(missionState.missionCurrentAircraft.sub(() => this.updateCreationSteps()));
 
     // V1.2: Re-render aircraft lists when current simulator aircraft changes
-    simVarState.currentSimAircraftReg.sub(() => {
+    this.stateSubscriptions.push(simVarState.currentSimAircraftReg.sub(() => {
       // Re-render hangar list if it exists
       if (this.hangarListRef.getOrDefault()) {
         this.renderHangarList();
@@ -534,7 +660,7 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
       if (this.missionAircraftInfoRef.getOrDefault()) {
         void this.loadCurrentAircraftForMission();
       }
-    });
+    }));
 
   }
 
@@ -583,6 +709,8 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
               const isValid = /^[A-Z]{4}$/.test(value);
               console.log("[WOA] Airport ICAO validation:", value, "valid:", isValid);
               authState.firstLaunchAirportValid.set(isValid);
+              // V4.1 FIX: Sync Subject with input value (for fallback in completeFirstLaunchSetup)
+              authState.firstLaunchAirport.set(value);
             });
           }
 
@@ -679,8 +807,9 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
   /**
    * P2P: Initialize persistence manager and AI economy
    * Called after database is ready (either on first launch completion or on existing data)
+   * @param skipLoadStates - If true, skip loading states (used after fresh first launch to avoid overwriting fresh data)
    */
-  private initializePersistenceAndEconomy(): void {
+  private initializePersistenceAndEconomy(skipLoadStates: boolean = false): void {
     // Initialize persistence manager
     PersistenceManager.initialize({
       onLoaded: () => {
@@ -693,6 +822,24 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
         console.log(`[WOA] Auto-saved: ${store}`);
       },
     });
+
+    // V4.1 FIX: Skip loading states if this is a fresh first launch
+    // Fresh first launch data is already in DatabaseManager, no need to re-load
+    // Re-loading could potentially restore stale cached data
+    if (skipLoadStates) {
+      console.log("[WOA] Skipping loadAllStates (fresh first launch)");
+      // Just enable auto-save and start AI economy
+      PersistenceManager.enableAutoSave();
+      AIEconomyService.initialize({
+        onPricesUpdated: (count) => console.log(`[AIEconomy] Updated ${count} prices`),
+        onOrdersGenerated: (count) => console.log(`[AIEconomy] Generated ${count} AI orders`),
+      });
+      AIEconomyService.start();
+      AIEconomyService.forceUpdate().then(() => {
+        console.log("[WOA] P2P local mode ready with AI economy (fresh first launch)");
+      });
+      return;
+    }
 
     // Load states from database
     PersistenceManager.loadAllStates()
@@ -727,10 +874,13 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
 
     const pilotName = pilotNameInput?.value?.trim() || "Pilote";
     const nationality = authState.firstLaunchNationality.get();
-    const startingAirport = (airportInput?.value?.trim() || "").toUpperCase();
+    // V4.1 FIX: Read airport from input, fallback to Subject, then to default
+    const inputAirport = (airportInput?.value?.trim() || "").toUpperCase();
+    const subjectAirport = authState.firstLaunchAirport.get().toUpperCase();
+    const startingAirport = inputAirport.length === 4 ? inputAirport : (subjectAirport.length === 4 ? subjectAirport : "LFPG");
 
     // Validation is done in WelcomePopup - button is disabled if invalid
-    console.log(`[WOA] Completing first launch: ${pilotName} (${nationality}) at ${startingAirport}`);
+    console.log(`[WOA] Completing first launch: ${pilotName} (${nationality}) at ${startingAirport} (input: "${inputAirport}", subject: "${subjectAirport}")`);
 
     // Hide welcome popup
     authState.showFirstLaunchPopup.set(false);
@@ -739,21 +889,58 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
     InitService.completeFirstLaunch(pilotName, nationality, startingAirport)
       .then(async () => {
         console.log("[WOA] First launch setup complete!");
-        // Initialize persistence and economy after setup
-        this.initializePersistenceAndEconomy();
+        // V4.1 FIX: Initialize persistence but SKIP loadAllStates to prevent overwriting fresh data
+        // The player data is already fresh in DatabaseManager from completeFirstLaunch()
+        this.initializePersistenceAndEconomy(true); // skipLoadStates = true
 
-        // Load player data into state
+        // Load player data into state (including career stats)
         try {
           const player = await InitService.getPlayerInfo();
           if (player) {
-            console.log(`[WOA] Player loaded: ${player.name} with ${player.money} credits`);
+            console.log(`[WOA] Player loaded: ${player.name} with ${player.money} credits, ${player.xp} XP`);
             marketState.walletPersonal.set(player.money);
+
+            // Load career stats for profile display
+            const careerStats = await DatabaseManager.getOrCreatePilotCareerStats(player.id);
+
             authState.currentUser.set({
               id: player.id,
               username: player.name,
-              email: "",
+              email: player.email || "",
+              xp: player.xp,
+              money: player.money,
+              nationality: player.nationality,
+              preferred_airport: player.preferred_airport,
+              current_airport: player.current_airport,  // V4.1: Current position
+              last_latitude: player.last_latitude,      // V4.1: Map marker fallback
+              last_longitude: player.last_longitude,    // V4.1: Map marker fallback
+              career_stats: {
+                total_missions: careerStats.total_missions,
+                total_flight_time_minutes: careerStats.total_flight_time_minutes,
+                total_distance_nm: careerStats.total_distance_nm,
+                average_grade: careerStats.average_grade,
+              },
             });
             authState.isLoggedIn.set(true);
+
+            // V4.1 FIX: Center map on player's starting airport after first launch
+            console.log(`[WOA] Centering map on new pilot's airport: ${player.current_airport || player.preferred_airport}`);
+            void this.centerMapOnPlayerAirport();
+
+            // V4.1 BRUTE FORCE: Directly force marker + view on chosen airport
+            const chosenIcao = player.current_airport || player.preferred_airport || startingAirport;
+            const airports = DatabaseManager.getAirportsCache();
+            const airport = airports.find(a => a.ident === chosenIcao);
+            if (airport && this.olMap && this.aircraftFeature) {
+              const coords = fromLonLat([airport.longitude, airport.latitude]);
+              const geom = this.aircraftFeature.getGeometry();
+              if (geom) {
+                geom.setCoordinates(coords);
+              }
+              this.olMap.getView().setCenter(coords);
+              this.olMap.getView().setZoom(12);
+              console.log(`[WOA] BRUTE FORCE: marker+view forced to ${chosenIcao} (${airport.latitude}, ${airport.longitude})`);
+            }
           }
         } catch (e) {
           console.warn("[WOA] Could not load player info:", e);
@@ -762,6 +949,21 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
         // Refresh hangar list with the new aircraft
         console.log("[WOA] Refreshing hangar after first launch...");
         void this.fetchHangarAircraftList();
+
+        // V4.1 FIX: Final verification log - the balance MUST be 100,000 CR
+        const finalBalance = marketState.walletPersonal.get();
+        const finalUserMoney = authState.currentUser.get()?.money;
+        console.log(`[WOA] ═══════════════════════════════════════════════════`);
+        console.log(`[WOA] FIRST LAUNCH COMPLETE - Balance Verification`);
+        console.log(`[WOA] marketState.walletPersonal: ${finalBalance}`);
+        console.log(`[WOA] authState.currentUser.money: ${finalUserMoney}`);
+        console.log(`[WOA] Expected: 100,000 CR`);
+        if (finalBalance !== 100000 || finalUserMoney !== 100000) {
+          console.error(`[WOA] CRITICAL: Balance mismatch! Expected 100,000 but got ${finalBalance}/${finalUserMoney}`);
+        } else {
+          console.log(`[WOA] ✓ Balance is correct: 100,000 CR`);
+        }
+        console.log(`[WOA] ═══════════════════════════════════════════════════`);
       })
       .catch((error) => {
         console.error("[WOA] Failed to complete first launch:", error);
@@ -773,7 +975,6 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
    */
   private initializeTrackingManager(): void {
     trackingManager.initialize({
-      getAuthToken: () => authState.authToken.get(),
       getActiveMission: () => missionState.activeMission.get(),
       getMissionCheckpoints: () => missionState.missionCheckpoints.get(),
       getMissionAircraft: () => missionState.missionCurrentAircraft.get(),
@@ -822,11 +1023,11 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
         checkpointState.flightPhaseId.set(id as FlightPhaseId);
         checkpointState.flightPhaseText.set(text);
         checkpointState.flightPhaseColor.set(color);
-        // Update icon based on phase
+        // Update icon based on phase (text labels for Coherent GT compatibility)
         const iconMap: Record<string, string> = {
-          "taxi_out": "🛫", "climb": "🛫", "cruise": "✈️", "descent": "🛬", "taxi_in": "🛬"
+          "taxi_out": "[DEP]", "climb": "[DEP]", "cruise": "[CRS]", "descent": "[ARR]", "taxi_in": "[ARR]"
         };
-        checkpointState.flightPhaseIcon.set(iconMap[id] || "✈️");
+        checkpointState.flightPhaseIcon.set(iconMap[id] || "[CRS]");
       },
       onWaypointPassed: (count) => missionState.waypointsPassed.set(count),
       onCheckpointsUpdate: (cps) => missionState.missionCheckpoints.set(cps),
@@ -959,34 +1160,53 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
       onStatsUpdated: (flightTime: number, distance: number, xp: number) => {
         // Stats are already in freeFlightState, no need to update here
       },
-      onSessionComplete: (xpEarned: number, flightTime: number, distance: number, landings: number) => {
-        console.log(`[FreeFlight] Session complete - XP: ${xpEarned}, Time: ${flightTime.toFixed(1)}min, Distance: ${distance.toFixed(1)}nm, Landings: ${landings}`);
-        // Popup is shown via freeFlightState.showEndFlightConfirm
+      onSessionComplete: (recapData: FreeFlightRecapData) => {
+        console.log(`[FreeFlight] Session complete - XP: ${recapData.xp_earned}, Grade: ${recapData.grade}`);
+
+        // Save to flight history
+        void this.saveFreeFlightToHistory(recapData);
+
+        // Award XP to player
+        void this.awardFreeFlightXp(recapData.xp_earned);
+
+        // Store recap data and show popup
+        freeFlightState.ffRecapData.set(recapData);
+        freeFlightState.ffShowRecap.set(true);
       },
       onError: (error: string) => {
         console.warn("[FreeFlight] Error:", error);
       },
     });
 
+    // Subscribe to recap popup state
+    this.stateSubscriptions.push(freeFlightState.ffShowRecap.sub((show) => {
+      if (show) {
+        this.renderFreeFlightRecapPopup();
+      } else {
+        const el = this.freeFlightRecapRef.getOrDefault();
+        if (el) el.innerHTML = "";
+      }
+    }));
+
     // Subscribe to changes that trigger free flight start/stop
     // Start when: logged in + aircraft detected + no active mission
-    authState.isLoggedIn.sub((loggedIn) => {
+    this.stateSubscriptions.push(authState.isLoggedIn.sub((loggedIn) => {
       if (loggedIn) {
         this.checkAndStartFreeFlight();
       } else {
         freeFlightManager.stopBackgroundTracking();
       }
-    });
+    }));
 
     // When aircraft changes
-    missionState.selectedAircraftId.sub(() => {
-      if (authState.isLoggedIn.get() || authState.isP2PMode.get()) {
+    this.stateSubscriptions.push(missionState.selectedAircraftId.sub(() => {
+      if (isGameReady()) {
         this.checkAndStartFreeFlight();
       }
-    });
+    }));
 
     // When mission state changes
-    missionState.activeMission.sub((mission) => {
+    this.stateSubscriptions.push(missionState.activeMission.sub((mission) => {
       if (mission) {
         // Mission started - pause free flight
         freeFlightManager.pauseForMission();
@@ -994,7 +1214,7 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
         // Mission ended - resume free flight
         this.checkAndStartFreeFlight();
       }
-    });
+    }));
   }
 
   /**
@@ -1018,6 +1238,11 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
       refreshCompanyData: async () => this.fetchCompanyData(),
       refreshMarketListings: () => void this.fetchMarketData(),
       refreshCargoLists: () => this.renderCargoUI(),
+      refreshInventory: () => {
+        // Refresh both player and company inventory after market purchase
+        void this.fetchProfileInventory();
+        void this.fetchCompanyInventory();
+      },
       transferCargo: (direction, locationId, itemId, qty) => {
         if (direction === "load") {
           void this.loadCargoItem(locationId, itemId, qty);
@@ -1033,7 +1258,7 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
    * Check conditions and start free flight tracking if appropriate
    */
   private checkAndStartFreeFlight(): void {
-    const isLoggedIn = authState.isLoggedIn.get() || authState.isP2PMode.get();
+    const isLoggedIn = isGameReady();
     const aircraftId = missionState.selectedAircraftId.get();
     const aircraftReg = simVarState.currentSimAircraftReg.get();
     const activeMission = missionState.activeMission.get();
@@ -1135,10 +1360,10 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
     }
   }
 
-  // V1.5: Load unit preferences from localStorage
+  // V1.5: Load unit preferences from NativePersistence
   private loadUnitPreferences(): void {
     try {
-      const savedUnits = localStorage.getItem("woa_units");
+      const savedUnits = NativePersistence.get("woa_units");
       if (savedUnits) {
         const units = JSON.parse(savedUnits);
         if (units.distance) settingsState.unitDistance.set(units.distance);
@@ -1154,22 +1379,18 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
     }
   }
 
-  // V1.5: Save unit preferences to localStorage
+  // V1.5: Save unit preferences to NativePersistence
   private saveUnitPreferences(): void {
-    try {
-      const units = {
-        distance: settingsState.unitDistance.get(),
-        weight: settingsState.unitWeight.get(),
-        altitude: settingsState.unitAltitude.get(),
-        fuel: settingsState.unitFuel.get(),
-        speed: settingsState.unitSpeed.get(),
-        temperature: settingsState.unitTemperature.get(),
-      };
-      localStorage.setItem("woa_units", JSON.stringify(units));
-      console.log("[WOA] Unit preferences saved:", units);
-    } catch (error) {
-      console.error("[WOA] Failed to save unit preferences:", error);
-    }
+    const units = {
+      distance: settingsState.unitDistance.get(),
+      weight: settingsState.unitWeight.get(),
+      altitude: settingsState.unitAltitude.get(),
+      fuel: settingsState.unitFuel.get(),
+      speed: settingsState.unitSpeed.get(),
+      temperature: settingsState.unitTemperature.get(),
+    };
+    NativePersistence.set("woa_units", JSON.stringify(units));
+    console.log("[WOA] Unit preferences saved:", units);
   }
 
   // V1.5: Toggle a unit preference and save
@@ -1204,28 +1425,20 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
     return categoryObj[key] || key;
   }
 
-  // V1.5: Set language and save to localStorage
+  // V1.5: Set language and save to NativePersistence
   private setLanguage(lang: Language): void {
     settingsState.currentLanguage.set(lang);
-    try {
-      localStorage.setItem("woa_language", lang);
-      console.log("[WOA] Language set to:", lang);
-    } catch (error) {
-      console.error("[WOA] Failed to save language:", error);
-    }
+    NativePersistence.set("woa_language", lang);
+    console.log("[WOA] Language set to:", lang);
   }
 
-  // V1.5: Load language from localStorage
+  // V1.5: Load language from NativePersistence
   private loadLanguage(): void {
-    try {
-      const savedLang = localStorage.getItem("woa_language") as Language | null;
-      const validLanguages: Language[] = ["en", "fr", "de", "es"];
-      if (savedLang && validLanguages.includes(savedLang)) {
-        settingsState.currentLanguage.set(savedLang);
-        console.log("[WOA] Language loaded:", savedLang);
-      }
-    } catch (error) {
-      console.error("[WOA] Failed to load language:", error);
+    const savedLang = NativePersistence.get("woa_language") as Language | null;
+    const validLanguages: Language[] = ["en", "fr", "de", "es"];
+    if (savedLang && validLanguages.includes(savedLang)) {
+      settingsState.currentLanguage.set(savedLang);
+      console.log("[WOA] Language loaded:", savedLang);
     }
   }
 
@@ -1233,6 +1446,16 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
     this.stopSimVarUpdates();
     // Don't dispose map on close - it might just be minimized
     // Only dispose on open to handle GT refresh case
+
+    // PASSE 3: Cleanup state subscriptions to prevent memory leaks
+    this.stateSubscriptions.forEach((sub) => {
+      try {
+        sub.destroy();
+      } catch (e) {
+        console.error("[WOA] Error destroying subscription:", e);
+      }
+    });
+    this.stateSubscriptions = [];
   }
 
   public onResume(): void {
@@ -1243,7 +1466,7 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
 
     // V1.4: Auto-sync aircraft fuel when app resumes (anti-cheat)
     // This ensures fuel is enforced when returning from main menu
-    if (authState.isLoggedIn.get() || authState.isP2PMode.get()) {
+    if (isGameReady()) {
       console.log("[WOA] App resumed, syncing aircraft state...");
       void this.autoSyncCurrentAircraft();
     }
@@ -1383,42 +1606,29 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
 
   /**
    * Reset all local data - for testing and troubleshooting
-   * Clears all localStorage with woa_ prefix and native persistence
+   * Clears DatabaseManager, localStorage, and native persistence
+   * V4.1 FIX: Made async to properly await the reset before showing welcome screen
    */
-  private resetAllData(): void {
+  private async resetAllData(): Promise<void> {
     const confirmReset = confirm("Are you sure you want to reset ALL data? This cannot be undone!");
     if (!confirmReset) return;
 
     console.log("[WOA] Resetting all local data...");
 
     try {
-      // Clear all woa_ keys from localStorage
-      const keysToRemove: string[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith("woa_")) {
-          keysToRemove.push(key);
-        }
-      }
+      // V4.1 FIX: AWAIT the database reset - MUST complete before anything else
+      // This clears DatabaseManager (player, aircraft, inventory, etc.) + NativePersistence + localStorage
+      await InitService.resetDatabase();
+      console.log("[WOA] DatabaseManager + NativePersistence + localStorage cleared via InitService");
 
-      keysToRemove.forEach(key => {
-        localStorage.removeItem(key);
-        console.log(`[WOA] Removed: ${key}`);
-      });
+      // Clear user preferences stored via generic NativePersistence.set()
+      NativePersistence.set("woa_language", "");
+      NativePersistence.set("woa_units", "");
+      console.log("[WOA] User preferences cleared");
 
-      console.log(`[WOA] Reset complete - removed ${keysToRemove.length} keys`);
-
-      // Clear native persistence (MSFS GetStoredData/SetStoredData)
-      NativePersistence.clear();
-      NativePersistence.clearSoloSetup();
-      NativePersistence.clearPlayerId();
-      console.log("[WOA] Native persistence cleared");
-
-      // Clear saved game mode
-      if (typeof SetStoredData === "function") {
-        SetStoredData("WOA_GameMode", "");
-        console.log("[WOA] Game mode cleared");
-      }
+      // Clear pending actions queue (Online mode)
+      NetworkState.clearPendingActions();
+      console.log("[WOA] Pending actions cleared");
 
       // Reset auth state
       authState.authToken.set(null);
@@ -1426,10 +1636,24 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
       authState.isLoggedIn.set(false);
       authState.isP2PMode.set(true);
 
+      // V4.1 FIX: Reset market state (wallet, etc.)
+      marketState.walletPersonal.set(0);
+      companyState.companyData.set(null);
+
+      // V4.1 FIX: Set mode to "solo" before showing welcome popup
+      // This ensures completeFirstLaunch() knows which mode to use
+      gameModeState.currentMode.set("solo");
+      gameModeState.modeSelected.set(true);
+      gameModeState.showModeSelector.set(false);
+      // Persist mode choice for next session
+      if (typeof SetStoredData === "function") {
+        SetStoredData("WOA_GameMode", "solo");
+      }
+
       // Show first launch popup for fresh start
       authState.showFirstLaunchPopup.set(true);
 
-      alert("Data reset complete! The welcome screen will appear. Please restart the EFB.");
+      alert("Data reset complete! The welcome screen will appear.");
 
     } catch (error) {
       console.error("[WOA] Reset failed:", error);
@@ -1512,18 +1736,6 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
     }
   }
 
-  // Helper to get auth headers for API calls
-  private getAuthHeaders(): Record<string, string> {
-    const token = authState.authToken.get();
-    if (token) {
-      return {
-        "Authorization": `Bearer ${token}`,
-        "Accept": "application/json",
-      };
-    }
-    return { "Accept": "application/json" };
-  }
-
   private async fetchNearbyAirports(): Promise<void> {
     const lat = simVarState.latitude.get();
     const lon = simVarState.longitude.get();
@@ -1563,17 +1775,6 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
     const el = this.nearbyAirportsListRef.getOrDefault();
     if (!el) return;
     el.innerHTML = renderAirportsListHtml(this.nearbyAirports, this.t("map", "noAirport"));
-  }
-
-  private renderInventoryList(): void {
-    const el = this.inventoryListRef.getOrDefault();
-    if (!el) return;
-    el.innerHTML = renderInventoryListHtml(
-      this.inventoryItems,
-      this.t("inventory", "emptyInventory"),
-      this.t("hangar", "storedAt"),
-      this.t("hangar", "units")
-    );
   }
 
   private renderAircraftList(): void {
@@ -1713,10 +1914,46 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
       return;
     }
 
-    // Get current position
-    const lat = simVarState.latitude.get();
-    const lon = simVarState.longitude.get();
+    // Get current position from SimVars
+    let lat = simVarState.latitude.get();
+    let lon = simVarState.longitude.get();
     const heading = simVarState.heading.get();
+
+    // V4.1: Check if SimVar coordinates are valid (not 0,0 or near Pacific)
+    const simVarValid = Math.abs(lat) > 0.1; // MSFS returns (0, 90) when no flight loaded
+
+    // V4.1 FIX: Robust fallback chain for initial marker position
+    if (!simVarValid) {
+      let foundFallback = false;
+      const user = authState.currentUser.get();
+
+      // Fallback 1: Player.last_latitude/longitude (persisted via WOA_Solo_SaveData)
+      if (user?.last_latitude && user?.last_longitude) {
+        lat = user.last_latitude;
+        lon = user.last_longitude;
+        foundFallback = true;
+        console.log(`[WOA] Map init: Using Player.last_latitude/longitude (${lat}, ${lon})`);
+      }
+
+      // Fallback 2: Player's current_airport via airports cache
+      if (!foundFallback) {
+        const airportIcao = user?.current_airport || user?.preferred_airport;
+        if (airportIcao) {
+          const airports = DatabaseManager.getAirportsCache();
+          const airport = airports.find(a => a.ident === airportIcao);
+          if (airport && airport.latitude && airport.longitude) {
+            lat = airport.latitude;
+            lon = airport.longitude;
+            foundFallback = true;
+            console.log(`[WOA] Map init: Using player airport ${airportIcao} for marker (${lat}, ${lon})`);
+          }
+        }
+      }
+
+      if (!foundFallback) {
+        console.log("[WOA] Map init: No fallback position available, marker will be at 0,0");
+      }
+    }
 
     // V2.1: Delegate map creation to MapManager (skip default handlers for Coherent GT)
     const success = mapManager.initializeMap(container, lat, lon, heading, { skipDefaultHandlers: true });
@@ -1739,6 +1976,11 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
     this.mapInitialized = true;
     mapState.mapError.set(null);
     console.log("[WOA] Map initialized successfully!");
+
+    // V4.1: If SimVar coordinates were invalid, center on player's airport
+    if (!simVarValid && this.olMap) {
+      void this.centerMapOnPlayerAirport();
+    }
 
     // Load airports on initial map load if filters are active
     const anyAirportsVisible = mapState.showLargeAirports.get() || mapState.showMediumAirports.get() || mapState.showSmallAirports.get();
@@ -1945,8 +2187,7 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
   }
 
   private async fetchMyFactoriesAtAirport(icaoCode: string): Promise<void> {
-    const token = authState.authToken.get();
-    if (!token) {
+    if (!isGameReady()) {
       mapState.myFactoriesAtAirport.set([]);
       return;
     }
@@ -1997,9 +2238,7 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
   // V0.8 Mission Methods
 
   private async fetchAvailableAircraft(icao: string): Promise<void> {
-    const token = authState.authToken.get();
-    // P2P mode doesn't require token
-    if (!authState.isP2PMode.get() && !token) {
+    if (!isGameReady()) {
       console.log("[WOA] Not logged in, cannot fetch aircraft");
       return;
     }
@@ -2544,18 +2783,23 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
       return;
     }
 
-    const token = authState.authToken.get();
-    const isP2P = authState.isP2PMode.get();
     const origin = missionCreationState.fpOriginIcao.get() || missionState.missionOriginIcao.get();
     const destination = missionCreationState.fpDestinationIcao.get();
     const aircraftId = missionState.selectedAircraftId.get();
     const distance = missionCreationState.fpTotalDistance.get();
     const waypointCount = missionCreationState.fpWaypointCount.get();
 
-    // P2P mode doesn't require token
-    if ((!isP2P && !token) || !origin || !destination || !aircraftId) {
-      console.log("[WOA] createMissionV11: Missing data - isP2P:", isP2P, "token:", !!token, "origin:", origin, "destination:", destination, "aircraftId:", aircraftId);
+    if (!isGameReady() || !origin || !destination || !aircraftId) {
+      console.log("[WOA] createMissionV11: Missing data - origin:", origin, "destination:", destination, "aircraftId:", aircraftId);
       missionState.missionError.set(this.t("missions", "missingMissionData"));
+      return;
+    }
+
+    // P4.10: Check if aircraft already has an active mission
+    const existingMissionForAircraft = await DatabaseManager.getActiveMissionForAircraft(aircraftId);
+    if (existingMissionForAircraft) {
+      console.log("[WOA] Aircraft already has active mission:", existingMissionForAircraft.id);
+      missionState.missionError.set(this.t("missions", "aircraftAlreadyInMission"));
       return;
     }
 
@@ -2679,9 +2923,7 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
   }
 
   private async fetchActiveMission(): Promise<void> {
-    const token = authState.authToken.get();
-    // P2P mode doesn't require token
-    if (!authState.isP2PMode.get() && !token) return;
+    if (!isGameReady()) return;
 
     try {
       // V1.9: Use missionService with ActiveMissionResponse type
@@ -2740,10 +2982,8 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
   }
 
   private async cancelMission(): Promise<void> {
-    const token = authState.authToken.get();
     const mission = missionState.activeMission.get();
-    // P2P mode doesn't require token
-    if (!mission || (!authState.isP2PMode.get() && !token)) return;
+    if (!mission || !isGameReady()) return;
 
     console.log("[WOA] Cancelling mission:", mission.id);
     missionState.missionStatus.set("loading");
@@ -2806,9 +3046,7 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
 
   // V0.8 Cargo Management Methods
   private async fetchAirportInventoryForCargo(icao: string): Promise<void> {
-    const token = authState.authToken.get();
-    // P2P mode doesn't require token
-    if (!authState.isP2PMode.get() && !token) return;
+    if (!isGameReady()) return;
 
     console.log("[WOA] Fetching airport inventory for cargo:", icao);
     cargoState.cargoLoading.set(true);
@@ -2855,9 +3093,7 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
   }
 
   private async fetchAircraftCargo(aircraftId: string): Promise<void> {
-    const token = authState.authToken.get();
-    // P2P mode doesn't require token
-    if (!authState.isP2PMode.get() && !token) return;
+    if (!isGameReady()) return;
 
     console.log("[WOA] Fetching aircraft cargo:", aircraftId);
 
@@ -2884,9 +3120,8 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
   }
 
   private async loadCargoItem(fromLocationId: string, itemId: string, qty: number): Promise<void> {
-    const token = authState.authToken.get();
     const aircraftId = missionState.selectedAircraftId.get();
-    if (!token || !aircraftId) return;
+    if (!isGameReady() || !aircraftId) return;
 
     // Safety check: must be on ground and not moving
     const onGround = SimVar.GetSimVarValue("SIM ON GROUND", "boolean") as boolean;
@@ -2909,6 +3144,8 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
         await this.fetchAirportInventoryForCargo(origin);
       }
       await this.fetchAircraftCargo(aircraftId);
+      // P2.5: Refresh profile inventory (items moved from airport to aircraft)
+      void this.fetchProfileInventory();
     } catch (error) {
       console.error("[WOA] Error loading cargo:", error);
       missionState.missionError.set(error instanceof Error ? error.message : this.t("missions", "errorLoadingCargo"));
@@ -2919,9 +3156,8 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
   }
 
   private async unloadCargoItem(toLocationId: string, itemId: string, qty: number): Promise<void> {
-    const token = authState.authToken.get();
     const aircraftId = missionState.selectedAircraftId.get();
-    if (!token || !aircraftId) return;
+    if (!isGameReady() || !aircraftId) return;
 
     // Safety check: must be on ground and not moving
     const onGround = SimVar.GetSimVarValue("SIM ON GROUND", "boolean") as boolean;
@@ -2944,6 +3180,8 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
         await this.fetchAirportInventoryForCargo(origin);
       }
       await this.fetchAircraftCargo(aircraftId);
+      // P2.5: Refresh profile inventory (items moved from aircraft to airport)
+      void this.fetchProfileInventory();
     } catch (error) {
       console.error("[WOA] Error unloading cargo:", error);
     } finally {
@@ -2952,11 +3190,26 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
   }
 
   private renderCargoUI(): void {
+    const PERSONNEL_ITEMS = ["worker", "engineer", "pilot", "copilot"];
+    const sourceFilter = cargoState.cargoSourceFilter.get();
+
+    // V4.1: Filter airport inventory by owner_type and exclude personnel
+    const filteredAirportInventory = (this.airportInventory as AirportInventoryItem[])
+      .filter(item => {
+        // Exclude personnel items (they go in passengers section)
+        if (PERSONNEL_ITEMS.includes(item.item_id.toLowerCase()) || item.category === "personnel") {
+          return false;
+        }
+        // Filter by owner_type if specified
+        const itemOwner = item.owner_type || "player";
+        return itemOwner === sourceFilter;
+      });
+
     // Render airport inventory (left panel) using helper
     const airportEl = this.airportInventoryRef.getOrDefault();
     if (airportEl) {
       airportEl.innerHTML = renderAirportInventoryHtml(
-        this.airportInventory as AirportInventoryItem[],
+        filteredAirportInventory,
         this.t("missions", "noItemAvailable")
       );
 
@@ -2976,16 +3229,111 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
       });
     }
 
+    // V4.1: Filter aircraft cargo to exclude personnel (they go in passengers section)
+    const filteredAircraftCargo = (this.aircraftCargo as AircraftCargoItem[])
+      .filter(item => !PERSONNEL_ITEMS.includes(item.item_id.toLowerCase()));
+
     // Render aircraft cargo (right panel) using helper
     const cargoEl = this.aircraftCargoRef.getOrDefault();
     if (cargoEl) {
       cargoEl.innerHTML = renderAircraftCargoHtml(
-        this.aircraftCargo as AircraftCargoItem[],
+        filteredAircraftCargo,
         "Soute vide"
       );
 
       // Add click handlers for unload buttons
       cargoEl.querySelectorAll(".unload-btn").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const itemId = btn.getAttribute("data-id");
+          const itemName = btn.getAttribute("data-name");
+          const maxQty = parseInt(btn.getAttribute("data-qty") || "1", 10);
+          const weight = parseFloat(btn.getAttribute("data-weight") || "0");
+          const firstLoc = this.airportInventory[0]?.location_id || "";
+          if (itemId && itemName) {
+            this.openCargoPopup("unload", itemId, itemName, maxQty, weight, firstLoc);
+          }
+        });
+      });
+    }
+
+    // V4.1: Render passengers section
+    this.renderPassengersUI();
+  }
+
+  // V4.1: Set cargo source filter and refresh UI
+  private setCargoSourceFilter(filter: "player" | "company"): void {
+    cargoState.cargoSourceFilter.set(filter);
+    this.renderCargoUI();
+  }
+
+  // V4.1: Render passengers section (personnel items)
+  private renderPassengersUI(): void {
+    const PERSONNEL_ITEMS = ["worker", "engineer", "pilot", "copilot"];
+
+    // Get personnel at airport (from airportInventory)
+    const airportPersonnel: PassengerItem[] = this.airportInventory
+      .filter(item => PERSONNEL_ITEMS.includes(item.item_id.toLowerCase()) || item.category === "personnel")
+      .map(item => ({
+        item_id: item.item_id,
+        location_id: item.location_id,
+        item_name: item.item_name,
+        quantity: item.quantity,
+        weight_kg: item.weight_kg,
+      }));
+
+    // Get personnel in aircraft cargo
+    const aircraftPersonnel = this.aircraftCargo
+      .filter(item => PERSONNEL_ITEMS.includes(item.item_id.toLowerCase()))
+      .map(item => ({
+        item_id: item.item_id,
+        item_name: item.item_name,
+        qty: item.qty,
+        weight_kg: item.weight_kg,
+      }));
+
+    // Calculate passenger count and weight
+    const passengerCount = aircraftPersonnel.reduce((sum, p) => sum + p.qty, 0);
+    const passengerWeight = aircraftPersonnel.reduce((sum, p) => sum + (p.qty * p.weight_kg), 0);
+
+    // Update state
+    cargoState.aircraftPassengerCount.set(passengerCount);
+    cargoState.aircraftPassengerWeight.set(passengerWeight);
+
+    // Render airport passengers
+    const airportPaxEl = this.airportPassengersRef.getOrDefault();
+    if (airportPaxEl) {
+      airportPaxEl.innerHTML = renderAirportPassengersHtml(
+        airportPersonnel,
+        "-"
+      );
+
+      // Add click handlers for load buttons
+      airportPaxEl.querySelectorAll(".load-pax-btn").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const itemId = btn.getAttribute("data-id");
+          const locId = btn.getAttribute("data-loc");
+          const itemName = btn.getAttribute("data-name");
+          const maxQty = parseInt(btn.getAttribute("data-qty") || "1", 10);
+          const weight = parseFloat(btn.getAttribute("data-weight") || "0");
+          if (itemId && locId && itemName) {
+            this.openCargoPopup("load", itemId, itemName, maxQty, weight, locId);
+          }
+        });
+      });
+    }
+
+    // Render aircraft passengers
+    const aircraftPaxEl = this.aircraftPassengersRef.getOrDefault();
+    if (aircraftPaxEl) {
+      aircraftPaxEl.innerHTML = renderAircraftPassengersHtml(
+        aircraftPersonnel,
+        "-"
+      );
+
+      // Add click handlers for unload buttons
+      aircraftPaxEl.querySelectorAll(".unload-pax-btn").forEach((btn) => {
         btn.addEventListener("click", (e) => {
           e.stopPropagation();
           const itemId = btn.getAttribute("data-id");
@@ -3168,9 +3516,7 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
    * V1.1: Fetch aircraft systems condition from API
    */
   private async fetchAircraftSystems(aircraftId: string): Promise<void> {
-    const token = authState.authToken.get();
-    // P2P mode doesn't require token
-    if (!authState.isP2PMode.get() && !token) return;
+    if (!isGameReady()) return;
 
     try {
       // V1.9: Use fleetService for aircraft systems
@@ -3189,9 +3535,7 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
    * V1.4: Fetch aircraft cargo items for hangar display
    */
   private async fetchHangarCargo(aircraftId: string): Promise<void> {
-    const token = authState.authToken.get();
-    // P2P mode doesn't require token
-    if (!authState.isP2PMode.get() && !token) return;
+    if (!isGameReady()) return;
 
     try {
       // V1.9: Use fleetService for aircraft cargo
@@ -3223,9 +3567,7 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
    * V1.1: Fetch aircraft systems for mission creation warnings
    */
   private async fetchMissionAircraftSystems(aircraftId: string): Promise<void> {
-    const token = authState.authToken.get();
-    // P2P mode doesn't require token
-    if (!authState.isP2PMode.get() && !token) return;
+    if (!isGameReady()) return;
 
     try {
       const data = await FleetRouter.getAircraftSystems(aircraftId);
@@ -3246,9 +3588,7 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
    * Called automatically when step 1 is displayed
    */
   private async loadCurrentAircraftForMission(): Promise<void> {
-    const token = authState.authToken.get();
-    // P2P mode doesn't require token
-    if (!authState.isP2PMode.get() && !token) {
+    if (!isGameReady()) {
       console.log("[WOA] Not logged in, cannot load aircraft");
       return;
     }
@@ -3337,15 +3677,22 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
       if (dbAirport && !simVarMatches && !apiMatches && simVarValid) {
         // SimVar is working but doesn't match - this is a confirmed mismatch
         console.warn(`[WOA] ANTI-CHEAT: Confirmed mismatch! DB=${dbAirport}, SimVar=${simVarAirport}`);
-        missionState.missionAircraftNotFound.set(true);
-        missionState.missionCurrentAircraft.set(null);
-        missionState.missionAircraftLoading.set(false);
-        this.updateCreationSteps();
-        const errorMsg = this.t("missions", "aircraftWrongAirport").replace("{db}", dbAirport).replace("{detected}", simVarAirport);
-        missionState.missionError.set(errorMsg);
-        missionCreationState.creationErrorMsg.set(errorMsg);
-        this.renderMissionAircraftInfo();
-        return;
+
+        // FIX 2: Solo mode - warn but don't block (player is responsible for their own experience)
+        // Online mode - block to ensure fair play
+        if (!isSoloMode()) {
+          missionState.missionAircraftNotFound.set(true);
+          missionState.missionCurrentAircraft.set(null);
+          missionState.missionAircraftLoading.set(false);
+          this.updateCreationSteps();
+          const errorMsg = this.t("missions", "aircraftWrongAirport").replace("{db}", dbAirport).replace("{detected}", simVarAirport);
+          missionState.missionError.set(errorMsg);
+          missionCreationState.creationErrorMsg.set(errorMsg);
+          this.renderMissionAircraftInfo();
+          return;
+        } else {
+          console.warn(`[WOA] ANTI-CHEAT: Solo mode - allowing mismatch (player responsibility)`);
+        }
       }
 
       // If we get here: either matched, or SimVar not working (benefit of the doubt)
@@ -3368,13 +3715,14 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
       }
 
       // Build aircraft info - V3.1: Use DB registration only (no sim registration fallback)
+      const passengerSeats = apiData.passenger_capacity ?? 4; // V4.1: Use DB value or default
       const aircraftInfo = {
         id: apiData.id,
         registration: apiData.registration || "N/A",
         aircraft_type: apiData.aircraft_type,
         icao_type: apiData.icao_type || null,
         cargo_capacity_kg: apiData.cargo_capacity_kg || 500,
-        passenger_capacity: 4, // Default
+        passenger_capacity: passengerSeats,
         fuel_gallons: apiData.fuel_gallons || 0,
         fuel_capacity_gallons: apiData.fuel_capacity_gallons || 50,
         condition: apiData.condition || 1.0,
@@ -3392,6 +3740,9 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
       };
 
       missionState.missionCurrentAircraft.set(aircraftInfo);
+
+      // V4.1: Update passenger seats state
+      cargoState.aircraftPassengerSeats.set(passengerSeats);
       missionState.missionAircraftNotFound.set(false);
 
       // V1.4: Anti-cheat - ALWAYS apply DB fuel to simulator
@@ -3558,9 +3909,6 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
    * V3.1: Now works in P2P mode (no token required)
    */
   private async autoUpdateAircraftRegistration(aircraftId: string, newReg: string): Promise<void> {
-    const token = authState.authToken.get();
-    const isP2P = authState.isP2PMode.get();
-
     if (!newReg || newReg.length < 2) return;
 
     try {
@@ -3615,9 +3963,8 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
    * This enforces the database state, preventing cheating via MFS fuel panel
    */
   private async syncFuelFromSimulator(): Promise<void> {
-    const token = authState.authToken.get();
     const aircraft = hangarState.hangarSelectedAircraft.get();
-    if (!token || !aircraft) return;
+    if (!isGameReady() || !aircraft) return;
 
     // Security check - only sync if this is the active aircraft
     if (!this.isSelectedAircraftActive()) {
@@ -3667,9 +4014,8 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
    * Writes to all fuel tanks and syncs to database
    */
   private async refuelHangarAircraft(): Promise<void> {
-    const token = authState.authToken.get();
     const aircraft = hangarState.hangarSelectedAircraft.get();
-    if (!token || !aircraft) return;
+    if (!isGameReady() || !aircraft) return;
 
     // Security check - only refuel if this is the active aircraft
     if (!this.isSelectedAircraftActive()) {
@@ -3703,16 +4049,14 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
   /**
    * V1.2: Auto-sync fuel for the current aircraft in simulator
    * Reads registration from SimVar ATC ID, finds matching aircraft, syncs fuel
-   * Called automatically at login and when opening Hangar tab (anti-cheat)
+   * Called automatically at startup and when opening Hangar tab (anti-cheat)
    */
   /**
    * V1.4: Auto-sync at connection - Apply DB fuel to simulator
    * This restores the saved fuel state when the player connects
    */
   private async autoSyncCurrentAircraft(): Promise<void> {
-    const token = authState.authToken.get();
-    // P2P mode doesn't require token
-    if (!authState.isP2PMode.get() && !token) return;
+    if (!isGameReady()) return;
 
     // Check if database is initialized before proceeding
     if (!DatabaseManager.isInitialized()) {
@@ -3858,12 +4202,14 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
     const currentSimReg = simVarState.currentSimAircraftReg.get();
     const filterText = hangarState.hangarFilter.get();
 
+    const lang = settingsState.currentLanguage.get();
     const translations: HangarListTranslations = {
       noAircraft: this.t("hangar", "noAircraft"),
       noMatch: "Aucun avion trouvé",
       personalBadge: this.t("hangar", "personalBadge"),
       companyBadge: this.t("hangar", "companyBadge"),
       active: this.t("hangar", "active"),
+      forSaleBadge: lang === "fr" ? "EN VENTE" : "FOR SALE",
     };
 
     listEl.innerHTML = renderHangarListHtml(aircraft, selectedId, currentSimReg, filterText, translations);
@@ -3979,8 +4325,7 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
   // V1.0: Check and validate checkpoints
   private async checkCheckpoints(): Promise<void> {
     const mission = missionState.activeMission.get();
-    const token = authState.authToken.get();
-    if (!mission || !token) return;
+    if (!mission || !isGameReady()) return;
 
     const checkpoints = missionState.missionCheckpoints.get();
     const nextSeq = missionState.nextCheckpoint.get();
@@ -4047,17 +4392,17 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
       }
     }
 
-    // Update flight phase display
+    // Update flight phase display (text labels for Coherent GT compatibility)
     if (phase === "departure") {
-      checkpointState.flightPhaseIcon.set("🛫");
+      checkpointState.flightPhaseIcon.set("[DEP]");
       checkpointState.flightPhaseText.set(this.t("missions", "takeoffPhase"));
       checkpointState.flightPhaseColor.set("#3b82f6");
     } else if (phase === "cruise") {
-      checkpointState.flightPhaseIcon.set("✈️");
+      checkpointState.flightPhaseIcon.set("[CRS]");
       checkpointState.flightPhaseText.set(this.t("missions", "cruisePhase"));
       checkpointState.flightPhaseColor.set("#10b981");
     } else if (phase === "arrival") {
-      checkpointState.flightPhaseIcon.set("🛬");
+      checkpointState.flightPhaseIcon.set("[ARR]");
       checkpointState.flightPhaseText.set(this.t("missions", "approachPhase"));
       checkpointState.flightPhaseColor.set("#f59e0b");
     }
@@ -4359,10 +4704,8 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
   private async completeMissionV1(): Promise<void> {
     this.stopFlightTracking();
 
-    const token = authState.authToken.get();
     const mission = missionState.activeMission.get();
-    // P2P mode doesn't require token
-    if (!mission || (!authState.isP2PMode.get() && !token)) return;
+    if (!mission || !isGameReady()) return;
 
     console.log("[WOA] V1.0: Completing mission with modifiers:", mission.id);
 
@@ -4472,6 +4815,58 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
       missionState.missionStatus.set("idle");
       missionState.missionError.set(null);
 
+      // P3.3/P4.4: Sync fuel from simulator to DB after mission (fuel was consumed)
+      try {
+        const fuelQuantity = SimVar.GetSimVarValue("FUEL TOTAL QUANTITY", "gallons") as number;
+        const fuelCapacity = SimVar.GetSimVarValue("FUEL TOTAL CAPACITY", "gallons") as number;
+        if (fuelCapacity > 0) {
+          await FleetRouter.syncFuel(mission.aircraft_id, fuelQuantity, fuelCapacity);
+          console.log(`[WOA] Fuel synced after mission: ${fuelQuantity.toFixed(1)}/${fuelCapacity.toFixed(1)} gal`);
+        }
+      } catch (e) {
+        console.warn("[WOA] Could not sync fuel after mission:", e);
+      }
+
+      // V4.1: Update player's current_airport to final destination
+      try {
+        const player = await InitService.getPlayerInfo();
+        if (player && finalIcao) {
+          player.current_airport = finalIcao;
+          player.updated_at = new Date().toISOString();
+          await DatabaseManager.put("player", player, false);
+          console.log(`[WOA] Player current_airport updated to ${finalIcao}`);
+        }
+      } catch (e) {
+        console.warn("[WOA] Could not update player current_airport:", e);
+      }
+
+      // V2.0: Refresh player stats after mission completion
+      try {
+        const player = await InitService.getPlayerInfo();
+        if (player) {
+          const careerStats = await DatabaseManager.getOrCreatePilotCareerStats(player.id);
+          authState.currentUser.set({
+            id: player.id,
+            username: player.name,
+            email: player.email || "",
+            xp: player.xp,
+            money: player.money,
+            nationality: player.nationality,
+            preferred_airport: player.preferred_airport,
+            current_airport: player.current_airport,  // V4.1: Updated after mission
+            career_stats: {
+              total_missions: careerStats.total_missions,
+              total_flight_time_minutes: careerStats.total_flight_time_minutes,
+              total_distance_nm: careerStats.total_distance_nm,
+              average_grade: careerStats.average_grade,
+            },
+          });
+          console.log(`[WOA] Player stats refreshed after mission: XP=${player.xp}, Missions=${careerStats.total_missions}, Current=${player.current_airport}`);
+        }
+      } catch (e) {
+        console.warn("[WOA] Could not refresh player stats after mission:", e);
+      }
+
     } catch (error) {
       console.error("[WOA] V1.0 Error completing mission:", error);
       missionState.missionError.set(this.t("missions", "errorCompletingMission"));
@@ -4481,26 +4876,146 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
   private updateMapPosition(): void {
     if (!mapManager.isInitialized()) return;
 
-    const lat = simVarState.latitude.get();
-    const lon = simVarState.longitude.get();
+    let lat = simVarState.latitude.get();
+    let lon = simVarState.longitude.get();
     const heading = simVarState.heading.get();
+    const simVarValid = Math.abs(lat) > 0.1; // MSFS returns (0, 90) when no flight loaded
 
-    if (lat === 0 && lon === 0) return;
+    // FIX 3: Position source hierarchy
+    // 1. If flying (SimVars valid) → use SimVars
+    // 2. If not flying → use DB (last_latitude/longitude or airport lookup)
+    if (!simVarValid) {
+      const user = authState.currentUser.get();
+      // Try last_latitude/longitude first
+      if (user?.last_latitude && user?.last_longitude && Math.abs(user.last_latitude) > 0.1) {
+        lat = user.last_latitude;
+        lon = user.last_longitude;
+      } else if (user?.current_airport) {
+        // Fallback: lookup airport coordinates
+        const airports = DatabaseManager.getAirportsCache();
+        const airport = airports.find(a => a.ident === user.current_airport);
+        if (airport) {
+          lat = airport.latitude;
+          lon = airport.longitude;
+        } else {
+          return; // No valid position, don't update marker
+        }
+      } else {
+        return; // No valid position, don't update marker
+      }
+    }
 
-    // V2.1: Delegate to MapManager
+    // Guard: Never move marker to invalid position
+    if (Math.abs(lat) < 0.1) {
+      return;
+    }
+
+    // Update marker position
     mapManager.updateAircraftPosition(lat, lon, heading);
+
+    // V4.1: Save valid SimVar position to Player for next startup (debounced by DB)
+    if (simVarValid) {
+      const user = authState.currentUser.get();
+      if (user && (user.last_latitude !== lat || user.last_longitude !== lon)) {
+        // Update in memory
+        authState.currentUser.set({ ...user, last_latitude: lat, last_longitude: lon });
+        // Update in database (will be persisted by NativePersistence via debounce)
+        void this.savePlayerPosition(lat, lon);
+      }
+    }
+  }
+
+  /**
+   * V4.1: Save player's last known position to database
+   */
+  private async savePlayerPosition(lat: number, lon: number): Promise<void> {
+    try {
+      const user = authState.currentUser.get();
+      if (!user) return;
+      const player = await DatabaseManager.get<Player>("player", String(user.id));
+      if (player) {
+        player.last_latitude = lat;
+        player.last_longitude = lon;
+        player.updated_at = new Date().toISOString();
+        await DatabaseManager.put("player", player, false);
+      }
+    } catch (e) {
+      // Silent fail - not critical
+    }
   }
 
   private centerMapOnAircraft(): void {
     if (!mapManager.isInitialized()) return;
 
-    const lat = simVarState.latitude.get();
-    const lon = simVarState.longitude.get();
+    let lat = simVarState.latitude.get();
+    let lon = simVarState.longitude.get();
+    const heading = simVarState.heading.get();
+    const simVarValid = Math.abs(lat) > 0.1; // MSFS returns (0, 90) when no flight loaded
 
-    if (lat === 0 && lon === 0) return;
+    // V4.1 FIX: If SimVars invalid, use Player.last_latitude/longitude
+    if (!simVarValid) {
+      const user = authState.currentUser.get();
+      if (user?.last_latitude && user?.last_longitude) {
+        lat = user.last_latitude;
+        lon = user.last_longitude;
+      } else {
+        console.log("[WOA] No valid position for centering");
+        return;
+      }
+    }
 
-    // V2.1: Delegate to MapManager
+    // Update marker AND center view
+    mapManager.updateAircraftPosition(lat, lon, heading);
     mapManager.centerOnAircraft(lat, lon);
+  }
+
+  /**
+   * V4.1: Center map on player's position (from last_lat/lon or airport)
+   * Also updates the marker position
+   */
+  private async centerMapOnPlayerAirport(): Promise<void> {
+    if (!this.olMap) return;
+
+    try {
+      const user = authState.currentUser.get();
+
+      // First try: use saved last_latitude/longitude
+      if (user?.last_latitude && user?.last_longitude) {
+        console.log(`[WOA] Centering on player saved position: (${user.last_latitude}, ${user.last_longitude})`);
+        mapManager.updateAircraftPosition(user.last_latitude, user.last_longitude, 0);
+        this.olMap.getView().animate({
+          center: fromLonLat([user.last_longitude, user.last_latitude]),
+          zoom: 9,
+          duration: 500,
+        });
+        return;
+      }
+
+      // Fallback: use current_airport or preferred_airport
+      const targetIcao = user?.current_airport || user?.preferred_airport;
+      if (!targetIcao) {
+        console.log("[WOA] No player position or airport to center on");
+        return;
+      }
+
+      // Get airport coordinates from cache
+      const airports = DatabaseManager.getAirportsCache();
+      const airport = airports.find(a => a.ident === targetIcao);
+
+      if (airport && airport.latitude && airport.longitude) {
+        console.log(`[WOA] Centering on player airport: ${targetIcao} (${airport.latitude}, ${airport.longitude})`);
+        mapManager.updateAircraftPosition(airport.latitude, airport.longitude, 0);
+        this.olMap.getView().animate({
+          center: fromLonLat([airport.longitude, airport.latitude]),
+          zoom: 9,
+          duration: 500,
+        });
+      } else {
+        console.log(`[WOA] Airport ${targetIcao} not found in cache`);
+      }
+    } catch (e) {
+      console.warn("[WOA] Could not center on player airport:", e);
+    }
   }
 
   private async searchAirportByIcao(): Promise<void> {
@@ -4829,46 +5344,12 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
     }
   }
 
-  private async fetchInventory(type: "player" | "company"): Promise<void> {
-    inventoryState.inventoryType.set(type);
-    console.log(`[WOA] Fetching ${type} inventory...`);
-    inventoryState.inventoryStatus.set("loading");
-    inventoryState.inventoryError.set(null);
-
-    try {
-      // P2P: Use MarketRouter for local inventory
-      const items = type === "player"
-        ? await MarketRouter.getPlayerInventory()
-        : await MarketRouter.getCompanyInventory();
-
-      console.log(`[WOA] ${type} Inventory:`, items);
-
-      this.inventoryItems = items.map((item: { item_id?: string; item_name?: string; item_type?: string; qty?: number; quantity?: number; airport_ident?: string; airport_icao?: string }) => ({
-        id: 0,
-        item_type: item.item_name || item.item_type || "unknown",
-        quantity: item.qty || item.quantity || 0,
-        airport_icao: item.airport_ident || item.airport_icao || "----",
-      }));
-
-      inventoryState.inventoryStatus.set("success");
-      this.renderInventoryList();
-
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error(`[WOA] ${type} Inventory FAILED:`, errorMsg);
-      inventoryState.inventoryStatus.set("error");
-      inventoryState.inventoryError.set(errorMsg);
-    }
-  }
-
   // ═══════════════════════════════════════════════════════════
   // COMPANY DATA
   // ═══════════════════════════════════════════════════════════
 
   private async fetchCompanyData(): Promise<void> {
-    const token = authState.authToken.get();
-    // P2P mode doesn't require token
-    if (!authState.isP2PMode.get() && !token) return;
+    if (!isGameReady()) return;
 
     companyState.companyLoading.set(true);
 
@@ -4897,7 +5378,25 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
       companyState.companyFleet.set(fleet);
       console.log("[WOA] Members loaded:", members.length, "Fleet loaded:", fleet.length);
 
+      // Determine player role from members list
+      const playerId = this.persistenceManager?.getPlayerId() || "";
+      const selfMember = members.find((m: any) => m.user_id === playerId);
+      if (selfMember) {
+        const role = selfMember.role === "owner" ? "ceo" : (selfMember.role as any);
+        companyState.playerRole.set(role);
+      } else {
+        companyState.playerRole.set("ceo");
+      }
+
       this.renderCompanyTab();
+
+      // Setup transfer input after render
+      setTimeout(() => {
+        const transferInput = this.transferAmountInputRef.getOrDefault();
+        if (transferInput) {
+          this.setupInputEventBlocker(transferInput);
+        }
+      }, 150);
 
     } catch (error) {
       console.error("[WOA] Error fetching company data:", error);
@@ -4908,13 +5407,233 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
   }
 
   private renderCompanyTab(): void {
+    const playerId = this.persistenceManager?.getPlayerId() || "";
+    const isSolo = authState.isP2PMode.get();
+    const members = companyState.companyMembers.get();
+    const membersForRender = members.map((m: any) => ({ user_id: m.user_id || "", username: m.username || m.email || "", role: m.role || "recruit" }));
+
+    // Overview members (compact)
     const membersEl = this.companyMembersRef.getOrDefault();
     if (membersEl) {
-      membersEl.innerHTML = renderCompanyMembersHtml(companyState.companyMembers.get(), this.t("company", "noMember"));
+      membersEl.innerHTML = renderCompanyMembersHtml(membersForRender, this.t("company", "noMember"), playerId, isSolo);
+    }
+    // Full Membres tab
+    const membersFullEl = this.companyMembersFullRef.getOrDefault();
+    if (membersFullEl) {
+      membersFullEl.innerHTML = renderCompanyMembersHtml(membersForRender, this.t("company", "noMember"), playerId, isSolo);
     }
     const fleetEl = this.companyFleetRef.getOrDefault();
     if (fleetEl) {
       fleetEl.innerHTML = renderCompanyFleetHtml(companyState.companyFleet.get(), this.t("company", "noAircraft"));
+    }
+  }
+
+  /**
+   * Handle player <-> company money transfer
+   */
+  private async handleTransfer(direction: "to" | "from"): Promise<void> {
+    const role = companyState.playerRole.get();
+    const action = direction === "to" ? "transfer_in" : "transfer_out";
+    if (!hasCompanyPermission(role, action)) {
+      companyState.transferError.set(this.t("company", "permissionDenied"));
+      return;
+    }
+
+    const inputEl = this.transferAmountInputRef.getOrDefault();
+    const amount = inputEl ? parseFloat(inputEl.value) : 0;
+    if (!amount || amount <= 0) return;
+
+    companyState.transferLoading.set(true);
+    companyState.transferError.set(null);
+
+    try {
+      if (direction === "to") {
+        await MarketRouter.transferToCompany(amount);
+      } else {
+        await MarketRouter.transferFromCompany(amount);
+      }
+      // Refresh balances
+      const playerBalance = await MarketRouter.getPlayerBalance().catch(() => 0);
+      marketState.walletPersonal.set(playerBalance);
+      const company = await MarketRouter.getCompanyInfo();
+      if (company) companyState.companyData.set(company);
+
+      // Clear input
+      if (inputEl) inputEl.value = "";
+
+      // Generate system message
+      const desc = direction === "to"
+        ? `${this.t("company", "transferToCompany")}: ${formatMoney(amount)}`
+        : `${this.t("company", "transferFromCompany")}: ${formatMoney(amount)}`;
+      void this.addCompanySystemMessage("transfer", desc);
+
+      console.log(`[WOA] Transfer ${direction} company: ${amount} CR`);
+    } catch (error: any) {
+      const msg = error?.message || (direction === "to" ? this.t("company", "insufficientPlayerFunds") : this.t("company", "insufficientCompanyFunds"));
+      companyState.transferError.set(msg);
+      console.error("[WOA] Transfer error:", error);
+    } finally {
+      companyState.transferLoading.set(false);
+    }
+  }
+
+  /**
+   * Fetch company wallet transaction history
+   */
+  private async fetchCompanyHistory(): Promise<void> {
+    companyState.companyHistoryLoading.set(true);
+    try {
+      const transactions = await DatabaseManager.getTransactionLog(100, 0, "company");
+      const timeline: UnifiedTimelineEntry[] = transactions.map(tx => ({
+        id: tx.id,
+        date: tx.timestamp,
+        type: "transaction" as const,
+        transactionType: tx.type,
+        amount: tx.amount,
+        description: tx.description,
+        airport_icao: tx.airport_icao,
+      }));
+      timeline.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      const lang = settingsState.currentLanguage.get();
+      const tr = translations[lang];
+      const historyTr: UnifiedHistoryTranslations = {
+        filterAll: "", filterFlights: "", filterTransactions: "", filterContracts: "",
+        mission: tr.history.mission,
+        freeflight: tr.history.freeflight,
+        marketBuy: (tr.history as any).marketBuy || "Purchase",
+        marketSell: (tr.history as any).marketSell || "Sale",
+        marketList: (tr.history as any).marketList || "Listed for sale",
+        aircraftBuy: (tr.history as any).aircraftBuy || "Aircraft purchase",
+        aircraftSell: (tr.history as any).aircraftSell || "Aircraft sale",
+        refuel: (tr.history as any).refuel || "Refuel",
+        repair: (tr.history as any).repair || "Repair",
+        companyCreate: (tr.history as any).companyCreate || "Company created",
+        missionReward: (tr.history as any).missionReward || "Mission reward",
+        transferToCompany: (tr.history as any).transferToCompany || "Transfer to company",
+        transferFromCompany: (tr.history as any).transferFromCompany || "Withdraw from company",
+        loadMore: tr.history.loadMore,
+        noHistory: (tr.history as any).noHistory || tr.history.noFlights,
+      };
+
+      const el = this.companyHistoryRef.getOrDefault();
+      if (el) {
+        el.innerHTML = renderTransactionsHistoryHtml(timeline, historyTr);
+      }
+      console.log(`[WOA] Company history loaded: ${transactions.length} transactions`);
+    } catch (error) {
+      console.error("[WOA] Error fetching company history:", error);
+    } finally {
+      companyState.companyHistoryLoading.set(false);
+    }
+  }
+
+  /**
+   * Fetch company messages from local DB
+   */
+  private async fetchCompanyMessages(): Promise<void> {
+    companyState.companyMessagesLoading.set(true);
+    try {
+      const companyId = companyState.companyData.get()?.id || "";
+      if (!companyId) {
+        companyState.companyMessagesLoading.set(false);
+        return;
+      }
+      const messages = await DatabaseManager.getCompanyMessages(companyId);
+      companyState.companyMessages.set(messages);
+
+      const role = companyState.playerRole.get();
+      const canPin = hasCompanyPermission(role, "message_pin");
+
+      const el = this.companyMessagesRef.getOrDefault();
+      if (el) {
+        el.innerHTML = renderCompanyMessagesHtml(
+          messages,
+          canPin,
+          { pinned: this.t("company", "pinned"), noMessages: this.t("company", "noMessages") }
+        );
+        // Attach pin button listeners
+        el.querySelectorAll(".pin-message-btn").forEach((btn: Element) => {
+          btn.addEventListener("click", () => {
+            const msgId = btn.getAttribute("data-message-id");
+            if (msgId) void this.handlePinMessage(msgId);
+          });
+        });
+      }
+    } catch (error) {
+      console.error("[WOA] Error fetching company messages:", error);
+    } finally {
+      companyState.companyMessagesLoading.set(false);
+    }
+  }
+
+  /**
+   * Send a company message
+   */
+  private async handleSendCompanyMessage(): Promise<void> {
+    const inputEl = this.companyMessageInputRef.getOrDefault();
+    const content = inputEl?.value?.trim() || "";
+    if (!content) return;
+
+    companyState.companyMessageSending.set(true);
+    try {
+      const companyId = companyState.companyData.get()?.id || "";
+      const playerId = this.persistenceManager?.getPlayerId() || "";
+      const playerName = DatabaseManager.getPlayer()?.username || "Player";
+
+      await DatabaseManager.saveCompanyMessage({
+        id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        company_id: companyId,
+        sender_id: playerId,
+        sender_name: playerName,
+        content,
+        is_system: false,
+        is_pinned: false,
+        created_at: new Date().toISOString(),
+      });
+
+      if (inputEl) inputEl.value = "";
+      void this.fetchCompanyMessages();
+    } catch (error) {
+      console.error("[WOA] Error sending message:", error);
+    } finally {
+      companyState.companyMessageSending.set(false);
+    }
+  }
+
+  /**
+   * Pin/unpin a company message
+   */
+  private async handlePinMessage(messageId: string): Promise<void> {
+    try {
+      const companyId = companyState.companyData.get()?.id || "";
+      await DatabaseManager.pinCompanyMessage(messageId, companyId);
+      void this.fetchCompanyMessages();
+    } catch (error) {
+      console.error("[WOA] Error pinning message:", error);
+    }
+  }
+
+  /**
+   * Add a system message to company messages
+   */
+  private async addCompanySystemMessage(type: string, description: string): Promise<void> {
+    try {
+      const companyId = companyState.companyData.get()?.id || "";
+      if (!companyId) return;
+
+      await DatabaseManager.saveCompanyMessage({
+        id: `sys_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        company_id: companyId,
+        sender_id: "system",
+        sender_name: "System",
+        content: description,
+        is_system: true,
+        is_pinned: false,
+        created_at: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error("[WOA] Error adding system message:", error);
     }
   }
 
@@ -4985,9 +5704,7 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
   // ═══════════════════════════════════════════════════════════
 
   private async fetchMarketData(): Promise<void> {
-    const token = authState.authToken.get();
-    // P2P mode doesn't require token
-    if (!authState.isP2PMode.get() && !token) return;
+    if (!isGameReady()) return;
 
     marketState.marketLoading.set(true);
     marketState.marketError.set(null);
@@ -5079,13 +5796,841 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
     await popupManager.confirmMarketBuy();
   }
 
+  // V4.1: Refresh wallets (personal + company)
+  private async fetchWallets(): Promise<void> {
+    try {
+      const player = await PlayerRouter.getPlayer();
+      if (player) {
+        marketState.walletPersonal.set(player.money);
+      }
+      // Also refresh company data to get company balance
+      void this.fetchCompanyData();
+    } catch (error) {
+      console.error("[WOA] Error fetching wallets:", error);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // V4.1: SELL ORDERS (MES VENTES)
+  // ═══════════════════════════════════════════════════════════
+
+  private async fetchMySellOrders(): Promise<void> {
+    if (!isGameReady()) return;
+
+    try {
+      const { localMarketService } = await import("./services/LocalMarketService");
+      const orders = await localMarketService.getMySellOrders();
+      this.renderMySellOrders(orders);
+    } catch (error) {
+      console.error("[WOA] Error fetching sell orders:", error);
+    }
+  }
+
+  private renderMySellOrders(orders: import("./managers/DatabaseManager").SellOrder[]): void {
+    const el = this.mySellOrdersRef.getOrDefault();
+    if (!el) return;
+
+    const lang = settingsState.currentLanguage.get();
+    const t = (key: string) => this.t("market", key);
+
+    if (orders.length === 0) {
+      el.innerHTML = `
+        <div style="background: #252532; border-radius: 8px; padding: 16px; text-align: center;">
+          <svg style="width: 32px; height: 32px; margin-bottom: 8px; opacity: 0.4;" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="1.5">
+            <path d="M20 12V8H6a2 2 0 01-2-2c0-1.1.9-2 2-2h12v4"/>
+            <path d="M4 6v12c0 1.1.9 2 2 2h14v-4"/>
+            <path d="M18 12a2 2 0 000 4h4v-4h-4z"/>
+          </svg>
+          <div style="color: #6b7280; font-size: 11px;">${t("noActiveOrders")}</div>
+        </div>
+      `;
+      return;
+    }
+
+    let html = '<div style="display: flex; flex-direction: column; gap: 8px;">';
+    for (const order of orders) {
+      const statusColor = order.status === "active" ? "#22c55e" : order.status === "sold" ? "#3b82f6" : "#6b7280";
+      const statusLabel = order.status === "active" ? (lang === "fr" ? "Actif" : "Active") :
+                          order.status === "sold" ? (lang === "fr" ? "Vendu" : "Sold") :
+                          (lang === "fr" ? "Annulé" : "Cancelled");
+
+      html += `
+        <div class="sell-order-item" data-order-id="${order.id}" style="background: #252532; border-radius: 8px; padding: 12px; cursor: ${order.status === "active" ? "pointer" : "default"};">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <div>
+              <div style="font-size: 13px; font-weight: 600; color: white;">${order.item_name}</div>
+              <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">
+                @ ${order.airport_icao} • ${order.quantity}x ${formatMoney(order.price_per_unit)}
+              </div>
+            </div>
+            <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
+              <span style="font-size: 10px; padding: 2px 6px; border-radius: 4px; background: ${statusColor}20; color: ${statusColor};">${statusLabel}</span>
+              <span style="font-size: 12px; font-weight: 600; color: #f59e0b;">${formatMoney(order.total_price)}</span>
+            </div>
+          </div>
+          ${order.status === "active" ? `<div style="margin-top: 8px; text-align: right;"><span class="cancel-order-btn" style="font-size: 10px; color: #ef4444; cursor: pointer;">${lang === "fr" ? "Annuler" : "Cancel"}</span></div>` : ""}
+        </div>
+      `;
+    }
+    html += "</div>";
+    el.innerHTML = html;
+
+    // Add click handlers for cancel buttons
+    el.querySelectorAll(".sell-order-item").forEach(item => {
+      const cancelBtn = item.querySelector(".cancel-order-btn");
+      if (cancelBtn) {
+        cancelBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const orderId = item.getAttribute("data-order-id");
+          if (orderId) void this.cancelSellOrder(orderId);
+        });
+      }
+    });
+  }
+
+  private async cancelSellOrder(orderId: string): Promise<void> {
+    if (!isGameReady()) return;
+
+    try {
+      const { localMarketService } = await import("./services/LocalMarketService");
+      await localMarketService.cancelSellOrder(orderId);
+      // Refresh the list
+      void this.fetchMySellOrders();
+    } catch (error) {
+      console.error("[WOA] Error cancelling sell order:", error);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // V4.1: MARKET INVENTORY
+  // ═══════════════════════════════════════════════════════════
+
+  private async fetchMarketInventory(): Promise<void> {
+    if (!isGameReady()) return;
+
+    inventoryState.marketInventoryLoading.set(true);
+
+    try {
+      const rawInventory = await MarketRouter.getPlayerInventory();
+
+      const items = rawInventory.map(inv => ({
+        id: String(inv.id),
+        item_code: inv.item_type,
+        item_name: inv.item_name,
+        quantity: inv.quantity,
+        airport_icao: inv.airport_icao,
+        tier: inv.tier || 0,
+        owner_type: "player" as const,
+      }));
+
+      // Also fetch company inventory
+      try {
+        const companyInv = await MarketRouter.getCompanyInventory();
+        for (const inv of companyInv) {
+          items.push({
+            id: String(inv.id),
+            item_code: inv.item_type,
+            item_name: inv.item_name,
+            quantity: inv.quantity,
+            airport_icao: inv.airport_icao,
+            tier: inv.tier || 0,
+            owner_type: "company" as const,
+          });
+        }
+      } catch {
+        // Company may not exist
+      }
+
+      inventoryState.marketInventory.set(items);
+      this.renderMarketInventory();
+    } catch (error) {
+      console.error("[WOA] Error fetching market inventory:", error);
+    } finally {
+      inventoryState.marketInventoryLoading.set(false);
+    }
+  }
+
+  private renderMarketInventory(): void {
+    const listEl = this.marketInventoryListRef.getOrDefault();
+    if (!listEl) return;
+
+    const items = inventoryState.marketInventory.get();
+    const filters = {
+      icao: inventoryState.marketInvIcaoFilter.get().trim(),
+      item: inventoryState.marketInvItemFilter.get().trim(),
+      tier: inventoryState.marketInvTierFilter.get(),
+      owner_type: inventoryState.marketInvOwnerFilter.get(),
+    };
+
+    const lang = settingsState.currentLanguage.get();
+    const sellLabel = lang === "fr" ? "Vendre" : "Sell";
+
+    // Apply filters
+    let filtered = items;
+    if (filters.icao.length > 0) {
+      filtered = filtered.filter(i => i.airport_icao?.toUpperCase().includes(filters.icao.toUpperCase()));
+    }
+    if (filters.item.length > 0) {
+      filtered = filtered.filter(i => i.item_name?.toLowerCase().includes(filters.item.toLowerCase()));
+    }
+    if (filters.tier !== null) {
+      filtered = filtered.filter(i => i.tier === filters.tier);
+    }
+    if (filters.owner_type && filters.owner_type !== "all") {
+      filtered = filtered.filter(i => (i.owner_type || "player") === filters.owner_type);
+    }
+
+    if (filtered.length === 0) {
+      listEl.innerHTML = `
+        <div style="background: #252532; border-radius: 12px; padding: 24px; text-align: center;">
+          <svg style="width: 40px; height: 40px; margin-bottom: 12px; opacity: 0.4;" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="1.5">
+            <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+            <path d="M3.27 6.96L12 12.01l8.73-5.05"/>
+            <path d="M12 22.08V12"/>
+          </svg>
+          <div style="color: #6b7280; font-size: 12px;">${this.t("inventory", "emptyInventory")}</div>
+        </div>
+      `;
+      return;
+    }
+
+    // Group by airport
+    const byAirport: Record<string, typeof filtered> = {};
+    for (const item of filtered) {
+      const icao = item.airport_icao || "UNKNOWN";
+      if (!byAirport[icao]) byAirport[icao] = [];
+      byAirport[icao].push(item);
+    }
+
+    // Render grouped inventory with sell buttons
+    let html = "";
+    for (const icao of Object.keys(byAirport)) {
+      const airportItems = byAirport[icao];
+      html += `<div style="background: #252532; border-radius: 8px; padding: 12px; margin-bottom: 8px;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span style="font-family: monospace; color: #60a5fa; font-size: 12px; font-weight: 600;">${icao}</span>
+          <span style="font-size: 10px; color: #6b7280;">(${airportItems.length} items)</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 4px;">`;
+      for (const item of airportItems) {
+        const ownerColor = (item.owner_type || "player") === "player" ? "#3b82f6" : "#f59e0b";
+        const tierColor = item.tier === 0 ? "#6b7280" : item.tier === 1 ? "#22c55e" : item.tier === 2 ? "#3b82f6" : "#a855f7";
+        html += `<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; background: #1a1a24; border-radius: 4px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="width: 8px; height: 8px; border-radius: 50%; background: ${ownerColor}; display: inline-block;"></span>
+            <span style="width: 6px; height: 6px; border-radius: 50%; background: ${tierColor};"></span>
+            <span style="font-size: 11px; color: white;">${item.item_name}</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 11px; color: #9ca3af; font-weight: 600;">x${item.quantity}</span>
+            <button class="inv-sell-btn" data-item-code="${item.item_code}" data-airport="${item.airport_icao}" style="padding: 3px 8px; background: #f59e0b; color: #1a1a24; border: none; border-radius: 4px; font-size: 9px; font-weight: 600; cursor: pointer;">${sellLabel}</button>
+          </div>
+        </div>`;
+      }
+      html += `</div></div>`;
+    }
+    listEl.innerHTML = html;
+
+    // Wire sell buttons
+    listEl.querySelectorAll(".inv-sell-btn").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const itemCode = (btn as HTMLElement).getAttribute("data-item-code") || "";
+        const airport = (btn as HTMLElement).getAttribute("data-airport") || "";
+        void this.openSellItemPopupHandler(itemCode, airport);
+      });
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // V4.1: SELL ITEM POPUP
+  // ═══════════════════════════════════════════════════════════
+
+  private async openSellItemPopupHandler(preSelectedItemCode?: string, preSelectedAirport?: string): Promise<void> {
+    if (!isGameReady()) return;
+
+    try {
+      const { localMarketService } = await import("./services/LocalMarketService");
+      const inventory = await localMarketService.getPlayerInventory();
+
+      // Map to SellableItem format
+      const items: SellableItem[] = inventory
+        .filter(inv => inv.quantity > 0)
+        .map(inv => ({
+          item_code: inv.item_type,
+          item_name: inv.item_name,
+          quantity: inv.quantity,
+          airport_icao: inv.airport_icao,
+          tier: inv.tier || 0,
+        }));
+
+      if (items.length === 0) {
+        openSellItemPopup([]);
+        this.renderSellItemPopupContent([]);
+        return;
+      }
+
+      // Find pre-selected item index
+      let preSelectedIndex = 0;
+      if (preSelectedItemCode) {
+        const idx = items.findIndex(i =>
+          i.item_code === preSelectedItemCode &&
+          (!preSelectedAirport || i.airport_icao === preSelectedAirport)
+        );
+        if (idx >= 0) preSelectedIndex = idx;
+      }
+
+      openSellItemPopup(items);
+      marketState.sellItemSelectedIndex.set(preSelectedIndex);
+      this.renderSellItemPopupContent(items, preSelectedIndex);
+    } catch (error) {
+      console.error("[WOA] Error opening sell item popup:", error);
+    }
+  }
+
+  private renderSellItemPopupContent(items: SellableItem[], preSelectedIndex: number = 0): void {
+    const el = this.sellItemPopupRef.getOrDefault();
+    if (!el) return;
+
+    const lang = settingsState.currentLanguage.get();
+    const t = (section: string, key: string) => this.t(section, key);
+
+    if (items.length === 0) {
+      el.innerHTML = `
+        <div style="background: #1a1a24; border-radius: 8px; padding: 16px; text-align: center;">
+          <div style="color: #6b7280; font-size: 12px;">${t("market", "noItemsToSell")}</div>
+        </div>
+        <button class="sell-popup-cancel" style="width: 100%; margin-top: 12px; padding: 10px; background: #374151; color: #9ca3af; border-radius: 8px; text-align: center; font-size: 11px; border: none; cursor: pointer;">
+          ${t("common", "cancel")}
+        </button>
+      `;
+      el.querySelector(".sell-popup-cancel")?.addEventListener("click", () => {
+        closeSellItemPopup();
+      });
+      return;
+    }
+
+    // Build item options HTML with pre-selection
+    let optionsHtml = "";
+    items.forEach((item, i) => {
+      const selected = i === preSelectedIndex ? " selected" : "";
+      optionsHtml += `<option value="${i}"${selected}>${item.item_name} (${item.quantity}x @ ${item.airport_icao})</option>`;
+    });
+
+    const selectedItem = items[preSelectedIndex] || items[0];
+    el.innerHTML = `
+      <div style="margin-bottom: 12px;">
+        <div style="font-size: 11px; color: #6b7280; margin-bottom: 6px;">${t("market", "selectItem")}</div>
+        <select class="sell-item-select" style="width: 100%; padding: 8px; background: #1a1a24; border: 1px solid #374151; border-radius: 6px; color: white; font-size: 12px; outline: none;">
+          ${optionsHtml}
+        </select>
+      </div>
+
+      <div style="margin-bottom: 12px;">
+        <div style="font-size: 11px; color: #6b7280; margin-bottom: 6px;">${t("market", "selectOwner")}</div>
+        <div style="display: flex; gap: 8px;">
+          <button class="sell-owner-btn" data-owner="player" style="flex: 1; padding: 8px; background: #3b82f6; color: white; border: 1px solid #3b82f6; border-radius: 6px; font-size: 11px; cursor: pointer;">
+            ${lang === "fr" ? "Perso" : "Personal"}
+          </button>
+          <button class="sell-owner-btn" data-owner="company" style="flex: 1; padding: 8px; background: #1a1a24; color: #6b7280; border: 1px solid #374151; border-radius: 6px; font-size: 11px; cursor: pointer;">
+            ${lang === "fr" ? "Company" : "Company"}
+          </button>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 12px;">
+        <div style="font-size: 11px; color: #6b7280; margin-bottom: 6px;">${t("common", "quantity")}</div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <input type="range" class="sell-qty-slider" min="1" max="${selectedItem.quantity}" value="1" style="flex: 1; accent-color: #3b82f6;" />
+          <span class="sell-qty-display" style="font-size: 14px; font-weight: 600; color: white; min-width: 30px; text-align: right;">1</span>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 12px;">
+        <div style="font-size: 11px; color: #6b7280; margin-bottom: 6px;">${t("market", "pricePerUnit")} (CR)</div>
+        <input type="number" class="sell-price-input" value="100" min="1" style="width: 100%; padding: 8px; background: #1a1a24; border: 1px solid #374151; border-radius: 6px; color: white; font-size: 12px; outline: none; box-sizing: border-box;" />
+      </div>
+
+      <div style="background: #1a1a24; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 12px; color: #9ca3af;">${t("market", "totalPrice")}:</span>
+          <span class="sell-total-display" style="font-size: 16px; font-weight: 700; color: #f59e0b;">100 CR</span>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <button class="sell-confirm-btn" style="width: 100%; padding: 12px; background: #22c55e; color: white; border-radius: 8px; text-align: center; font-size: 12px; font-weight: 600; border: none; cursor: pointer;">
+          ${t("market", "postOrder")}
+        </button>
+        <button class="sell-popup-cancel" style="width: 100%; padding: 10px; background: #374151; color: #9ca3af; border-radius: 8px; text-align: center; font-size: 11px; border: none; cursor: pointer;">
+          ${t("common", "cancel")}
+        </button>
+      </div>
+    `;
+
+    // Wire up event handlers
+    const selectEl = el.querySelector(".sell-item-select") as HTMLSelectElement;
+    const qtySlider = el.querySelector(".sell-qty-slider") as HTMLInputElement;
+    const qtyDisplay = el.querySelector(".sell-qty-display") as HTMLSpanElement;
+    const priceInput = el.querySelector(".sell-price-input") as HTMLInputElement;
+    const totalDisplay = el.querySelector(".sell-total-display") as HTMLSpanElement;
+    const ownerBtns = el.querySelectorAll(".sell-owner-btn");
+    let selectedOwner: "player" | "company" = "player";
+
+    const updateTotal = (): void => {
+      const qty = parseInt(qtySlider.value) || 1;
+      const price = parseInt(priceInput.value) || 0;
+      totalDisplay.textContent = `${formatMoney(qty * price)}`;
+    };
+
+    // Item selection change
+    selectEl?.addEventListener("change", () => {
+      const idx = parseInt(selectEl.value);
+      const item = items[idx];
+      if (item) {
+        qtySlider.max = item.quantity.toString();
+        qtySlider.value = "1";
+        qtyDisplay.textContent = "1";
+        marketState.sellItemSelectedIndex.set(idx);
+        updateTotal();
+      }
+    });
+
+    // Quantity slider
+    qtySlider?.addEventListener("input", () => {
+      qtyDisplay.textContent = qtySlider.value;
+      updateTotal();
+    });
+
+    // Price input
+    priceInput?.addEventListener("input", () => {
+      updateTotal();
+    });
+    // Stop keyboard propagation for inputs
+    [priceInput, selectEl].forEach(input => {
+      if (!input) return;
+      input.addEventListener("keydown", (e: Event) => { e.stopPropagation(); e.stopImmediatePropagation(); });
+      input.addEventListener("keyup", (e: Event) => { e.stopPropagation(); e.stopImmediatePropagation(); });
+      input.addEventListener("keypress", (e: Event) => { e.stopPropagation(); e.stopImmediatePropagation(); });
+    });
+
+    // Owner type buttons
+    ownerBtns.forEach(btn => {
+      btn.addEventListener("click", () => {
+        selectedOwner = (btn.getAttribute("data-owner") as "player" | "company") || "player";
+        ownerBtns.forEach(b => {
+          if (b.getAttribute("data-owner") === selectedOwner) {
+            (b as HTMLElement).style.background = "#3b82f6";
+            (b as HTMLElement).style.color = "white";
+            (b as HTMLElement).style.borderColor = "#3b82f6";
+          } else {
+            (b as HTMLElement).style.background = "#1a1a24";
+            (b as HTMLElement).style.color = "#6b7280";
+            (b as HTMLElement).style.borderColor = "#374151";
+          }
+        });
+        marketState.sellItemOwnerType.set(selectedOwner);
+      });
+    });
+
+    // Confirm button
+    el.querySelector(".sell-confirm-btn")?.addEventListener("click", () => {
+      const idx = parseInt(selectEl.value);
+      const qty = parseInt(qtySlider.value) || 1;
+      const price = parseInt(priceInput.value) || 0;
+      if (price <= 0) return;
+      void this.confirmSellItem(items[idx], qty, price, selectedOwner);
+    });
+
+    // Cancel button
+    el.querySelector(".sell-popup-cancel")?.addEventListener("click", () => {
+      closeSellItemPopup();
+    });
+  }
+
+  private async confirmSellItem(item: SellableItem, qty: number, price: number, ownerType: "player" | "company"): Promise<void> {
+    if (!isGameReady()) return;
+
+    try {
+      const { localMarketService } = await import("./services/LocalMarketService");
+      await localMarketService.postSellOrder({
+        item_id: item.item_code,
+        quantity: qty,
+        price_per_unit: price,
+        owner_type: ownerType,
+        airport_icao: item.airport_icao,
+      });
+
+      console.log("[WOA] Sell order posted:", item.item_name, qty, "x", price, "CR");
+
+      closeSellItemPopup();
+      void this.fetchMySellOrders();
+      void this.fetchWallets();
+    } catch (error) {
+      console.error("[WOA] Error posting sell order:", error);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // V4.1: AIRCRAFT SELL CHOICE POPUP
+  // ═══════════════════════════════════════════════════════════
+
+  private async openSellAircraftPopupHandler(aircraftId: string): Promise<void> {
+    if (!isGameReady()) return;
+
+    try {
+      const { localMarketService } = await import("./services/LocalMarketService");
+      const myAircraft = await localMarketService.getMyAircraftForSale();
+      const ac = myAircraft.find(a => a.id === aircraftId);
+      if (!ac) {
+        console.error("[WOA] Aircraft not found:", aircraftId);
+        return;
+      }
+
+      if (ac.has_cargo) {
+        console.warn("[WOA] Aircraft has cargo, cannot sell");
+        return;
+      }
+
+      const catalogPrice = ac.catalog?.basePrice || ac.purchase_price || 50000;
+      const data: SellAircraftData = {
+        id: ac.id,
+        registration: ac.registration,
+        type_code: ac.type_code,
+        name: ac.catalog?.name || ac.type_code,
+        condition: ac.condition,
+        sell_value: ac.sell_value,
+        catalog_price: catalogPrice,
+        location_icao: ac.location_icao,
+        owner_type: ac.owner_type,
+      };
+
+      openSellAircraftPopup(data);
+      this.renderSellAircraftPopupContent(data);
+    } catch (error) {
+      console.error("[WOA] Error opening aircraft sell popup:", error);
+    }
+  }
+
+  private renderSellAircraftPopupContent(data: SellAircraftData): void {
+    const el = this.sellAircraftPopupRef.getOrDefault();
+    if (!el) return;
+
+    const lang = settingsState.currentLanguage.get();
+    const t = (section: string, key: string) => this.t(section, key);
+    const conditionColor = data.condition >= 80 ? "#22c55e" : data.condition >= 50 ? "#f59e0b" : "#ef4444";
+
+    el.innerHTML = `
+      <div style="background: #1a1a24; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+        <div style="font-size: 14px; font-weight: 600; color: white; margin-bottom: 4px;">${data.name}</div>
+        <div style="font-size: 11px; color: #6b7280;">${data.registration} @ ${data.location_icao}</div>
+        <div style="display: flex; gap: 8px; margin-top: 6px;">
+          <span style="font-size: 10px; padding: 2px 6px; border-radius: 4px; background: ${conditionColor}20; color: ${conditionColor};">${data.condition}%</span>
+          <span style="font-size: 10px; color: #9ca3af;">${t("market", "catalogPrice")}: ${formatMoney(data.catalog_price)}</span>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <div style="font-size: 11px; font-weight: 600; color: #9ca3af; text-transform: uppercase; margin-bottom: 8px;">
+          ${t("market", "quickSale")}
+        </div>
+        <div style="background: #1a1a24; border-radius: 8px; padding: 12px;">
+          <div style="font-size: 11px; color: #6b7280; margin-bottom: 6px;">${t("market", "quickSaleDesc")}</div>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 16px; font-weight: 700; color: #f59e0b;">${formatMoney(data.sell_value)}</span>
+            <button class="quick-sell-btn" style="padding: 8px 16px; background: #ef4444; color: white; border-radius: 6px; font-size: 11px; font-weight: 600; border: none; cursor: pointer;">
+              ${t("market", "confirmSell")}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <div style="font-size: 11px; font-weight: 600; color: #9ca3af; text-transform: uppercase; margin-bottom: 8px;">
+          ${t("market", "postToMarket")}
+        </div>
+        <div style="background: #1a1a24; border-radius: 8px; padding: 12px;">
+          <div style="font-size: 11px; color: #6b7280; margin-bottom: 8px;">${t("market", "marketSaleDesc")}</div>
+          <div style="margin-bottom: 8px;">
+            <div style="font-size: 11px; color: #6b7280; margin-bottom: 4px;">${t("market", "askingPrice")} (CR)</div>
+            <input type="number" class="aircraft-price-input" value="${data.catalog_price}" min="1" style="width: 100%; padding: 8px; background: #252532; border: 1px solid #374151; border-radius: 6px; color: white; font-size: 12px; outline: none; box-sizing: border-box;" />
+          </div>
+          <button class="market-sell-btn" style="width: 100%; padding: 8px; background: #22c55e; color: white; border-radius: 6px; font-size: 11px; font-weight: 600; border: none; cursor: pointer;">
+            ${t("market", "postOrder")}
+          </button>
+        </div>
+      </div>
+
+      <button class="sell-aircraft-cancel" style="width: 100%; padding: 10px; background: #374151; color: #9ca3af; border-radius: 8px; text-align: center; font-size: 11px; border: none; cursor: pointer;">
+        ${t("common", "cancel")}
+      </button>
+    `;
+
+    // Stop keyboard propagation for price input
+    const priceInput = el.querySelector(".aircraft-price-input") as HTMLInputElement;
+    if (priceInput) {
+      priceInput.addEventListener("keydown", (e: Event) => { e.stopPropagation(); e.stopImmediatePropagation(); });
+      priceInput.addEventListener("keyup", (e: Event) => { e.stopPropagation(); e.stopImmediatePropagation(); });
+      priceInput.addEventListener("keypress", (e: Event) => { e.stopPropagation(); e.stopImmediatePropagation(); });
+    }
+
+    // Quick sell button
+    el.querySelector(".quick-sell-btn")?.addEventListener("click", () => {
+      void this.confirmQuickSellAircraft(data.id);
+    });
+
+    // Market sell button
+    el.querySelector(".market-sell-btn")?.addEventListener("click", () => {
+      const price = parseInt(priceInput?.value || "0");
+      if (price <= 0) return;
+      void this.confirmMarketSellAircraft(data.id, price);
+    });
+
+    // Cancel button
+    el.querySelector(".sell-aircraft-cancel")?.addEventListener("click", () => {
+      closeSellAircraftPopup();
+    });
+  }
+
+  private async confirmQuickSellAircraft(aircraftId: string): Promise<void> {
+    if (!isGameReady()) return;
+
+    try {
+      const { localMarketService } = await import("./services/LocalMarketService");
+      const saleValue = await localMarketService.sellAircraft(aircraftId);
+      console.log("[WOA] Aircraft sold (quick) for:", saleValue, "CR");
+
+      closeSellAircraftPopup();
+      void this.fetchWallets();
+      void this.fetchAircraftCatalog();
+      void this.fetchHangarAircraftList();
+    } catch (error) {
+      console.error("[WOA] Error quick-selling aircraft:", error);
+    }
+  }
+
+  private async confirmMarketSellAircraft(aircraftId: string, askingPrice: number): Promise<void> {
+    if (!isGameReady()) return;
+
+    try {
+      const { localMarketService } = await import("./services/LocalMarketService");
+      await localMarketService.postAircraftSellOrder(aircraftId, askingPrice);
+      console.log("[WOA] Aircraft sell order posted at:", askingPrice, "CR");
+
+      closeSellAircraftPopup();
+      void this.fetchMySellOrders();
+      void this.fetchAircraftCatalog();
+      void this.fetchHangarAircraftList();
+    } catch (error) {
+      console.error("[WOA] Error posting aircraft sell order:", error);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // V4.1: AIRCRAFT CATALOG (AVIONS)
+  // ═══════════════════════════════════════════════════════════
+
+  private async fetchAircraftCatalog(): Promise<void> {
+    if (!isGameReady()) return;
+
+    try {
+      const { localMarketService } = await import("./services/LocalMarketService");
+      const categoryFilter = marketState.aircraftCategoryFilter.get();
+      const filters = categoryFilter === "all" ? undefined : { category: categoryFilter };
+
+      const catalog = await localMarketService.getAircraftCatalog(filters);
+      const myAircraft = await localMarketService.getMyAircraftForSale();
+
+      this.renderAircraftCatalog(catalog);
+      this.renderMyAircraftForSale(myAircraft);
+    } catch (error) {
+      console.error("[WOA] Error fetching aircraft catalog:", error);
+    }
+  }
+
+  private renderAircraftCatalog(catalog: import("./managers/DatabaseManager").AircraftCatalog[]): void {
+    const el = this.aircraftCatalogRef.getOrDefault();
+    if (!el) return;
+
+    const lang = settingsState.currentLanguage.get();
+    const t = (key: string) => this.t("market", key);
+    const walletPersonal = marketState.walletPersonal.get();
+    const companyBalance = companyState.companyData.get()?.balance || 0;
+
+    if (catalog.length === 0) {
+      el.innerHTML = `
+        <div style="background: #252532; border-radius: 8px; padding: 16px; text-align: center;">
+          <div style="color: #6b7280; font-size: 11px;">${lang === "fr" ? "Aucun avion disponible" : "No aircraft available"}</div>
+        </div>
+      `;
+      return;
+    }
+
+    let html = '<div style="display: flex; flex-direction: column; gap: 8px;">';
+    for (const aircraft of catalog) {
+      const canBuyPersonal = walletPersonal >= aircraft.basePrice;
+      const canBuyCompany = companyBalance >= aircraft.basePrice;
+      const licenseColor = aircraft.requiredLicense === "PPL" ? "#22c55e" :
+                           aircraft.requiredLicense === "IR" ? "#3b82f6" :
+                           aircraft.requiredLicense === "CPL" ? "#f59e0b" :
+                           aircraft.requiredLicense === "ATPL" ? "#a855f7" : "#6b7280";
+
+      html += `
+        <div class="aircraft-catalog-item" data-catalog-id="${aircraft.id}" style="background: #252532; border-radius: 8px; padding: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <div>
+              <div style="font-size: 13px; font-weight: 600; color: white;">${aircraft.name}</div>
+              <div style="font-size: 10px; color: #6b7280; margin-top: 2px;">${aircraft.manufacturer} • ${aircraft.icaoType}</div>
+              <div style="display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap;">
+                <span style="font-size: 9px; padding: 2px 6px; border-radius: 4px; background: #22c55e20; color: #22c55e;">${lang === "fr" ? "Neuf - 100%" : "New - 100%"}</span>
+                <span style="font-size: 9px; padding: 2px 6px; border-radius: 4px; background: ${licenseColor}20; color: ${licenseColor};">${aircraft.requiredLicense}</span>
+                <span style="font-size: 9px; padding: 2px 6px; border-radius: 4px; background: #3b82f620; color: #3b82f6;">${aircraft.passengerSeats} pax</span>
+                <span style="font-size: 9px; padding: 2px 6px; border-radius: 4px; background: #f59e0b20; color: #f59e0b;">${aircraft.cargoCapacityKg} kg</span>
+                <span style="font-size: 9px; padding: 2px 6px; border-radius: 4px; background: #6b728020; color: #9ca3af;">${aircraft.maxRangeNm} nm</span>
+                ${aircraft.requiresCopilot ? `<span style="font-size: 9px; padding: 2px 6px; border-radius: 4px; background: #ef444420; color: #ef4444;">${lang === "fr" ? "Copilote" : "Copilot"}</span>` : ""}
+              </div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-size: 14px; font-weight: 700; color: #22c55e;">${formatMoney(aircraft.basePrice)}</div>
+              <div style="display: flex; gap: 4px; margin-top: 6px;">
+                <button class="buy-personal-btn" ${!canBuyPersonal ? "disabled" : ""} style="font-size: 9px; padding: 4px 8px; border-radius: 4px; border: none; cursor: ${canBuyPersonal ? "pointer" : "not-allowed"}; background: ${canBuyPersonal ? "#3b82f6" : "#374151"}; color: ${canBuyPersonal ? "white" : "#6b7280"};">
+                  ${lang === "fr" ? "Perso" : "Personal"}
+                </button>
+                <button class="buy-company-btn" ${!canBuyCompany ? "disabled" : ""} style="font-size: 9px; padding: 4px 8px; border-radius: 4px; border: none; cursor: ${canBuyCompany ? "pointer" : "not-allowed"}; background: ${canBuyCompany ? "#f59e0b" : "#374151"}; color: ${canBuyCompany ? "#1a1a24" : "#6b7280"};">
+                  ${lang === "fr" ? "Company" : "Company"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+    html += "</div>";
+    el.innerHTML = html;
+
+    // Add click handlers for buy buttons
+    el.querySelectorAll(".aircraft-catalog-item").forEach(item => {
+      const catalogId = item.getAttribute("data-catalog-id");
+      if (!catalogId) return;
+
+      const personalBtn = item.querySelector(".buy-personal-btn");
+      const companyBtn = item.querySelector(".buy-company-btn");
+
+      if (personalBtn && !personalBtn.hasAttribute("disabled")) {
+        personalBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          void this.purchaseAircraft(catalogId, "player");
+        });
+      }
+      if (companyBtn && !companyBtn.hasAttribute("disabled")) {
+        companyBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          void this.purchaseAircraft(catalogId, "company");
+        });
+      }
+    });
+  }
+
+  private renderMyAircraftForSale(aircraft: Array<import("./managers/DatabaseManager").Aircraft & { catalog?: import("./managers/DatabaseManager").AircraftCatalog; sell_value: number; has_cargo: boolean }>): void {
+    const el = this.myAircraftForSaleRef.getOrDefault();
+    if (!el) return;
+
+    const lang = settingsState.currentLanguage.get();
+    const t = (key: string) => this.t("market", key);
+
+    if (aircraft.length === 0) {
+      el.innerHTML = `
+        <div style="background: #252532; border-radius: 8px; padding: 16px; text-align: center;">
+          <div style="color: #6b7280; font-size: 11px;">${lang === "fr" ? "Aucun avion à vendre" : "No aircraft to sell"}</div>
+        </div>
+      `;
+      return;
+    }
+
+    let html = '<div style="display: flex; flex-direction: column; gap: 8px;">';
+    for (const ac of aircraft) {
+      const conditionColor = ac.condition >= 80 ? "#22c55e" : ac.condition >= 50 ? "#f59e0b" : "#ef4444";
+
+      html += `
+        <div class="my-aircraft-item" data-aircraft-id="${ac.id}" style="background: #252532; border-radius: 8px; padding: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <div>
+              <div style="font-size: 13px; font-weight: 600; color: white;">${ac.catalog?.name || ac.aircraft_type}</div>
+              <div style="font-size: 10px; color: #6b7280; margin-top: 2px;">${ac.registration} • @ ${ac.location_icao}</div>
+              <div style="display: flex; gap: 6px; margin-top: 4px;">
+                <span style="font-size: 9px; padding: 2px 6px; border-radius: 4px; background: ${conditionColor}20; color: ${conditionColor};">${ac.condition}%</span>
+                ${ac.has_cargo ? `<span style="font-size: 9px; padding: 2px 6px; border-radius: 4px; background: #ef444420; color: #ef4444;">${lang === "fr" ? "Cargo" : "Has cargo"}</span>` : ""}
+              </div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-size: 14px; font-weight: 700; color: #f59e0b;">${formatMoney(ac.sell_value)}</div>
+              <button class="sell-aircraft-btn" ${ac.has_cargo ? "disabled" : ""} style="margin-top: 6px; font-size: 9px; padding: 4px 8px; border-radius: 4px; border: none; cursor: ${ac.has_cargo ? "not-allowed" : "pointer"}; background: ${ac.has_cargo ? "#374151" : "#ef4444"}; color: ${ac.has_cargo ? "#6b7280" : "white"};">
+                ${lang === "fr" ? "Vendre" : "Sell"}
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+    html += "</div>";
+    el.innerHTML = html;
+
+    // Add click handlers for sell buttons
+    el.querySelectorAll(".my-aircraft-item").forEach(item => {
+      const aircraftId = item.getAttribute("data-aircraft-id");
+      if (!aircraftId) return;
+
+      const sellBtn = item.querySelector(".sell-aircraft-btn");
+      if (sellBtn && !sellBtn.hasAttribute("disabled")) {
+        sellBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          void this.sellAircraft(aircraftId);
+        });
+      }
+    });
+  }
+
+  private async purchaseAircraft(catalogId: string, ownerType: "player" | "company"): Promise<void> {
+    if (!isGameReady()) return;
+
+    try {
+      const { localMarketService } = await import("./services/LocalMarketService");
+
+      // Get current location - prefer closest airport from SimVar, fallback to user's location
+      const closestAirport = simVarState.closestAirport.get();
+      const user = authState.currentUser.get();
+      const currentIcao = (closestAirport && closestAirport !== "----")
+        ? closestAirport
+        : (user?.current_airport || user?.preferred_airport || "LFPG");
+
+      const newAircraft = await localMarketService.purchaseAircraft({
+        catalog_id: catalogId,
+        owner_type: ownerType,
+        location_icao: currentIcao,
+      });
+
+      console.log("[WOA] Aircraft purchased:", newAircraft.registration);
+
+      // Refresh wallet and catalog
+      void this.fetchWallets();
+      void this.fetchAircraftCatalog();
+      void this.fetchHangarAircraftList();
+    } catch (error) {
+      console.error("[WOA] Error purchasing aircraft:", error);
+    }
+  }
+
+  private async sellAircraft(aircraftId: string): Promise<void> {
+    // V4.1: Open sell choice popup instead of instant sale
+    void this.openSellAircraftPopupHandler(aircraftId);
+  }
+
   // ═══════════════════════════════════════════════════════════
   // PROFILE INVENTORY
   // ═══════════════════════════════════════════════════════════
 
   private async fetchProfileInventory(): Promise<void> {
-    // P2P mode check
-    if (!authState.isP2PMode.get() && !authState.authToken.get()) return;
+    if (!isGameReady()) return;
 
     inventoryState.profileInventoryLoading.set(true);
 
@@ -5117,11 +6662,12 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
 
   /**
    * Shared grouped inventory renderer - used by both profile and company inventory
+   * V4.1: Added owner_type badge and category support for personnel items
    */
   private renderGroupedInventory(
     listEl: HTMLElement | null,
-    items: Array<{ id: string; item_code: string; item_name: string; quantity: number; airport_icao: string; tier: number }>,
-    filters: { icao: string; item: string; tier: number | null }
+    items: Array<{ id: string; item_code: string; item_name: string; quantity: number; airport_icao: string; tier: number; owner_type?: "player" | "company"; category?: string }>,
+    filters: { icao: string; item: string; tier: number | null; owner_type?: "all" | "player" | "company" }
   ): void {
     if (!listEl) return;
 
@@ -5135,6 +6681,10 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
     }
     if (filters.tier !== null) {
       filtered = filtered.filter(i => i.tier === filters.tier);
+    }
+    // V4.1: Filter by owner_type
+    if (filters.owner_type && filters.owner_type !== "all") {
+      filtered = filtered.filter(i => (i.owner_type || "player") === filters.owner_type);
     }
 
     // Render empty state
@@ -5171,9 +6721,14 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
         </div>
         <div style="display: flex; flex-direction: column; gap: 4px;">`;
       for (const item of airportItems) {
-        const tierColor = item.tier === 0 ? "#6b7280" : item.tier === 1 ? "#22c55e" : item.tier === 2 ? "#3b82f6" : "#a855f7";
+        // V4.1: Ownership badge color (blue=player, orange=company)
+        const ownerColor = (item.owner_type || "player") === "player" ? "#3b82f6" : "#f59e0b";
+        // V4.1: Tier/category color (violet for personnel, otherwise tier-based)
+        const isPersonnel = item.category === "personnel" || ["worker", "engineer", "pilot", "copilot"].includes(item.item_code);
+        const tierColor = isPersonnel ? "#a855f7" : (item.tier === 0 ? "#6b7280" : item.tier === 1 ? "#22c55e" : item.tier === 2 ? "#3b82f6" : "#a855f7");
         html += `<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; background: #1a1a24; border-radius: 4px;">
           <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="width: 8px; height: 8px; border-radius: 50%; background: ${ownerColor}; display: inline-block;"></span>
             <span style="width: 6px; height: 6px; border-radius: 50%; background: ${tierColor};"></span>
             <span style="font-size: 11px; color: white;">${item.item_name}</span>
           </div>
@@ -5192,9 +6747,285 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
       {
         icao: inventoryState.profileIcaoFilter.get().trim(),
         item: inventoryState.profileItemFilter.get().trim(),
-        tier: inventoryState.profileTierFilter.get()
+        tier: inventoryState.profileTierFilter.get(),
+        owner_type: inventoryState.profileOwnerFilter.get()  // V4.1: Ownership filter
       }
     );
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // V2.4: FLIGHT HISTORY
+  // ═══════════════════════════════════════════════════════════
+
+  /**
+   * V4.1: Fetch unified history (flights + transactions) from local database
+   */
+  private async fetchFlightHistory(): Promise<void> {
+    this.flightHistoryLoading.set(true);
+
+    try {
+      // Fetch both flights and transactions in parallel
+      const [flights, transactions] = await Promise.all([
+        DatabaseManager.getFlightHistory(50),
+        DatabaseManager.getTransactionLog(50),
+      ]);
+
+      this.flightHistoryEntries = flights;
+      this.transactionLogEntries = transactions;
+
+      console.log(`[WOA] Unified history loaded: ${flights.length} flights, ${transactions.length} transactions`);
+      this.renderMarketTransactionHistory();
+      this.renderMissionHistory();
+      this.renderFreeFlightHistory();
+    } catch (error) {
+      console.error("[WOA] Error fetching unified history:", error);
+    } finally {
+      this.flightHistoryLoading.set(false);
+    }
+  }
+
+  /**
+   * V4.1: Render transactions-only history for Market > Historique
+   */
+  private renderMarketTransactionHistory(): void {
+    const el = this.flightHistoryRef.getOrDefault();
+    if (!el) return;
+
+    const lang = settingsState.currentLanguage.get();
+    const tr = translations[lang];
+
+    // Build transactions timeline only
+    const timeline: UnifiedTimelineEntry[] = [];
+    for (const tx of this.transactionLogEntries) {
+      timeline.push({
+        id: tx.id,
+        date: tx.timestamp,
+        type: "transaction",
+        transactionType: tx.type,
+        amount: tx.amount,
+        description: tx.description,
+        airport_icao: tx.airport_icao,
+      });
+    }
+    timeline.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    const historyTr: UnifiedHistoryTranslations = {
+      filterAll: "", filterFlights: "", filterTransactions: "", filterContracts: "",
+      mission: tr.history.mission,
+      freeflight: tr.history.freeflight,
+      marketBuy: (tr.history as any).marketBuy || "Purchase",
+      marketSell: (tr.history as any).marketSell || "Sale",
+      marketList: (tr.history as any).marketList || "Listed for sale",
+      aircraftBuy: (tr.history as any).aircraftBuy || "Aircraft purchase",
+      aircraftSell: (tr.history as any).aircraftSell || "Aircraft sale",
+      refuel: (tr.history as any).refuel || "Refuel",
+      repair: (tr.history as any).repair || "Repair",
+      companyCreate: (tr.history as any).companyCreate || "Company created",
+      missionReward: (tr.history as any).missionReward || "Mission reward",
+      loadMore: tr.history.loadMore,
+      noHistory: (tr.history as any).noHistory || tr.history.noFlights,
+    };
+
+    el.innerHTML = renderTransactionsHistoryHtml(timeline, historyTr);
+  }
+
+  /**
+   * V4.1: Render mission-only history for Missions > Historique
+   */
+  private renderMissionHistory(): void {
+    const el = this.missionHistoryRef.getOrDefault();
+    if (!el) return;
+
+    const lang = settingsState.currentLanguage.get();
+    const tr = translations[lang];
+
+    // Build mission flights timeline only
+    const timeline: UnifiedTimelineEntry[] = [];
+    for (const flight of this.flightHistoryEntries) {
+      if (flight.type !== "mission") continue;
+      timeline.push({
+        id: flight.id,
+        date: typeof flight.date === "number" ? new Date(flight.date).toISOString() : flight.date,
+        type: "flight",
+        flightType: flight.type,
+        departure_icao: flight.departure_icao,
+        arrival_icao: flight.arrival_icao,
+        grade: flight.grade,
+        xp_earned: flight.xp_earned,
+        money_earned: flight.money_earned,
+        flight_time_minutes: flight.flight_time_minutes,
+      });
+    }
+    timeline.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    const historyTr: UnifiedHistoryTranslations = {
+      filterAll: "", filterFlights: "", filterTransactions: "", filterContracts: "",
+      mission: tr.history.mission,
+      freeflight: tr.history.freeflight,
+      marketBuy: "", marketSell: "", marketList: "", aircraftBuy: "", aircraftSell: "",
+      refuel: "", repair: "", companyCreate: "", missionReward: "",
+      loadMore: tr.history.loadMore,
+      noHistory: (tr.history as any).noHistory || tr.history.noFlights,
+    };
+
+    el.innerHTML = renderFlightsHistoryHtml(timeline, historyTr);
+  }
+
+  /**
+   * V4.1: Render free-flight-only history for Profile > Historique des vols
+   */
+  private renderFreeFlightHistory(): void {
+    const el = this.profileFlightHistoryRef.getOrDefault();
+    if (!el) return;
+
+    const lang = settingsState.currentLanguage.get();
+    const tr = translations[lang];
+
+    // Build free flight timeline only
+    const timeline: UnifiedTimelineEntry[] = [];
+    for (const flight of this.flightHistoryEntries) {
+      if (flight.type !== "freeflight") continue;
+      timeline.push({
+        id: flight.id,
+        date: typeof flight.date === "number" ? new Date(flight.date).toISOString() : flight.date,
+        type: "flight",
+        flightType: flight.type,
+        departure_icao: flight.departure_icao,
+        arrival_icao: flight.arrival_icao,
+        grade: flight.grade,
+        xp_earned: flight.xp_earned,
+        money_earned: flight.money_earned,
+        flight_time_minutes: flight.flight_time_minutes,
+      });
+    }
+    timeline.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    const historyTr: UnifiedHistoryTranslations = {
+      filterAll: "", filterFlights: "", filterTransactions: "", filterContracts: "",
+      mission: tr.history.mission,
+      freeflight: tr.history.freeflight,
+      marketBuy: "", marketSell: "", marketList: "", aircraftBuy: "", aircraftSell: "",
+      refuel: "", repair: "", companyCreate: "", missionReward: "",
+      loadMore: tr.history.loadMore,
+      noHistory: (tr.history as any).noHistory || tr.history.noFlights,
+    };
+
+    el.innerHTML = renderFlightsHistoryHtml(timeline, historyTr);
+  }
+
+  /**
+   * Save free flight session to history
+   */
+  private async saveFreeFlightToHistory(recapData: FreeFlightRecapData): Promise<void> {
+    const aircraftId = missionState.selectedAircraftId.get();
+    const aircraftReg = simVarState.currentSimAircraftReg.get() || "Unknown";
+
+    const entry: FlightHistoryEntry = {
+      id: `ff_${Date.now()}`,
+      type: "freeflight",
+      date: new Date().toISOString(),
+      departure_icao: recapData.departure_icao,
+      arrival_icao: recapData.arrival_icao,
+      aircraft_id: aircraftId || "",
+      aircraft_registration: aircraftReg,
+      distance_nm: recapData.distance_nm,
+      flight_time_minutes: recapData.flight_time_minutes,
+      score: recapData.score_total,
+      grade: recapData.grade,
+      xp_earned: recapData.xp_earned,
+      money_earned: 0,
+      landing_fpm: recapData.landing_fpm,
+      landing_quality: recapData.landing_quality,
+      max_gforce: recapData.max_gforce,
+      bonuses: recapData.bonuses,
+    };
+
+    try {
+      await DatabaseManager.saveFlightHistory(entry);
+      console.log("[WOA] Flight history entry saved:", entry.id);
+    } catch (error) {
+      console.error("[WOA] Error saving flight history:", error);
+    }
+  }
+
+  /**
+   * Award XP to player from free flight
+   */
+  private async awardFreeFlightXp(xp: number): Promise<void> {
+    if (xp <= 0) return;
+
+    try {
+      // Add XP via PlayerRouter (works in both online and P2P mode)
+      await PlayerRouter.updateXP(xp);
+      console.log(`[WOA] Awarded ${xp} XP from free flight`);
+
+      // Refresh user data to update displayed XP
+      void this.fetchCurrentUser();
+    } catch (error) {
+      console.error("[WOA] Error awarding free flight XP:", error);
+    }
+  }
+
+  /**
+   * Render free flight recap popup
+   */
+  private renderFreeFlightRecapPopup(): void {
+    const el = this.freeFlightRecapRef.getOrDefault();
+    if (!el) return;
+
+    const recapData = freeFlightState.ffRecapData.get();
+    if (!recapData) return;
+
+    const lang = settingsState.currentLanguage.get();
+    const tr = translations[lang];
+
+    const recapTr: FreeFlightRecapTranslations = {
+      reportTitle: tr.freeFlight.reportTitle,
+      departure: tr.freeFlight.departure,
+      arrival: tr.freeFlight.arrival,
+      distance: tr.freeFlight.distance,
+      flightTime: tr.freeFlight.flightTime,
+      fuelRemaining: tr.freeFlight.fuelRemaining,
+      flightQuality: tr.freeFlight.flightQuality,
+      landing: tr.freeFlight.landing,
+      gforceMax: tr.freeFlight.gforceMax,
+      atcCompliance: tr.freeFlight.atcCompliance,
+      violations: tr.freeFlight.violations,
+      bonuses: tr.freeFlight.bonuses,
+      bonusRealTime: tr.freeFlight.bonusRealTime,
+      bonusNight: tr.freeFlight.bonusNight,
+      bonusAtc: tr.freeFlight.bonusAtc,
+      bonusFuelEco: tr.freeFlight.bonusFuelEco,
+      bonusNoAP: tr.freeFlight.bonusNoAP,
+      bonusBadWeather: tr.freeFlight.bonusBadWeather,
+      totalBonus: tr.freeFlight.totalBonus,
+      result: tr.freeFlight.result,
+      score: tr.freeFlight.score,
+      grade: tr.freeFlight.grade,
+      xpEarned: tr.freeFlight.xpEarned,
+      moneyEarned: tr.freeFlight.moneyEarned,
+      moneyDisabled: tr.freeFlight.moneyDisabled,
+      close: tr.freeFlight.close,
+      butter: tr.freeFlight.butter,
+      smooth: tr.freeFlight.smooth,
+      normal: tr.freeFlight.normal,
+      hard: tr.freeFlight.hard,
+      crash: tr.freeFlight.crash,
+      perfect: tr.freeFlight.perfect,
+      ok: tr.freeFlight.ok,
+      poor: tr.freeFlight.poor,
+    };
+
+    el.innerHTML = renderFreeFlightRecapHtml(recapData, recapTr);
+
+    // Bind close button
+    const closeBtn = el.querySelector(".ff-recap-close-btn");
+    if (closeBtn) {
+      closeBtn.addEventListener("click", () => {
+        freeFlightState.ffShowRecap.set(false);
+        freeFlightState.ffRecapData.set(null);
+      });
+    }
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -5202,8 +7033,7 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
   // ═══════════════════════════════════════════════════════════
 
   private async fetchCompanyInventory(): Promise<void> {
-    // P2P mode check
-    if (!authState.isP2PMode.get() && !authState.authToken.get()) return;
+    if (!isGameReady()) return;
 
     inventoryState.companyInventoryLoading.set(true);
 
@@ -5240,7 +7070,8 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
       {
         icao: inventoryState.companyIcaoFilter.get().trim(),
         item: inventoryState.companyItemFilter.get().trim(),
-        tier: inventoryState.companyTierFilter.get()
+        tier: inventoryState.companyTierFilter.get(),
+        owner_type: inventoryState.companyOwnerFilter.get()  // V4.1: Ownership filter
       }
     );
   }
@@ -5255,6 +7086,7 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
             {renderSidebarTab({ tabId: "profile", activeTab: navigationState.activeTab, onClick: () => navigationState.activeTab.set("profile") })}
             {renderSidebarTab({ tabId: "map", activeTab: navigationState.activeTab, onClick: () => navigationState.activeTab.set("map") })}
             {renderSidebarTab({ tabId: "missions", activeTab: navigationState.activeTab, onClick: () => navigationState.activeTab.set("missions") })}
+            {renderSidebarTab({ tabId: "contrats", activeTab: navigationState.activeTab, onClick: () => navigationState.activeTab.set("contrats") })}
             {renderSidebarTab({ tabId: "company", activeTab: navigationState.activeTab, onClick: () => navigationState.activeTab.set("company") })}
             {renderSidebarTab({ tabId: "market", activeTab: navigationState.activeTab, onClick: () => navigationState.activeTab.set("market") })}
             {renderSidebarTab({ tabId: "hangar", activeTab: navigationState.activeTab, onClick: () => navigationState.activeTab.set("hangar") })}
@@ -5369,11 +7201,17 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
             profileIcaoFilter: inventoryState.profileIcaoFilter,
             profileItemFilter: inventoryState.profileItemFilter,
             profileTierFilter: inventoryState.profileTierFilter,
+            profileOwnerFilter: inventoryState.profileOwnerFilter,  // V4.1
             profileIcaoFilterRef: this.profileIcaoFilterRef,
             profileItemFilterRef: this.profileItemFilterRef,
             profileInventoryListRef: this.profileInventoryListRef,
             onFetchProfileInventory: () => { void this.fetchProfileInventory(); },
             onSetProfileTierFilter: (tier: number | null) => { inventoryState.profileTierFilter.set(tier); this.renderProfileInventory(); },
+            onSetProfileOwnerFilter: (owner: "all" | "player" | "company") => { inventoryState.profileOwnerFilter.set(owner); this.renderProfileInventory(); },  // V4.1
+            // Flight history
+            profileFlightHistoryRef: this.profileFlightHistoryRef,
+            profileFlightHistoryLoading: this.profileFlightHistoryLoading,
+            onFetchFlightHistory: () => { void this.fetchFlightHistory(); },
           })}
 
           {/* Missions Tab Content - V1.9: Extracted to MissionsView.tsx */}
@@ -5422,6 +7260,13 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
             cargoLoading: cargoState.cargoLoading,
             airportInventoryRef: this.airportInventoryRef,
             aircraftCargoRef: this.aircraftCargoRef,
+            cargoSourceFilter: cargoState.cargoSourceFilter,
+            onSetCargoSourceFilter: (filter: "player" | "company") => this.setCargoSourceFilter(filter),
+            aircraftPassengerSeats: cargoState.aircraftPassengerSeats,
+            aircraftPassengerCount: cargoState.aircraftPassengerCount,
+            aircraftPassengerWeight: cargoState.aircraftPassengerWeight,
+            airportPassengersRef: this.airportPassengersRef,
+            aircraftPassengersRef: this.aircraftPassengersRef,
             creationStep3Valid: missionCreationState.creationStep3Valid,
             fpValidated: missionCreationState.fpValidated,
             fpHasActivePlan: missionCreationState.fpHasActivePlan,
@@ -5442,6 +7287,9 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
             cargoPopupQtyRef: this.cargoPopupQtyRef,
             showMissionRecap: popupState.showMissionRecap,
             missionRecapData: missionState.missionRecapData,
+            missionHistoryRef: this.missionHistoryRef,
+            missionHistoryLoading: this.missionHistoryLoading,
+            onFetchMissionHistory: () => { void this.fetchFlightHistory(); },
             onCancelMission: () => this.cancelMission(),
             onValidateCargoStep: () => this.validateCargoStep(),
             onModifyCargoStep: () => this.modifyCargoStep(),
@@ -5454,16 +7302,12 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
             t: (cat: string, key: string) => this.t(cat as keyof typeof translations["fr"], key),
           })}
 
-          {/* Inventaire Tab Content - V1.8: Extracted to InventoryView.tsx */}
-          {renderInventoryTab({
+          {/* Contrats Tab Content - V4.1: New contracts system */}
+          {renderContratsTab({
             activeTab: navigationState.activeTab as Subject<string>,
             currentLanguage: settingsState.currentLanguage,
             isLoggedIn: authState.isLoggedIn,
-            inventoryType: inventoryState.inventoryType,
-            inventoryStatus: inventoryState.inventoryStatus,
-            inventoryError: inventoryState.inventoryError,
-            inventoryListRef: this.inventoryListRef,
-            onFetchInventory: (type: "player" | "company") => this.fetchInventory(type),
+            contratsSubTab: navigationState.contratsSubTab,
           })}
 
           {/* Company Tab Content - V1.8: Extracted to CompanyView.tsx */}
@@ -5502,6 +7346,24 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
               inventoryState.companyTierFilter.set(tier);
               this.renderCompanyInventory();
             },
+            // Transfers
+            playerRole: companyState.playerRole,
+            transferAmount: companyState.transferAmount,
+            transferLoading: companyState.transferLoading,
+            transferError: companyState.transferError,
+            transferAmountInputRef: this.transferAmountInputRef,
+            onTransfer: (direction: "to" | "from") => { void this.handleTransfer(direction); },
+            // Membres full tab
+            companyMembersFullRef: this.companyMembersFullRef,
+            // Historique tab
+            companyHistoryRef: this.companyHistoryRef,
+            companyHistoryLoading: companyState.companyHistoryLoading,
+            // Messagerie tab
+            companyMessagesRef: this.companyMessagesRef,
+            companyMessagesLoading: companyState.companyMessagesLoading,
+            companyMessageInputRef: this.companyMessageInputRef,
+            companyMessageSending: companyState.companyMessageSending,
+            onSendMessage: () => { void this.handleSendCompanyMessage(); },
             t: (cat: string, key: string) => this.t(cat as keyof TranslationKeys, key),
           })}
 
@@ -5510,8 +7372,10 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
             activeTab: navigationState.activeTab as Subject<string>,
             currentLanguage: settingsState.currentLanguage,
             isLoggedIn: authState.isLoggedIn,
+            marketSubTab: navigationState.marketSubTab,
             walletPersonal: marketState.walletPersonal,
             companyData: companyState.companyData,
+            playerRole: companyState.playerRole,
             marketTierFilter: marketState.marketTierFilter,
             marketIcaoFilter: marketState.marketIcaoFilter,
             marketIcaoFilterRef: this.marketIcaoFilterRef,
@@ -5532,6 +7396,39 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
             onUpdateMarketBuyQty: (qty: number) => this.updateMarketBuyQty(qty),
             onCloseMarketBuyPopup: () => this.closeMarketBuyPopup(),
             onConfirmMarketBuy: () => { void this.confirmMarketBuy(); },
+            // V4.1: Sell orders
+            mySellOrdersRef: this.mySellOrdersRef,
+            onFetchMySellOrders: () => { void this.fetchMySellOrders(); },
+            onCancelSellOrder: (orderId: string) => { void this.cancelSellOrder(orderId); },
+            // V4.1: Aircraft catalog
+            aircraftCatalogRef: this.aircraftCatalogRef,
+            myAircraftForSaleRef: this.myAircraftForSaleRef,
+            aircraftCategoryFilter: marketState.aircraftCategoryFilter,
+            onFetchAircraftCatalog: () => { void this.fetchAircraftCatalog(); },
+            onPurchaseAircraft: (catalogId: string, ownerType: "player" | "company") => { void this.purchaseAircraft(catalogId, ownerType); },
+            onSellAircraft: (aircraftId: string) => { void this.sellAircraft(aircraftId); },
+            // V4.1: Market inventory
+            marketInventoryListRef: this.marketInventoryListRef,
+            marketInvIcaoFilterRef: this.marketInvIcaoFilterRef,
+            marketInvItemFilterRef: this.marketInvItemFilterRef,
+            marketInvIcaoFilter: inventoryState.marketInvIcaoFilter,
+            marketInvItemFilter: inventoryState.marketInvItemFilter,
+            marketInvTierFilter: inventoryState.marketInvTierFilter,
+            marketInvOwnerFilter: inventoryState.marketInvOwnerFilter,
+            onFetchMarketInventory: () => { void this.fetchMarketInventory(); },
+            // V4.1: Sell item popup
+            showSellItemPopup: marketState.showSellItemPopup,
+            sellItemPopupRef: this.sellItemPopupRef,
+            onOpenSellItemPopup: (itemCode?: string, airportIcao?: string) => { void this.openSellItemPopupHandler(itemCode, airportIcao); },
+            onCloseSellItemPopup: () => { closeSellItemPopup(); },
+            // V4.1: Aircraft sell choice popup
+            showSellAircraftPopup: marketState.showSellAircraftPopup,
+            sellAircraftPopupRef: this.sellAircraftPopupRef,
+            onCloseSellAircraftPopup: () => { closeSellAircraftPopup(); },
+            // V4.1: History (moved from Profile)
+            flightHistoryRef: this.flightHistoryRef,
+            flightHistoryLoading: this.flightHistoryLoading,
+            onFetchFlightHistory: () => { void this.fetchFlightHistory(); },
           })}
 
           {/* Hangar Tab Content - V1.8: Extracted to HangarView.tsx */}
@@ -5566,7 +7463,7 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
             isOfflineSimulated: settingsState.isOfflineSimulated,
             currentGameMode: gameModeState.currentMode,
             onSetLanguage: (lang: Language) => this.setLanguage(lang),
-            onResetData: () => this.resetAllData(),
+            onResetData: () => { void this.resetAllData(); },
             onTestCommBus: () => { void this.testCommBus(); },
             onSimulateOffline: () => { void this.toggleSimulateOffline(); },
             onChangeGameMode: () => showModeSelector(),
@@ -5621,6 +7518,12 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
 
         {/* V1.4: Systems Detail Popup (rendered via ref) */}
         <div ref={this.systemsPopupRef} style={popupState.showSystemsPopup.map(show => show ? "display: block;" : "display: none;")}>
+        </div>
+
+        {/* V2.4: Free Flight Recap Popup (rendered via ref) */}
+        <div ref={this.freeFlightRecapRef} style={freeFlightState.ffShowRecap.map(show => show
+          ? "position: absolute; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000;"
+          : "display: none;")}>
         </div>
       </div>
     );

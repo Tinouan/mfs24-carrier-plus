@@ -11,10 +11,6 @@ export type { SettingsViewProps } from "./SettingsView";
 export { renderProfileTab } from "./ProfileView";
 export type { ProfileViewProps } from "./ProfileView";
 
-// Inventory Tab
-export { renderInventoryTab } from "./InventoryView";
-export type { InventoryViewProps } from "./InventoryView";
-
 // Market Tab
 export { renderMarketTab } from "./MarketView";
 export type { MarketViewProps } from "./MarketView";
@@ -34,6 +30,10 @@ export type { CompanyViewProps } from "./CompanyView";
 // Missions Tab
 export { renderMissionsTab } from "./MissionsView";
 export type { MissionsViewProps, CargoPopupItem } from "./MissionsView";
+
+// Contrats Tab (V4.1)
+export { renderContratsTab } from "./ContratsView";
+export type { ContratsViewProps } from "./ContratsView";
 
 // Free Flight Tab (Career Mode)
 export { renderFreeFlightView } from "./FreeFlightView";

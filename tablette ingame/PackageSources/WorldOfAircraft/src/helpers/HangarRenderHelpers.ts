@@ -4,6 +4,8 @@
  * Event listeners must be attached by the caller after setting innerHTML.
  */
 
+import { formatMoney } from "./PlayerHelpers";
+
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════
@@ -23,6 +25,7 @@ export interface RefuelPopupData {
     total: string;
     cancel: string;
     full: string;
+    confirmRefuel: string;
   };
 }
 
@@ -81,6 +84,7 @@ export interface HangarListTranslations {
   personalBadge: string;
   companyBadge: string;
   active: string;
+  forSaleBadge: string;
 }
 
 export interface HangarSystemsTranslations {
@@ -182,7 +186,7 @@ export function renderHangarSystemsHtml(
   }
 
   // Display ALL systems with gauges in a single column
-  html += `<div style="display: grid; grid-template-columns: 1fr; gap: 6px;">`;
+  html += `<div style="display: flex; flex-direction: column; gap: 6px;">`;
 
   systemOrder.forEach(key => {
     const sys = systems[key];
@@ -311,6 +315,11 @@ export function renderHangarListHtml(
       ? `<div style="font-size: 7px; padding: 1px 4px; background: #22c55e; color: white; border-radius: 2px; font-weight: 600; margin-left: 4px;">${translations.active}</div>`
       : "";
 
+    // For sale badge
+    const forSaleBadge = ac.for_sale
+      ? `<div style="font-size: 7px; padding: 1px 4px; background: #f59e0b; color: #1a1a24; border-radius: 2px; font-weight: 600; margin-left: 4px;">${translations.forSaleBadge}</div>`
+      : "";
+
     // Thumbnail image - use local coui:// images based on icao_type
     const localThumbnailUrl = ac.icao_type
       ? `coui://html_ui/efb_ui/efb_apps/WorldOfAircraft/Assets/aircraft/${ac.icao_type.toUpperCase()}.jpg`
@@ -333,7 +342,7 @@ export function renderHangarListHtml(
                 <div style="font-size: 11px; font-weight: 600; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                   ${ac.aircraft_type}
                 </div>
-                ${activeIndicator}
+                ${activeIndicator}${forSaleBadge}
               </div>
               <div style="${badgeStyle} flex-shrink: 0;">
                 ${badgeText}
@@ -367,63 +376,74 @@ export function renderHangarListHtml(
  */
 export function renderRefuelPopupHtml(data: RefuelPopupData): string {
   const { registration, aircraftType, currentFuel, maxFuel, targetFuel, pricePerGallon, translations } = data;
+
   const fuelToAdd = Math.max(0, targetFuel - currentFuel);
-  const totalCost = fuelToAdd * pricePerGallon;
+  const cost = fuelToAdd * pricePerGallon;
+  const targetPercent = maxFuel > 0 ? Math.round((targetFuel / maxFuel) * 100) : 0;
+  const currentPercent = maxFuel > 0 ? Math.round((currentFuel / maxFuel) * 100) : 0;
+  const gaugeColor = targetPercent > 50 ? "#22c55e" : targetPercent > 25 ? "#f59e0b" : "#ef4444";
 
   return `
-    <div style="background: #1e1e2e; border-radius: 12px; padding: 16px; max-width: 320px; box-shadow: 0 8px 32px rgba(0,0,0,0.4);">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-        <div>
-          <div style="font-size: 14px; font-weight: 600; color: white;">${translations.refuelTitle}</div>
-          <div style="font-size: 10px; color: #9ca3af;">${registration} • ${aircraftType}</div>
+    <div class="refuel-overlay" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 9999;">
+      <div style="background: #1f2937; border: 2px solid #374151; border-radius: 12px; padding: 20px; width: 320px;">
+        <!-- Header -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <div style="font-size: 18px; font-weight: 700; color: white;">${translations.refuelTitle}</div>
+          <button class="refuel-close-btn" style="background: none; border: none; color: #9ca3af; font-size: 24px; cursor: pointer; padding: 0; line-height: 1;">×</button>
         </div>
-        <button class="refuel-close-btn" style="background: none; border: none; cursor: pointer; padding: 4px;">
-          <svg style="width: 20px; height: 20px;" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2">
-            <path d="M18 6L6 18M6 6l12 12"/>
-          </svg>
-        </button>
-      </div>
 
-      <div style="background: #252532; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-          <span style="font-size: 10px; color: #6b7280;">${translations.currentLevel}</span>
-          <span style="font-size: 11px; color: #f59e0b; font-weight: 600;">${currentFuel.toFixed(1)} gal</span>
+        <!-- Aircraft Info -->
+        <div style="font-size: 14px; color: #9ca3af; margin-bottom: 16px; padding: 10px; background: #374151; border-radius: 8px;">
+          <span style="font-weight: 600; color: white;">${registration}</span> - ${aircraftType}
         </div>
-        <div style="background: #374151; border-radius: 4px; height: 8px; overflow: hidden;">
-          <div style="width: ${(currentFuel / maxFuel) * 100}%; height: 100%; background: #f59e0b;"></div>
-        </div>
-      </div>
 
-      <div style="margin-bottom: 12px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <span style="font-size: 10px; color: #6b7280;">${translations.target}: ${targetFuel.toFixed(1)} gal</span>
-          <button class="refuel-full-btn" style="font-size: 9px; padding: 3px 8px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer;">
+        <!-- Fuel Gauge -->
+        <div style="margin-bottom: 20px;">
+          <div style="font-size: 12px; color: #9ca3af; margin-bottom: 8px;">
+            ${translations.currentLevel}: <span style="color: white; font-weight: 600;">${Math.round(currentFuel)} gal</span> (${currentPercent}%)
+          </div>
+          <div style="height: 20px; background: #374151; border-radius: 10px; overflow: hidden; position: relative;">
+            <div style="position: absolute; left: ${currentPercent}%; top: 0; bottom: 0; width: 3px; background: white; z-index: 2;"></div>
+            <div style="height: 100%; width: ${targetPercent}%; background: ${gaugeColor}; border-radius: 10px; transition: width 0.1s;"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-top: 6px;">
+            <span style="font-size: 11px; color: #6b7280;">0 gal</span>
+            <span style="font-size: 11px; color: #6b7280;">${Math.round(maxFuel)} gal</span>
+          </div>
+        </div>
+
+        <!-- Slider -->
+        <div style="margin-bottom: 20px;">
+          <input type="range" class="refuel-slider" min="${Math.round(currentFuel)}" max="${Math.round(maxFuel)}" value="${Math.round(targetFuel)}"
+            style="width: 100%; height: 12px; -webkit-appearance: none; background: #374151; border-radius: 6px; outline: none; cursor: pointer;">
+        </div>
+
+        <!-- Target + Cost Row -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding: 12px; background: #374151; border-radius: 8px;">
+          <div>
+            <div style="font-size: 11px; color: #6b7280; margin-bottom: 4px;">${translations.target}</div>
+            <div style="font-size: 24px; font-weight: 700; color: ${gaugeColor};">${Math.round(targetFuel)} gal</div>
+            <div style="font-size: 11px; color: #9ca3af;">+${Math.round(fuelToAdd)} gal ${translations.toAdd}</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 11px; color: #6b7280; margin-bottom: 4px;">${translations.total}</div>
+            <div style="font-size: 24px; font-weight: 700; color: #f59e0b;">${formatMoney(cost)}</div>
+            <div style="font-size: 11px; color: #9ca3af;">@ ${formatMoney(pricePerGallon)}/gal</div>
+          </div>
+        </div>
+
+        <!-- Buttons -->
+        <div style="display: flex; gap: 10px;">
+          <button class="refuel-cancel-btn" style="flex: 1; padding: 14px; background: #374151; color: white; border: none; border-radius: 8px; font-size: 14px; cursor: pointer;">
+            ${translations.cancel}
+          </button>
+          <button class="refuel-full-btn" style="flex: 1; padding: 14px; background: #6366f1; color: white; border: none; border-radius: 8px; font-size: 14px; cursor: pointer;">
             ${translations.full}
           </button>
+          <button class="refuel-confirm-btn" style="flex: 1; padding: 14px; background: #22c55e; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">
+            ${translations.confirmRefuel}
+          </button>
         </div>
-        <input type="range" class="refuel-slider" min="${currentFuel}" max="${maxFuel}" value="${targetFuel}" step="0.1"
-          style="width: 100%; height: 6px; appearance: none; background: #374151; border-radius: 3px; cursor: pointer;"
-        />
-      </div>
-
-      <div style="background: #252532; border-radius: 8px; padding: 10px; margin-bottom: 12px;">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-          <span style="font-size: 10px; color: #6b7280;">${translations.toAdd}</span>
-          <span style="font-size: 11px; color: white;">${fuelToAdd.toFixed(1)} gal</span>
-        </div>
-        <div style="display: flex; justify-content: space-between;">
-          <span style="font-size: 10px; color: #6b7280;">${translations.total}</span>
-          <span style="font-size: 12px; color: #22c55e; font-weight: 600;">$${totalCost.toFixed(2)}</span>
-        </div>
-      </div>
-
-      <div style="display: flex; gap: 8px;">
-        <button class="refuel-cancel-btn" style="flex: 1; padding: 10px; background: #374151; color: white; border: none; border-radius: 6px; font-size: 11px; cursor: pointer;">
-          ${translations.cancel}
-        </button>
-        <button class="refuel-confirm-btn" style="flex: 1; padding: 10px; background: #22c55e; color: white; border: none; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer;">
-          ⛽ Refuel
-        </button>
       </div>
     </div>
   `;
@@ -499,12 +519,12 @@ export function renderSystemsPopupHtml(data: SystemsPopupData): string {
           </div>
         </div>
 
-        <div style="display: grid; gap: 6px; margin-bottom: 12px;">
+        <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;">
           ${systemsHtml}
         </div>
 
         <button class="systems-repair-btn" style="width: 100%; padding: 10px; background: #f59e0b; color: white; border: none; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer;">
-          🔧 ${translations.repair}
+          [FIX] ${translations.repair}
         </button>
       </div>
     </div>
@@ -526,7 +546,7 @@ export function renderRepairListHtml(
   if (items.length === 0) {
     return `
       <div style="text-align: center; padding: 16px; color: #22c55e; font-size: 11px;">
-        ✓ ${noRepairNeededText}
+        [OK] ${noRepairNeededText}
       </div>
     `;
   }

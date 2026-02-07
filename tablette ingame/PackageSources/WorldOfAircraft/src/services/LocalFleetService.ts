@@ -44,9 +44,10 @@ class LocalFleetServiceClass {
     // 0. Repair orphaned aircraft (owner_id and company_id both undefined/null)
     await this.repairOrphanedAircraft(player.id);
 
-    // 1. Get personal aircraft (owned directly by player)
-    const personalAircraft = await DatabaseManager.getAircraftByOwner(player.id);
-    console.log(`[LocalFleetService] Personal aircraft for player ${player.id}: ${personalAircraft.length}`);
+    // 1. Get personal aircraft (owned directly by player) - filter out sold/inactive
+    const personalAircraftRaw = await DatabaseManager.getAircraftByOwner(player.id);
+    const personalAircraft = personalAircraftRaw.filter(ac => ac.is_active !== false);
+    console.log(`[LocalFleetService] Personal aircraft for player ${player.id}: ${personalAircraft.length} (${personalAircraftRaw.length} total)`);
     for (const ac of personalAircraft) {
       const catEntry = catalog.find((c) => c.icaoType === ac.type_code || c.id === ac.type_code);
       result.push({
@@ -59,13 +60,15 @@ class LocalFleetServiceClass {
         required_license: catEntry?.requiredLicense || "PPL",
         owner_type: "player",
         thumbnail_url: null,
+        for_sale: ac.for_sale === true,
       });
     }
 
     // 2. Get company aircraft (if player has a company)
     const company = await DatabaseManager.getCompanyByOwner(player.id);
     if (company) {
-      const companyAircraft = await DatabaseManager.getAircraftByCompany(company.id);
+      const companyAircraftRaw = await DatabaseManager.getAircraftByCompany(company.id);
+      const companyAircraft = companyAircraftRaw.filter(ac => ac.is_active !== false);
       for (const ac of companyAircraft) {
         const catEntry = catalog.find((c) => c.icaoType === ac.type_code || c.id === ac.type_code);
         result.push({
@@ -78,6 +81,7 @@ class LocalFleetServiceClass {
           required_license: catEntry?.requiredLicense || "PPL",
           owner_type: "company",
           thumbnail_url: null,
+          for_sale: ac.for_sale === true,
         });
       }
     }
@@ -92,7 +96,8 @@ class LocalFleetServiceClass {
   private async repairOrphanedAircraft(playerId: string): Promise<void> {
     const allAircraft = await DatabaseManager.getAll<Aircraft>("aircraft");
     const player = await DatabaseManager.getPlayer();
-    const defaultLocation = player?.nationality === "FR" ? "LFPG" : "KJFK";
+    // FIX 1: Use player's current location, not hardcoded nationality-based default
+    const defaultLocation = player?.current_airport || player?.preferred_airport || "LFPG";
 
     for (const ac of allAircraft) {
       let needsRepair = false;
@@ -677,11 +682,13 @@ class LocalFleetServiceClass {
     if (payFrom === "player") {
       if (player.money < cost) throw new Error("Insufficient funds");
       player.money -= cost;
+      player.money = Math.round(player.money);
       await DatabaseManager.savePlayer(player);
     } else {
       const company = await DatabaseManager.getCompanyByOwner(player.id);
       if (!company || company.balance < cost) throw new Error("Insufficient company funds");
       company.balance -= cost;
+      company.balance = Math.round(company.balance);
       await DatabaseManager.put("company", company);
     }
 

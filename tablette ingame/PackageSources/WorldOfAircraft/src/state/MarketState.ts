@@ -12,6 +12,26 @@ import type { MarketListing, MarketBuyItem } from "../types";
 
 export type WalletType = "player" | "company";
 
+export interface SellableItem {
+  item_code: string;
+  item_name: string;
+  quantity: number;
+  airport_icao: string;
+  tier: number;
+}
+
+export interface SellAircraftData {
+  id: string;
+  registration: string;
+  type_code: string;
+  name: string;
+  condition: number;
+  sell_value: number;
+  catalog_price: number;
+  location_icao: string;
+  owner_type: "player" | "company";
+}
+
 // ═══════════════════════════════════════════════════════════
 // MARKET STATE TYPE
 // ═══════════════════════════════════════════════════════════
@@ -34,6 +54,22 @@ export interface MarketStateType {
   marketBuyQty: Subject<number>;
   marketBuyTotal: Subject<number>;
   marketBuyWallet: Subject<WalletType>;
+
+  // V4.1: Aircraft catalog filter
+  aircraftCategoryFilter: Subject<string>;
+
+  // V4.1: Sell item popup
+  showSellItemPopup: Subject<boolean>;
+  sellItemList: Subject<SellableItem[]>;
+  sellItemSelectedIndex: Subject<number>;
+  sellItemQty: Subject<number>;
+  sellItemPrice: Subject<number>;
+  sellItemOwnerType: Subject<WalletType>;
+
+  // V4.1: Aircraft sell choice popup
+  showSellAircraftPopup: Subject<boolean>;
+  sellAircraftData: Subject<SellAircraftData | null>;
+  sellAircraftPrice: Subject<number>;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -58,6 +94,22 @@ export const marketState: MarketStateType = {
   marketBuyQty: Subject.create(1),
   marketBuyTotal: Subject.create(0),
   marketBuyWallet: Subject.create<WalletType>("company"),
+
+  // V4.1: Aircraft catalog filter
+  aircraftCategoryFilter: Subject.create<string>("all"),
+
+  // V4.1: Sell item popup
+  showSellItemPopup: Subject.create(false),
+  sellItemList: Subject.create<SellableItem[]>([]),
+  sellItemSelectedIndex: Subject.create(0),
+  sellItemQty: Subject.create(1),
+  sellItemPrice: Subject.create(0),
+  sellItemOwnerType: Subject.create<WalletType>("player"),
+
+  // V4.1: Aircraft sell choice popup
+  showSellAircraftPopup: Subject.create(false),
+  sellAircraftData: Subject.create<SellAircraftData | null>(null),
+  sellAircraftPrice: Subject.create(0),
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -84,4 +136,29 @@ export const updateBuyTotal = (): void => {
   if (item) {
     marketState.marketBuyTotal.set(item.sale_price * qty);
   }
+};
+
+export const openSellItemPopup = (items: SellableItem[]): void => {
+  marketState.sellItemList.set(items);
+  marketState.sellItemSelectedIndex.set(0);
+  marketState.sellItemQty.set(1);
+  marketState.sellItemPrice.set(items.length > 0 ? 100 : 0);
+  marketState.sellItemOwnerType.set("player");
+  marketState.showSellItemPopup.set(true);
+};
+
+export const closeSellItemPopup = (): void => {
+  marketState.showSellItemPopup.set(false);
+  marketState.sellItemList.set([]);
+};
+
+export const openSellAircraftPopup = (data: SellAircraftData): void => {
+  marketState.sellAircraftData.set(data);
+  marketState.sellAircraftPrice.set(data.catalog_price);
+  marketState.showSellAircraftPopup.set(true);
+};
+
+export const closeSellAircraftPopup = (): void => {
+  marketState.showSellAircraftPopup.set(false);
+  marketState.sellAircraftData.set(null);
 };

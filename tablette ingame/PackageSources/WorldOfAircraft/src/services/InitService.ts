@@ -17,6 +17,8 @@ import {
   loadSavedGameMode,
   isSoloMode,
   isOnlineMode,
+  setModeInitialized,
+  resetModeSelection,
   type GameMode
 } from "../state/GameModeState";
 import seedData from "../data/seed.json";
@@ -24,6 +26,33 @@ import itemsData from "../data/items.json";
 import recipesData from "../data/recipes.json";
 import aircraftData from "../data/aircraft.json";
 // Airports loaded separately due to size (24MB)
+
+// ═══════════════════════════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════════════════════════
+
+/** Company creation cost - aligned with spec ARCHITECTURE.md */
+export const COMPANY_CREATION_COST = 25_000;
+
+/** V4.1: Passenger seats by aircraft type (ICAO code) */
+const PASSENGER_SEATS_BY_TYPE: Record<string, number> = {
+  C172: 3,
+  PA28: 3,
+  SR22: 3,
+  DA40: 3,
+  C208: 9,
+  PC12: 9,
+  BE20: 8,
+  B738: 189,
+  A320: 180,
+  CRJ9: 90,
+};
+const DEFAULT_PASSENGER_SEATS = 4;
+
+/** Get passenger seats for an aircraft type */
+export function getPassengerSeats(typeCode: string): number {
+  return PASSENGER_SEATS_BY_TYPE[typeCode.toUpperCase()] ?? DEFAULT_PASSENGER_SEATS;
+}
 
 // ═══════════════════════════════════════════════════════════
 // TYPES
@@ -74,6 +103,9 @@ class InitServiceClass {
 
     this.callbacks = callbacks;
 
+    // CRITICAL: Reset initialization flag at start - prevents stale data routing
+    setModeInitialized(false);
+
     try {
       // ═══════════════════════════════════════════════════════════
       // PHASE 1: Base initialization (common to both modes)
@@ -95,6 +127,8 @@ class InitServiceClass {
         onError: (e) => {
           throw e;
         },
+        // Persistence is handled by DatabaseManager.schedulePersistentSave() → saveToDataStore()
+        // which saves to "WorldOfAircraftData" key. No need for separate NativePersistence callback.
       });
 
       // 2. Load local catalogs (items, recipes, aircraft types)
@@ -141,6 +175,10 @@ class InitServiceClass {
   async continueWithMode(mode: GameMode): Promise<void> {
     console.log(`[InitService] Continuing initialization with mode: ${mode}`);
 
+    // CRITICAL: Reset initialization flag before starting mode setup
+    // This prevents ServiceAdapter from routing to old data during mode switch
+    setModeInitialized(false);
+
     try {
       if (mode === "solo") {
         await this.initializeSoloMode();
@@ -164,10 +202,28 @@ class InitServiceClass {
     console.log("[InitService] SOLO MODE - Local career, no server");
     console.log("[InitService] ═══════════════════════════════════════");
 
+    // DEBUG: Raw storage values
+    try {
+      // @ts-ignore - GetStoredData is a global MSFS function
+      const rawSetupNew = typeof GetStoredData === "function" ? GetStoredData("WOA_Solo_SetupComplete") : "N/A";
+      // @ts-ignore
+      const rawSetupOld = typeof GetStoredData === "function" ? GetStoredData("WOA_SoloSetupComplete") : "N/A";
+      // @ts-ignore
+      const rawSaveData = typeof GetStoredData === "function" ? GetStoredData("WOA_Solo_SaveData") : "N/A";
+      // @ts-ignore
+      const rawPlayerId = typeof GetStoredData === "function" ? GetStoredData("WOA_Solo_PlayerId") : "N/A";
+      console.log("[DEBUG] WOA_Solo_SetupComplete =", rawSetupNew);
+      console.log("[DEBUG] WOA_SoloSetupComplete (old) =", rawSetupOld);
+      console.log("[DEBUG] WOA_Solo_SaveData exists =", rawSaveData && rawSaveData !== "" ? "YES (" + rawSaveData.length + " chars)" : "NO");
+      console.log("[DEBUG] WOA_Solo_PlayerId =", rawPlayerId);
+    } catch (e) {
+      console.log("[DEBUG] GetStoredData not available:", e);
+    }
+
     NetworkState.setOffline(); // Solo mode is always "offline" from SEED perspective
 
     // 1. Check if Solo setup has ever been completed (true first launch detection)
-    const setupComplete = NativePersistence.isSoloSetupComplete();
+    const setupComplete = NativePersistence.isSetupComplete("solo");
     console.log(`[InitService] Solo setup complete flag: ${setupComplete}`);
 
     if (!setupComplete) {
@@ -178,26 +234,12 @@ class InitServiceClass {
       return;
     }
 
-    // 2. Clear local cache to prevent mode data contamination
-    console.log("[InitService] Solo: Clearing local cache before restore...");
-    await DatabaseManager.clear("aircraft");
-    await DatabaseManager.clear("player");
-    await DatabaseManager.clear("company");
-
-    // 3. Restore from native MSFS persistence
-    this.reportProgress("Restauration sauvegarde Solo...", 40);
-    const savedData = await NativePersistence.load();
-
-    if (savedData) {
-      this.reportProgress("Restauration des données...", 50);
-      await NativePersistence.restore(savedData);
-      console.log(`[InitService] Solo: Restored data from native persistence (saved ${new Date(savedData.timestamp).toLocaleString()})`);
-    } else {
-      console.log("[InitService] Solo: No persistence data found");
-    }
+    // 2. Data is already restored by DatabaseManager.initialize() → restoreFromDataStore()
+    // which loads from "WorldOfAircraftData" key. No need for separate NativePersistence restore.
+    // NativePersistence is now ONLY used for flags (setup complete, player ID, language, units).
 
     // 3. Verify we have local player data (should exist if setup was completed)
-    this.reportProgress("Chargement du profil Solo...", 55);
+    this.reportProgress("Chargement du profil Solo...", 40);
     const localPlayer = await DatabaseManager.getPlayer();
 
     if (!localPlayer) {
@@ -211,20 +253,21 @@ class InitServiceClass {
 
     console.log(`[InitService] Solo: Loaded player ${localPlayer.name} (${localPlayer.money} credits)`);
 
+    // FIX 5: Realign new player aircraft to current_airport (if 0 missions/flights)
+    await this.realignNewPlayerAircraft();
+
     // 3. Generate AI market if needed
     this.reportProgress("Chargement du marché IA...", 70);
     await this.ensureSoloMarket();
 
-    // 4. Start native persistence auto-save (every 60 seconds)
-    if (NativePersistence.isAvailable()) {
-      NativePersistence.startAutoSave(60000);
-      console.log("[InitService] Solo: Auto-save started (60s interval)");
-    }
+    // 4. Auto-save is handled by DatabaseManager.schedulePersistentSave() → saveToDataStore()
+    // which saves to "WorldOfAircraftData". No need for separate NativePersistence auto-save.
 
     // 5. Ready!
     this.initialized = true;
+    setModeInitialized(true); // CRITICAL: Enable ServiceAdapter routing now
     this.reportProgress("Mode Solo prêt !", 100);
-    console.log("[InitService] Solo mode initialization complete");
+    console.log("[InitService] Solo mode initialization complete - data routing enabled");
     this.callbacks.onComplete?.();
   }
 
@@ -289,8 +332,9 @@ class InitServiceClass {
 
     // 7. Ready!
     this.initialized = true;
+    setModeInitialized(true); // CRITICAL: Enable ServiceAdapter routing now
     this.reportProgress("Mode Online prêt !", 100);
-    console.log("[InitService] Online mode initialization complete");
+    console.log("[InitService] Online mode initialization complete - data routing enabled");
     this.callbacks.onComplete?.();
   }
 
@@ -314,6 +358,10 @@ class InitServiceClass {
     await DatabaseManager.clear("aircraft");
     await DatabaseManager.clear("player");
     await DatabaseManager.clear("company");
+    await DatabaseManager.clear("inventory");
+    // DEBUG: Verify clear worked
+    const invAfterClear = await DatabaseManager.getAll("inventory");
+    console.log(`[InitService] Online: After clear, inventory count: ${invAfterClear.length}`);
     console.log("[InitService] Online: Local cache cleared - loading fresh from SEED");
 
     // Use LOCAL player ID for consistency
@@ -609,7 +657,7 @@ class InitServiceClass {
   /**
    * Complete first launch setup with user-provided data
    * Called after user fills the welcome form
-   * Note: Player starts with personal aircraft, no company (can buy one later for 50,000 credits)
+   * Note: Player starts with personal aircraft, no company (can buy one later for 25,000 credits)
    *
    * SEED CENTRAL: Player is created both locally and on the SEED server
    */
@@ -618,15 +666,40 @@ class InitServiceClass {
     nationality: string,
     startingAirport: string
   ): Promise<void> {
-    console.log(`[InitService] Completing first launch: ${pilotName} (${nationality}) at ${startingAirport}`);
+    // V4.1 FIX: Validate and sanitize starting airport
+    const validAirport = /^[A-Z]{4}$/.test(startingAirport) ? startingAirport : "LFPG";
+    if (validAirport !== startingAirport) {
+      console.warn(`[InitService] Invalid airport "${startingAirport}", using fallback: ${validAirport}`);
+    }
+
+    console.log(`[InitService] Completing first launch: ${pilotName} (${nationality}) at ${validAirport}`);
     const soloMode = isSoloMode();
     console.log(`[InitService] Game mode: ${soloMode ? "Solo" : "Online"}`);
 
     const seed = seedData as unknown as SeedData;
 
-    // 0. Clean up any orphaned data from previous sessions
+    // 0. CRITICAL: Clear ALL stores before creating new player
+    // This eliminates ghost data that was restored from WorldOfAircraftData
+    // Without this, DatabaseManager.put("player") would ADD to existing array instead of replacing
     this.reportProgress("Nettoyage...", 40);
-    await this.cleanupOrphanedData();
+    console.log("[InitService] Clearing all stores for fresh start...");
+    await DatabaseManager.clear("player");           // CRITICAL: Old player with wrong balance
+    await DatabaseManager.clear("pilot_career_stats");
+    await DatabaseManager.clear("aircraft");
+    await DatabaseManager.clear("company");
+    await DatabaseManager.clear("company_members");
+    await DatabaseManager.clear("inventory");
+    await DatabaseManager.clear("missions");
+    await DatabaseManager.clear("mission_legs");
+    await DatabaseManager.clear("mission_waypoints");
+    await DatabaseManager.clear("mission_events");
+    await DatabaseManager.clear("mission_cargo");
+    await DatabaseManager.clear("flight_history");
+    await DatabaseManager.clear("transaction_log");
+    await DatabaseManager.clear("sell_orders");
+    await DatabaseManager.clear("free_flight_sessions");
+    // Note: Keep items, recipes, aircraft_catalog, airports (static data)
+    console.log("[InitService] All player data stores cleared");
 
     // 1. Get the player ID (already created in getOrCreatePlayerId)
     const playerId = this.getOrCreatePlayerId();
@@ -640,7 +713,7 @@ class InitServiceClass {
         name: pilotName,
         money: 100000, // 100,000 credits for testing
         xp: 0,
-        home_airport: startingAirport,
+        home_airport: validAirport,  // V4.1 FIX: Use validated airport
         created_at: now,
         updated_at: now,
       };
@@ -658,16 +731,16 @@ class InitServiceClass {
 
     // 3. Create player locally
     this.reportProgress("Création du profil local...", 60);
-    await this.createCustomPlayer(pilotName, nationality, startingAirport, playerId);
+    await this.createCustomPlayer(pilotName, nationality, validAirport, playerId);  // V4.1 FIX
 
     // 3b. Create pilot career stats
     this.reportProgress("Initialisation des stats...", 65);
     await this.createPilotCareerStats(playerId);
 
     // 4. Create PERSONAL starter aircraft at chosen airport (not company)
-    // Player can buy a company later for 50,000 credits
+    // Player can buy a company later for 25,000 credits
     this.reportProgress("Création de l'avion...", 70);
-    const aircraft = await this.createPersonalStarterAircraft(playerId, startingAirport);
+    const aircraft = await this.createPersonalStarterAircraft(playerId, validAirport);  // V4.1 FIX
 
     // 4b. Sync aircraft to SEED (Online mode only)
     if (!soloMode) {
@@ -686,30 +759,34 @@ class InitServiceClass {
       await this.ensureSoloMarket();
     }
 
-    // 7. Save to native persistence immediately
-    if (NativePersistence.isAvailable()) {
-      await NativePersistence.save();
-      console.log("[InitService] First launch data saved to native persistence");
-
-      // 8. For Solo mode, mark setup as complete
-      if (soloMode) {
-        NativePersistence.setSoloSetupComplete(true);
-        console.log("[InitService] Solo setup marked as complete");
-
-        // Start auto-save for Solo mode
-        NativePersistence.startAutoSave(60000);
-      }
+    // 7. Mark setup as complete (flag only)
+    if (soloMode && NativePersistence.isAvailable()) {
+      NativePersistence.setSoloSetupComplete(true);
+      console.log("[InitService] Solo setup marked as complete");
     }
+
+    // 8. CRITICAL: Force save new player data to WorldOfAircraftData backup
+    // This ensures the NEW player (100,000 CR) overwrites any ghost data
+    await DatabaseManager.forceSave();
+    console.log("[InitService] New player data saved to WorldOfAircraftData backup");
 
     this.reportProgress("Prêt !", 100);
     console.log("[InitService] First launch setup complete!");
     this.initialized = true;
+    setModeInitialized(true); // CRITICAL: Enable ServiceAdapter routing now
+    console.log("[InitService] First launch complete - data routing enabled");
     this.callbacks.onComplete?.();
   }
 
   private async createCustomPlayer(name: string, nationality: string, homeAirport: string, existingPlayerId?: string): Promise<string> {
     const playerId = existingPlayerId || this.generateUUID();
     const now = new Date().toISOString();
+
+    // V4.1 FIX: Get airport coordinates for map marker fallback
+    const airports = DatabaseManager.getAirportsCache();
+    const airportData = airports.find(a => a.ident === homeAirport);
+    const startLat = airportData?.latitude || 0;
+    const startLon = airportData?.longitude || 0;
 
     const player: Player = {
       id: playerId,
@@ -719,6 +796,9 @@ class InitServiceClass {
       trust_score: 100,
       nationality: nationality,
       preferred_airport: homeAirport,  // Home base airport
+      current_airport: homeAirport,    // V4.1: Start at home airport
+      last_latitude: startLat,         // V4.1: For map marker fallback
+      last_longitude: startLon,        // V4.1: For map marker fallback
       is_premium: false,
       created_at: now,
       updated_at: now,
@@ -726,7 +806,7 @@ class InitServiceClass {
     };
 
     await DatabaseManager.put("player", player, false);
-    console.log(`[InitService] Created pilot: ${name} (${nationality}) at ${homeAirport} with 100,000 credits`);
+    console.log(`[InitService] Created pilot: ${name} (${nationality}) at ${homeAirport} (${startLat}, ${startLon}) with 100,000 credits`);
 
     return playerId;
   }
@@ -795,6 +875,7 @@ class InitServiceClass {
       flight_hours: 0,
       cycles: 0,
       cargo_capacity_kg: 120,     // C172 cargo capacity from catalog
+      passenger_seats: getPassengerSeats("C172"),  // V4.1: Passenger capacity
       for_sale: false,
       is_active: true,
       created_at: now,
@@ -892,6 +973,7 @@ class InitServiceClass {
       flight_hours: 0,
       cycles: 0,
       cargo_capacity_kg: 200,     // Default, will be overwritten from catalog
+      passenger_seats: getPassengerSeats(typeCode),  // V4.1: Passenger capacity
       for_sale: false,
       is_active: true,
       created_at: now,
@@ -957,6 +1039,50 @@ class InitServiceClass {
 
     await DatabaseManager.put("pilot_career_stats", stats, false);
     console.log(`[InitService] Created pilot career stats for user ${userId}`);
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // FIX 5: REALIGN NEW PLAYER AIRCRAFT
+  // ─────────────────────────────────────────────────────────
+
+  /**
+   * FIX 5: Realign aircraft position for new players (0 missions, 0 flights)
+   * This fixes the case where aircraft location_icao drifted away from player.current_airport
+   */
+  async realignNewPlayerAircraft(): Promise<void> {
+    const player = await DatabaseManager.getPlayer();
+    if (!player || !player.current_airport) {
+      console.log("[InitService] realignNewPlayerAircraft: No player or current_airport");
+      return;
+    }
+
+    // Check if player has any completed missions or flights
+    const careerStats = await DatabaseManager.getOrCreatePilotCareerStats(player.id);
+    const totalActivity = (careerStats.completed_missions || 0) + (careerStats.total_landings || 0);
+
+    if (totalActivity > 0) {
+      console.log(`[InitService] realignNewPlayerAircraft: Player has ${totalActivity} activities, skipping`);
+      return;
+    }
+
+    // Get player's aircraft
+    const aircraft = await DatabaseManager.getAircraftByOwner(player.id);
+    if (aircraft.length === 0) {
+      console.log("[InitService] realignNewPlayerAircraft: No aircraft found");
+      return;
+    }
+
+    // Realign all aircraft to player.current_airport
+    for (const ac of aircraft) {
+      if (ac.location_icao !== player.current_airport) {
+        console.log(`[InitService] realignNewPlayerAircraft: Moving ${ac.registration} from ${ac.location_icao} to ${player.current_airport}`);
+        ac.location_icao = player.current_airport;
+        ac.updated_at = new Date().toISOString();
+        await DatabaseManager.put("aircraft", ac, false);
+      }
+    }
+
+    console.log(`[InitService] realignNewPlayerAircraft: Realigned ${aircraft.length} aircraft to ${player.current_airport}`);
   }
 
   // ─────────────────────────────────────────────────────────
@@ -1071,21 +1197,46 @@ class InitServiceClass {
     // Generate unique registration
     const registration = this.generateRegistration();
 
+    // Create systems with all conditions at 100% (new aircraft)
+    const systems: AircraftSystemsInline = {
+      engine_condition: 100,
+      propeller_condition: 100,
+      landing_gear_condition: 100,
+      electrical_condition: 100,
+      avionics_condition: 100,
+      pitot_condition: 100,
+      engine_failed: false,
+      propeller_failed: false,
+      landing_gear_failed: false,
+      electrical_failed: false,
+      avionics_failed: false,
+      pitot_failed: false,
+      last_maintenance_at: now,
+    };
+
     const aircraft: Aircraft = {
       id: aircraftId,
       registration: registration,
       type_code: starter.type_code,
       company_id: companyId,
-      owner_id: null,  // Company aircraft
+      owner_id: null,           // Company aircraft
+      owner_type: "company",    // Explicit ownership type
       location_icao: starter.location_icao,
+      status: "parked",         // Aircraft starts parked
       fuel_gallons: starter.fuel_gallons,
-      condition: starter.condition,
-      flight_hours: starter.flight_hours,
+      condition: 100,           // Perfect condition (ignore seed.condition)
+      flight_hours: starter.flight_hours || 0,
+      cycles: 0,
+      cargo_capacity_kg: 120,   // Default C172 capacity
+      is_active: true,
       created_at: now,
+      updated_at: now,
+      systems: systems,         // All systems at 100%
     };
 
     await DatabaseManager.put("aircraft", aircraft, false);
-    console.log(`[InitService] Created starter aircraft: ${registration} at ${starter.location_icao}`);
+    console.log(`[InitService] Created starter aircraft: ${registration} at ${starter.location_icao} (condition: 100%)`);
+
 
     return aircraftId;
   }
@@ -1168,12 +1319,82 @@ class InitServiceClass {
     console.log("[InitService] Resetting database...");
     await DatabaseManager.deleteDatabase();
 
-    // Clear native persistence data and Solo setup flag
-    if (NativePersistence.isAvailable()) {
-      NativePersistence.clear();
-      NativePersistence.clearSoloSetup();
-      console.log("[InitService] Native persistence cleared");
+    // V4.1 FIX: Clear DatabaseManager's own backup (DATASTORE_KEY = "WorldOfAircraftData")
+    // This is a SEPARATE persistence system from NativePersistence!
+    try {
+      // @ts-ignore - SetStoredData is a global MSFS function
+      if (typeof SetStoredData === "function") {
+        SetStoredData("WorldOfAircraftData", "");
+        console.log("[InitService] Cleared WorldOfAircraftData from SetStoredData");
+      }
+    } catch (e) {
+      console.warn("[InitService] Failed to clear WorldOfAircraftData:", e);
     }
+
+    // Also clear sessionStorage backup
+    try {
+      sessionStorage.removeItem("WorldOfAircraftData");
+      console.log("[InitService] Cleared WorldOfAircraftData from sessionStorage");
+    } catch (e) {
+      // sessionStorage may not be available
+    }
+
+    // Clear ALL native persistence data for BOTH modes
+    if (NativePersistence.isAvailable()) {
+      // Clear save data for BOTH modes explicitly
+      NativePersistence.clearSaveData("solo");
+      NativePersistence.clearSaveData("online");
+
+      // V4.1 FIX: Clear OLD migration key WOA_SaveData (legacy from before mode separation)
+      try {
+        // @ts-ignore - SetStoredData is a global MSFS function
+        if (typeof SetStoredData === "function") {
+          SetStoredData("WOA_SaveData", "");
+          console.log("[InitService] Cleared legacy migration key WOA_SaveData");
+        }
+      } catch (e) {
+        console.warn("[InitService] Failed to clear legacy key:", e);
+      }
+
+      // Clear setup flags for BOTH modes
+      NativePersistence.clearSetup("solo");
+      NativePersistence.clearSetup("online");
+
+      // Clear player IDs for BOTH modes (CRITICAL - was missing!)
+      NativePersistence.clearPlayerId("solo");
+      NativePersistence.clearPlayerId("online");
+
+      // V4.1 FIX: Verify the data was actually cleared
+      const verifyResult = NativePersistence.verifyClear("solo");
+      if (!verifyResult.cleared) {
+        console.error("[InitService] CRITICAL: Save data not properly cleared!", verifyResult);
+      } else {
+        console.log("[InitService] Verified: Solo save data is empty");
+      }
+
+      console.log("[InitService] Native persistence cleared (save data + setup flags + player IDs)");
+    }
+
+    // V4.1 FIX: Clear localStorage backup (NativePersistence.set() also saves to localStorage)
+    try {
+      // Clear all WOA-related localStorage keys
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith("WOA_") || key.startsWith("woa_") || key.startsWith("carrier_"))) {
+          keysToRemove.push(key);
+        }
+      }
+      for (const key of keysToRemove) {
+        localStorage.removeItem(key);
+      }
+      console.log(`[InitService] Cleared ${keysToRemove.length} localStorage keys`);
+    } catch (e) {
+      console.warn("[InitService] Failed to clear localStorage:", e);
+    }
+
+    // Clear game mode selection
+    resetModeSelection();
 
     this.initialized = false;
     console.log("[InitService] Database reset complete. Call initialize() to setup again.");
@@ -1189,12 +1410,10 @@ class InitServiceClass {
 
   /**
    * Purchase a company for the player
-   * Cost: 50,000 credits
+   * Cost: COMPANY_CREATION_COST (25,000 credits)
    * Returns the new company or throws if insufficient funds
    */
   async purchaseCompany(companyName: string, headquartersIcao?: string): Promise<Company> {
-    const COMPANY_COST = 50000;
-
     const player = await DatabaseManager.getPlayer();
     if (!player) throw new Error("No player found");
 
@@ -1203,13 +1422,24 @@ class InitServiceClass {
     if (existingCompany) throw new Error("Player already has a company");
 
     // Check funds
-    if (player.money < COMPANY_COST) {
-      throw new Error(`Insufficient funds. Need ${COMPANY_COST} credits, have ${player.money}`);
+    if (player.money < COMPANY_CREATION_COST) {
+      throw new Error(`Insufficient funds. Need ${COMPANY_CREATION_COST} credits, have ${player.money}`);
     }
 
     // Deduct cost
-    player.money -= COMPANY_COST;
+    player.money -= COMPANY_CREATION_COST;
     await DatabaseManager.savePlayer(player);
+
+    // V4.1: Log transaction
+    await DatabaseManager.saveTransaction({
+      timestamp: new Date().toISOString(),
+      type: "company_create",
+      amount: -COMPANY_CREATION_COST,
+      balance_after: player.money,
+      wallet: "player",
+      description: `Company "${companyName || player.name + " Aviation"}" created`,
+      airport_icao: headquartersIcao?.trim().toUpperCase() || player.preferred_airport || "LFPG",
+    });
 
     // Create company
     const companyId = this.generateUUID();
@@ -1231,7 +1461,7 @@ class InitServiceClass {
     };
 
     await DatabaseManager.put("company", company, false);
-    console.log(`[InitService] Purchased company: ${company.name} at ${hqAirport} for ${COMPANY_COST} credits`);
+    console.log(`[InitService] Purchased company: ${company.name} at ${hqAirport} for ${COMPANY_CREATION_COST} credits`);
 
     // Sync company to SEED server
     try {
@@ -1257,18 +1487,21 @@ class InitServiceClass {
    * Get company purchase cost
    */
   getCompanyCost(): number {
-    return 50000;
+    return COMPANY_CREATION_COST;
   }
 
   /**
-   * Trigger a save to native persistence
+   * Trigger an immediate save to native persistence
    * Call this after critical actions (mission complete, purchase, etc.)
+   * Uses DatabaseManager.forceSave() which saves to "WorldOfAircraftData" key
    */
   async saveNow(): Promise<boolean> {
-    if (NativePersistence.isAvailable()) {
-      return NativePersistence.save();
+    try {
+      await DatabaseManager.forceSave();
+      return true;
+    } catch {
+      return false;
     }
-    return false;
   }
 
   /**

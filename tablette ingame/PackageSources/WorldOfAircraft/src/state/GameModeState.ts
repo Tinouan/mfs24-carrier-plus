@@ -16,6 +16,7 @@
  */
 
 import { Subject } from "@microsoft/msfs-sdk";
+import { authState } from "./AuthState";
 
 // ═══════════════════════════════════════════════════════════
 // TYPES
@@ -38,6 +39,14 @@ export interface GameModeStateType {
 
   /** Error message if mode switch fails */
   modeSwitchError: Subject<string | null>;
+
+  /**
+   * Whether mode initialization is complete
+   * CRITICAL: Data fetching should NOT happen until this is true
+   * - Solo: true after NativePersistence restore complete
+   * - Online: true after SEED connection and data sync complete
+   */
+  modeInitialized: Subject<boolean>;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -56,6 +65,7 @@ export const gameModeState: GameModeStateType = {
   showModeSelector: Subject.create(false),
   modeSwitchLoading: Subject.create(false),
   modeSwitchError: Subject.create<string | null>(null),
+  modeInitialized: Subject.create(false),
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -88,6 +98,43 @@ export const isOnlineMode = (): boolean => {
  */
 export const isModeSelected = (): boolean => {
   return gameModeState.modeSelected.get();
+};
+
+/**
+ * Check if mode initialization is complete
+ * CRITICAL: Data fetching should NOT happen until this returns true
+ */
+export const isModeInitialized = (): boolean => {
+  return gameModeState.modeInitialized.get();
+};
+
+/**
+ * PASSE 5: Unified guard for checking if game is ready for operations
+ *
+ * This replaces the inconsistent pattern: authState.isLoggedIn.get() || authState.isP2PMode.get()
+ *
+ * Returns true when:
+ * - Solo mode: Local services (IndexedDB) are initialized
+ * - Online mode: SEED connection and auth are established
+ *
+ * Use this for:
+ * - Checking if UI can fetch/display data
+ * - Checking if operations can be performed
+ *
+ * Note: This imports from AuthState to check the operational flags.
+ * For routing (Solo vs Online), use isSoloMode()/isOnlineMode() instead.
+ */
+export const isGameReady = (): boolean => {
+  return authState.isLoggedIn.get() || authState.isP2PMode.get();
+};
+
+/**
+ * Set mode initialization status
+ * Called by InitService when mode-specific setup is complete
+ */
+export const setModeInitialized = (initialized: boolean): void => {
+  console.log(`[GameModeState] Mode initialization: ${initialized}`);
+  gameModeState.modeInitialized.set(initialized);
 };
 
 /**
@@ -153,6 +200,7 @@ export const resetModeSelection = (): void => {
   gameModeState.currentMode.set(null);
   gameModeState.modeSelected.set(false);
   gameModeState.showModeSelector.set(true);
+  gameModeState.modeInitialized.set(false); // Reset initialization flag
 
   // Clear persisted mode
   try {

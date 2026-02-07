@@ -15,6 +15,8 @@ export interface AirportInventoryItem {
   quantity: number;
   weight_kg: number;
   location_name: string;
+  owner_type?: "player" | "company";  // V4.1: Ownership tag
+  category?: string;                   // V4.1: Item category (e.g. "personnel")
 }
 
 export interface AircraftCargoItem {
@@ -90,6 +92,76 @@ export function renderAircraftCargoHtml(
       <div style="flex: 1; text-align: right;">
         <div style="font-size: 12px; color: white; font-weight: 500;">${item.item_name}</div>
         <div style="font-size: 10px; color: #6b7280;">${item.total_weight_kg}kg total</div>
+      </div>
+    </div>
+  `).join("");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// V4.1: PASSENGERS HTML (PERSONNEL ITEMS)
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface PassengerItem {
+  item_id: string;
+  location_id: string;
+  item_name: string;
+  quantity: number;
+  weight_kg: number;
+}
+
+/**
+ * Generate HTML for airport passengers list (personnel items available to load)
+ * CSS classes for event binding:
+ * - .load-pax-btn[data-id, data-loc, data-name, data-qty, data-weight] - Load button
+ */
+export function renderAirportPassengersHtml(
+  items: PassengerItem[],
+  emptyMessage: string
+): string {
+  if (items.length === 0) {
+    return `<div style="color: #9ca3af; font-size: 10px; text-align: center; padding: 4px;">
+      ${emptyMessage}
+    </div>`;
+  }
+
+  return items.map(item => `
+    <div class="pax-item" style="display: flex; justify-content: space-between; align-items: center; padding: 4px 6px; margin-bottom: 4px;">
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <span style="width: 6px; height: 6px; border-radius: 50%; background: #a855f7; display: inline-block;"></span>
+        <span style="font-size: 10px; color: white;">${item.item_name}</span>
+        <span style="font-size: 10px; color: #a855f7; font-weight: 600;">x${item.quantity}</span>
+      </div>
+      <button class="load-pax-btn" data-id="${item.item_id}" data-loc="${item.location_id}" data-name="${item.item_name}" data-qty="${item.quantity}" data-weight="${item.weight_kg}" style="background: #a855f7; color: white; border: none; border-radius: 4px; padding: 2px 6px; font-size: 9px; cursor: pointer;">
+        +
+      </button>
+    </div>
+  `).join("");
+}
+
+/**
+ * Generate HTML for aircraft passengers list (personnel loaded on aircraft)
+ * CSS classes for event binding:
+ * - .unload-pax-btn[data-id, data-name, data-qty, data-weight] - Unload button
+ */
+export function renderAircraftPassengersHtml(
+  items: Array<{ item_id: string; item_name: string; qty: number; weight_kg: number }>,
+  emptyMessage: string
+): string {
+  if (items.length === 0) {
+    return `<div style="color: #9ca3af; font-size: 10px; text-align: center; padding: 4px;">
+      ${emptyMessage}
+    </div>`;
+  }
+
+  return items.map(item => `
+    <div class="pax-item" style="display: flex; justify-content: space-between; align-items: center; padding: 4px 6px; margin-bottom: 4px;">
+      <button class="unload-pax-btn" data-id="${item.item_id}" data-name="${item.item_name}" data-qty="${item.qty}" data-weight="${item.weight_kg}" style="background: #f59e0b; color: #1a1a24; border: none; border-radius: 4px; padding: 2px 6px; font-size: 9px; cursor: pointer;">
+        -
+      </button>
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <span style="font-size: 10px; color: #a855f7; font-weight: 600;">x${item.qty}</span>
+        <span style="font-size: 10px; color: white;">${item.item_name}</span>
+        <span style="width: 6px; height: 6px; border-radius: 50%; background: #a855f7; display: inline-block;"></span>
       </div>
     </div>
   `).join("");

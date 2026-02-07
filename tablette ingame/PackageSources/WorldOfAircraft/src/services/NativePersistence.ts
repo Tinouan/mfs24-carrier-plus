@@ -10,7 +10,7 @@
  * - restore() : Restaure les données dans DatabaseManager
  */
 
-import { DatabaseManager, type Player, type Aircraft, type Company, type Mission } from "../managers/DatabaseManager";
+import { DatabaseManager, type Player, type Aircraft, type Company, type Mission, type InventoryItem } from "../managers/DatabaseManager";
 import { NetworkState, type OfflineAction } from "../state/NetworkState";
 import { getCurrentGameMode, type GameMode } from "../state/GameModeState";
 
@@ -27,6 +27,7 @@ export interface SaveData {
   aircraft: Aircraft[];
   company: Company | null;
   missions: Mission[];
+  inventory: InventoryItem[];
   pending_actions: OfflineAction[];
 
   // Checksum pour détecter corruption
@@ -104,6 +105,55 @@ class NativePersistenceClass {
   }
 
   /**
+   * Generic get: retrieve a simple string value by key
+   * Key is auto-prefixed with "WOA_" for namespace isolation
+   */
+  get(key: string): string | null {
+    if (!this.isAvailable()) {
+      // Fallback to localStorage
+      return localStorage.getItem(key);
+    }
+    try {
+      const value = GetStoredData(`WOA_${key}`);
+      if (value && value.length > 0) {
+        return value;
+      }
+      // Migration: check localStorage
+      const localValue = localStorage.getItem(key);
+      if (localValue) {
+        this.set(key, localValue); // Migrate to native
+        return localValue;
+      }
+      return null;
+    } catch {
+      return localStorage.getItem(key);
+    }
+  }
+
+  /**
+   * Generic set: store a simple string value by key
+   * Key is auto-prefixed with "WOA_" for namespace isolation
+   */
+  set(key: string, value: string): void {
+    // Always save to localStorage as backup
+    if (value) {
+      localStorage.setItem(key, value);
+    } else {
+      localStorage.removeItem(key);
+    }
+
+    if (!this.isAvailable()) {
+      return;
+    }
+
+    try {
+      SetStoredData(`WOA_${key}`, value);
+    } catch (e) {
+      console.error(`[NativePersistence] Failed to set ${key}:`, e);
+    }
+  }
+
+  /**
    * Sauvegarder toutes les données
    */
   async save(): Promise<boolean> {
@@ -114,6 +164,11 @@ class NativePersistenceClass {
 
     try {
       const saveData = await this.collectSaveData();
+      // Don't save empty data (no player = nothing to save)
+      if (!saveData.player || !saveData.player.id) {
+        console.log("[NativePersistence] Skipping save - no player data");
+        return false;
+      }
       saveData.checksum = this.calculateChecksum(saveData);
 
       const json = JSON.stringify(saveData);
@@ -215,6 +270,14 @@ class NativePersistenceClass {
       console.log(`[NativePersistence] Restored ${saveData.missions.length} missions`);
     }
 
+    // Inventory
+    if (saveData.inventory && saveData.inventory.length > 0) {
+      for (const item of saveData.inventory) {
+        await DatabaseManager.put("inventory", item, false);
+      }
+      console.log(`[NativePersistence] Restored ${saveData.inventory.length} inventory items`);
+    }
+
     // Pending actions (for offline sync)
     if (saveData.pending_actions && saveData.pending_actions.length > 0) {
       NetworkState.pendingActions.set(saveData.pending_actions);
@@ -269,6 +332,60 @@ class NativePersistenceClass {
   }
 
   /**
+   * V4.1: Clear save data for a specific mode
+   * More explicit than clear() which uses current mode
+   */
+  clearSaveData(mode: GameMode): void {
+    if (!this.isAvailable()) {
+      console.warn("[NativePersistence] GetStoredData/SetStoredData not available");
+      return;
+    }
+
+    try {
+      const storageKey = this.getStorageKey(mode);
+      SetStoredData(storageKey, "");
+      console.log(`[NativePersistence] Save data cleared for ${storageKey}`);
+    } catch (e) {
+      console.error(`[NativePersistence] Clear failed for ${mode}:`, e);
+    }
+  }
+
+  /**
+   * V4.1: Verify that save data was properly cleared
+   * Returns an object indicating if the data is empty
+   */
+  verifyClear(mode: GameMode): { cleared: boolean; dataLength: number; hasPlayer: boolean } {
+    if (!this.isAvailable()) {
+      return { cleared: true, dataLength: 0, hasPlayer: false };
+    }
+
+    try {
+      const storageKey = this.getStorageKey(mode);
+      const json = GetStoredData(storageKey);
+
+      if (!json || json === "") {
+        return { cleared: true, dataLength: 0, hasPlayer: false };
+      }
+
+      // Check if there's a player in the data
+      try {
+        const data = JSON.parse(json);
+        const hasPlayer = !!(data.player && data.player.id);
+        return {
+          cleared: false,
+          dataLength: json.length,
+          hasPlayer,
+        };
+      } catch {
+        return { cleared: false, dataLength: json.length, hasPlayer: false };
+      }
+    } catch (e) {
+      console.error("[NativePersistence] Verify failed:", e);
+      return { cleared: true, dataLength: 0, hasPlayer: false };
+    }
+  }
+
+  /**
    * Obtenir des infos sur la sauvegarde actuelle (sans charger tout)
    */
   async getSaveInfo(): Promise<{ exists: boolean; timestamp?: number; size?: number } | null> {
@@ -297,27 +414,32 @@ class NativePersistenceClass {
   /**
    * Check if setup has been completed for current mode
    * Used to detect true "first launch" vs. returning player
+   *
+   * FIX: Now checks "WorldOfAircraftData" (where DatabaseManager actually saves)
+   * instead of the mode-specific keys that are never written.
+   *
    * @param mode - Optional mode override (defaults to current mode)
    */
   isSetupComplete(mode?: GameMode | null): boolean {
-    if (!this.isAvailable()) {
-      return false;
-    }
+    if (!this.isAvailable()) return false;
+
+    // Check the ACTUAL data store used by DatabaseManager
+    const DATASTORE_KEY = "WorldOfAircraftData";
+    const json = GetStoredData(DATASTORE_KEY);
+    if (!json || json === "") return false;
 
     try {
-      const setupKey = this.getSetupKey(mode);
-      const value = GetStoredData(setupKey);
-      if (value === "true") return true;
-      // Migration: Check old key WOA_SoloSetupComplete (no underscore)
-      if ((mode ?? getCurrentGameMode()) === "solo") {
-        const oldValue = GetStoredData("WOA_SoloSetupComplete");
-        if (oldValue === "true") {
-          this.setSetupComplete(true, "solo"); // Migrate to new key
-          return true;
-        }
+      const data = JSON.parse(json);
+      // Check for player data in the DatabaseManager format
+      const hasPlayer = !!(data.player && Array.isArray(data.player) && data.player.length > 0);
+      if (!hasPlayer) {
+        console.log(`[NativePersistence] No player found in ${DATASTORE_KEY}`);
+        return false;
       }
-      return false;
-    } catch {
+      console.log(`[NativePersistence] Setup complete - found player in ${DATASTORE_KEY}`);
+      return true;
+    } catch (e) {
+      console.warn(`[NativePersistence] Failed to parse ${DATASTORE_KEY}:`, e);
       return false;
     }
   }
@@ -491,6 +613,7 @@ class NativePersistenceClass {
     });
 
     const pendingActions = NetworkState.pendingActions.get();
+    const inventory = await DatabaseManager.getAll<InventoryItem>("inventory");
 
     return {
       version: this.VERSION,
@@ -500,6 +623,7 @@ class NativePersistenceClass {
       aircraft: aircraft || [],
       company: company || null,
       missions: recentMissions,
+      inventory: inventory || [],
       pending_actions: pendingActions,
       checksum: "",
     };

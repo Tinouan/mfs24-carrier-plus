@@ -191,7 +191,7 @@ export function renderSettingsTab(props: SettingsViewProps): VNode {
         {/* Section: Danger Zone - Reset Data */}
         <div style="background: #252532; border: 1px solid #7f1d1d; border-radius: 8px; padding: 16px; margin-bottom: 12px;">
           <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-            <span style="font-size: 14px;">⚠️</span>
+            <span style="font-size: 12px; color: #ef4444; font-weight: 700;">[!]</span>
             <span style="font-size: 13px; font-weight: 600; color: #fca5a5;">
               {currentLanguage.map(l => l === "fr" ? "Zone de danger" : "Danger Zone")}
             </span>
@@ -213,7 +213,7 @@ export function renderSettingsTab(props: SettingsViewProps): VNode {
         {/* Section: Debug */}
         <div style="background: #252532; border: 1px solid #6366f1; border-radius: 8px; padding: 16px; margin-bottom: 12px;">
           <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-            <span style="font-size: 14px;">🔧</span>
+            <span style="font-size: 11px; color: #818cf8; font-weight: 700;">[DBG]</span>
             <span style="font-size: 13px; font-weight: 600; color: #818cf8;">
               {currentLanguage.map(l => l === "fr" ? "Debug" : "Debug")}
             </span>
@@ -256,7 +256,7 @@ export function renderSettingsTab(props: SettingsViewProps): VNode {
         {/* Section: A propos */}
         <div style="background: #252532; border-radius: 8px; padding: 16px;">
           <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-            <span style="font-size: 14px;">ℹ️</span>
+            <span style="font-size: 11px; color: #60a5fa; font-weight: 700;">[i]</span>
             <span style="font-size: 13px; font-weight: 600; color: white;">
               {currentLanguage.map(l => translations[l].settings.about)}
             </span>
@@ -276,7 +276,7 @@ export function renderSettingsTab(props: SettingsViewProps): VNode {
               {currentLanguage.map(l => translations[l].settings.server)}
             </span>
             <span style="font-size: 12px; color: #22c55e;">
-              {currentLanguage.map(l => translations[l].settings.connected)} ✓
+              {currentLanguage.map(l => translations[l].settings.connected)} [OK]
             </span>
           </div>
 

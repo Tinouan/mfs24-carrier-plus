@@ -4,7 +4,7 @@
  */
 
 import { Subject } from "@microsoft/msfs-sdk";
-import type { CompanyData, CompanyMember, CompanyFleetItem } from "../types";
+import type { CompanyData, CompanyMember, CompanyFleetItem, CompanyRole, CompanyMessage } from "../types";
 
 // ═══════════════════════════════════════════════════════════
 // COMPANY STATE TYPE
@@ -27,6 +27,23 @@ export interface CompanyStateType {
   buyCompanyAirport: Subject<string>;
   buyCompanyLoading: Subject<boolean>;
   buyCompanyError: Subject<string | null>;
+
+  // Phase 4: Player role in company
+  playerRole: Subject<CompanyRole>;
+
+  // Phase 4: Transfers
+  transferAmount: Subject<number>;
+  transferLoading: Subject<boolean>;
+  transferError: Subject<string | null>;
+
+  // Phase 4: Company historique
+  companyHistoryLoading: Subject<boolean>;
+
+  // Phase 4: Company messagerie
+  companyMessages: Subject<CompanyMessage[]>;
+  companyMessagesLoading: Subject<boolean>;
+  companyMessageInput: Subject<string>;
+  companyMessageSending: Subject<boolean>;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -50,6 +67,23 @@ export const companyState: CompanyStateType = {
   buyCompanyAirport: Subject.create<string>(""),
   buyCompanyLoading: Subject.create(false),
   buyCompanyError: Subject.create<string | null>(null),
+
+  // Phase 4: Player role in company
+  playerRole: Subject.create<CompanyRole>("ceo"),
+
+  // Phase 4: Transfers
+  transferAmount: Subject.create<number>(0),
+  transferLoading: Subject.create(false),
+  transferError: Subject.create<string | null>(null),
+
+  // Phase 4: Company historique
+  companyHistoryLoading: Subject.create(false),
+
+  // Phase 4: Company messagerie
+  companyMessages: Subject.create<CompanyMessage[]>([]),
+  companyMessagesLoading: Subject.create(false),
+  companyMessageInput: Subject.create<string>(""),
+  companyMessageSending: Subject.create(false),
 };
 
 // ═══════════════════════════════════════════════════════════

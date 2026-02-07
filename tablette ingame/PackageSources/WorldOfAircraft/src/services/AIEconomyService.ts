@@ -4,8 +4,9 @@
  */
 
 import { DatabaseManager } from "../managers/DatabaseManager";
-import type { Item, MarketOrder } from "../managers/DatabaseManager";
+import type { Item, MarketOrder, InventoryItem, SellOrder } from "../managers/DatabaseManager";
 import { marketState } from "../state/MarketState";
+import { localMarketService } from "./LocalMarketService";
 
 // ═══════════════════════════════════════════════════════════
 // TYPES
@@ -40,6 +41,17 @@ const MAX_ORDERS_PER_AIRPORT = 6;
 const ORDER_QUANTITY_MIN = 10;
 const ORDER_QUANTITY_MAX = 100;
 
+// V4.1: Personnel spawn config
+const PERSONNEL_SPAWN_INTERVAL_SIM_SECONDS = 3600; // 1 hour sim time
+const WORKERS_PER_LARGE_AIRPORT = { min: 3, max: 5 };
+const WORKERS_PER_MEDIUM_AIRPORT = { min: 2, max: 4 };
+const ENGINEERS_PER_LARGE_AIRPORT = { min: 1, max: 2 };
+
+// V4.1: AI buyer config (for player sell orders)
+const AI_BUYER_INTERVAL_SIM_SECONDS = 900; // 15 min sim time
+const AI_BUY_BASE_PROBABILITY = 0.15; // 15% base chance per tick
+const AI_BUY_PRICE_FACTOR = 0.3; // +30% chance if price is 20% below market
+
 // AI airports (main hubs)
 const AI_AIRPORTS = [
   "LFPG", "LFPO", "LFBO", "LFML", "LFSB", "LFLL", "LFMN", "LFBD", "LFRS", "LFRN",
@@ -54,6 +66,8 @@ class AIEconomyServiceClass {
   private callbacks: AIEconomyCallbacks = {};
   private lastPriceUpdate = 0;
   private lastOrderGeneration = 0;
+  private lastPersonnelSpawn = 0;  // V4.1: Track personnel spawn time
+  private lastAIBuyerTick = 0;  // V4.1: Track AI buyer tick
   private priceHistory: Map<string, PriceHistory> = new Map();
   private isRunning = false;
   private tickInterval: number | null = null;
@@ -103,6 +117,18 @@ class AIEconomyServiceClass {
     if (simTimeSeconds - this.lastOrderGeneration >= ORDER_GENERATION_INTERVAL_SIM_SECONDS) {
       this.generateAIOrders();
       this.lastOrderGeneration = simTimeSeconds;
+    }
+
+    // V4.1: Spawn personnel every 1 hour sim time
+    if (simTimeSeconds - this.lastPersonnelSpawn >= PERSONNEL_SPAWN_INTERVAL_SIM_SECONDS) {
+      this.spawnPersonnel();
+      this.lastPersonnelSpawn = simTimeSeconds;
+    }
+
+    // V4.1: Process AI buyer for player sell orders every 15 min sim time
+    if (simTimeSeconds - this.lastAIBuyerTick >= AI_BUYER_INTERVAL_SIM_SECONDS) {
+      this.processAIBuyer();
+      this.lastAIBuyerTick = simTimeSeconds;
     }
   }
 
@@ -284,6 +310,180 @@ class AIEconomyServiceClass {
     } catch (error) {
       console.error("[AIEconomyService] Failed to generate AI orders:", error);
     }
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // V4.1: PERSONNEL SPAWNING
+  // ─────────────────────────────────────────────────────────
+
+  /**
+   * Spawn workers and engineers at airports
+   * Workers: large + medium airports
+   * Engineers: large airports only
+   */
+  private async spawnPersonnel(): Promise<void> {
+    try {
+      const airports = DatabaseManager.getAirportsCache();
+      if (airports.length === 0) {
+        console.log("[AIEconomyService] No airports in cache, skipping personnel spawn");
+        return;
+      }
+
+      const largeAirports = airports.filter(a => a.type === "large_airport");
+      const mediumAirports = airports.filter(a => a.type === "medium_airport");
+
+      let workersSpawned = 0;
+      let engineersSpawned = 0;
+
+      // Spawn workers and engineers at large airports
+      for (const airport of largeAirports.slice(0, 20)) { // Limit to 20 airports
+        const workerCount = WORKERS_PER_LARGE_AIRPORT.min +
+          Math.floor(Math.random() * (WORKERS_PER_LARGE_AIRPORT.max - WORKERS_PER_LARGE_AIRPORT.min + 1));
+        const engineerCount = ENGINEERS_PER_LARGE_AIRPORT.min +
+          Math.floor(Math.random() * (ENGINEERS_PER_LARGE_AIRPORT.max - ENGINEERS_PER_LARGE_AIRPORT.min + 1));
+
+        await this.addOrUpdatePersonnelInventory(airport.ident, "worker", workerCount);
+        await this.addOrUpdatePersonnelInventory(airport.ident, "engineer", engineerCount);
+
+        workersSpawned += workerCount;
+        engineersSpawned += engineerCount;
+      }
+
+      // Spawn workers at medium airports (no engineers)
+      for (const airport of mediumAirports.slice(0, 30)) { // Limit to 30 airports
+        const workerCount = WORKERS_PER_MEDIUM_AIRPORT.min +
+          Math.floor(Math.random() * (WORKERS_PER_MEDIUM_AIRPORT.max - WORKERS_PER_MEDIUM_AIRPORT.min + 1));
+
+        await this.addOrUpdatePersonnelInventory(airport.ident, "worker", workerCount);
+        workersSpawned += workerCount;
+      }
+
+      console.log(`[AIEconomyService] Spawned ${workersSpawned} workers, ${engineersSpawned} engineers`);
+    } catch (error) {
+      console.error("[AIEconomyService] Failed to spawn personnel:", error);
+    }
+  }
+
+  /**
+   * Add or update personnel inventory at an airport
+   */
+  private async addOrUpdatePersonnelInventory(icao: string, itemCode: string, quantity: number): Promise<void> {
+    // Check if there's already personnel of this type at the airport
+    const existing = await DatabaseManager.getInventoryAt("airport", icao);
+    const existingItem = existing.find(i => i.item_code === itemCode);
+
+    if (existingItem) {
+      // Update quantity (cap at reasonable maximum)
+      existingItem.quantity = Math.min(existingItem.quantity + quantity, 20);
+      await DatabaseManager.put("inventory", existingItem, false);
+    } else {
+      // Create new inventory entry
+      const inventoryItem: InventoryItem = {
+        id: this.generateUUID(),
+        location_type: "airport",
+        location_id: icao,
+        item_code: itemCode,
+        quantity: quantity,
+        owner_type: "player", // Available for pickup (not owned by anyone specifically)
+        created_at: new Date().toISOString(),
+      };
+      await DatabaseManager.put("inventory", inventoryItem, false);
+    }
+  }
+
+  /**
+   * Force spawn personnel (for testing or initial setup)
+   */
+  async forceSpawnPersonnel(): Promise<void> {
+    await this.spawnPersonnel();
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // V4.1: AI BUYER (for player sell orders)
+  // ─────────────────────────────────────────────────────────
+
+  /**
+   * Process player sell orders and potentially buy them
+   * Probability increases if price is below market value
+   */
+  private async processAIBuyer(): Promise<void> {
+    try {
+      // Get all active player sell orders
+      const allOrders = await DatabaseManager.getActiveSellOrders();
+      const playerOrders = allOrders.filter(o => o.seller_id !== "AI" && o.status === "active");
+
+      if (playerOrders.length === 0) {
+        return;
+      }
+
+      let purchasedCount = 0;
+
+      for (const order of playerOrders) {
+        // Calculate buy probability based on price
+        const marketPrice = await this.getMarketPriceForItem(order.item_id);
+        const priceRatio = marketPrice > 0 ? order.price_per_unit / marketPrice : 1;
+
+        // Base probability + bonus if price is below market
+        let buyProbability = AI_BUY_BASE_PROBABILITY;
+        if (priceRatio < 0.8) {
+          // Price is 20%+ below market: significant bonus
+          buyProbability += AI_BUY_PRICE_FACTOR * (1 - priceRatio);
+        } else if (priceRatio > 1.2) {
+          // Price is 20%+ above market: reduce probability
+          buyProbability *= 0.5;
+        }
+
+        // Roll the dice
+        if (Math.random() < buyProbability) {
+          try {
+            await localMarketService.fulfillSellOrder(order.id, "AI_BUYER");
+            purchasedCount++;
+            console.log(`[AIEconomyService] AI bought ${order.quantity}x ${order.item_name} for ${order.total_price} CR`);
+          } catch (error) {
+            console.error(`[AIEconomyService] Failed to buy order ${order.id}:`, error);
+          }
+        }
+      }
+
+      if (purchasedCount > 0) {
+        console.log(`[AIEconomyService] AI purchased ${purchasedCount} player sell orders`);
+      }
+    } catch (error) {
+      console.error("[AIEconomyService] Failed to process AI buyer:", error);
+    }
+  }
+
+  /**
+   * Get average market price for an item (from AI market orders)
+   */
+  private async getMarketPriceForItem(itemId: string): Promise<number> {
+    try {
+      // Try to get from items table first
+      const item = await DatabaseManager.get<Item>("items", itemId);
+      if (item) {
+        return item.base_price;
+      }
+
+      // Fallback: check market orders for this item
+      const orders = await DatabaseManager.getActiveMarketOrders();
+      const itemOrders = orders.filter(o => o.item_code === itemId);
+
+      if (itemOrders.length === 0) {
+        return 0;
+      }
+
+      const totalPrice = itemOrders.reduce((sum, o) => sum + (o.price_per_unit ?? o.unit_price ?? 0), 0);
+      return totalPrice / itemOrders.length;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * Force AI buyer to run immediately (for testing)
+   */
+  async forceAIBuyer(): Promise<void> {
+    await this.processAIBuyer();
   }
 
   // ─────────────────────────────────────────────────────────

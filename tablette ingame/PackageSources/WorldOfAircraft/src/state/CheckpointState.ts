@@ -60,8 +60,8 @@ export const checkpointState: CheckpointStateType = {
   checkpointLine6: Subject.create(""),
   checkpointLine7: Subject.create(""),
 
-  // Flight phase display
-  flightPhaseIcon: Subject.create("🛫"),
+  // Flight phase display (text labels for Coherent GT compatibility)
+  flightPhaseIcon: Subject.create("[DEP]"),
   flightPhaseText: Subject.create("EN ATTENTE"),
   flightPhaseColor: Subject.create("#9ca3af"),
   flightPhaseId: Subject.create<FlightPhaseId>("none"),

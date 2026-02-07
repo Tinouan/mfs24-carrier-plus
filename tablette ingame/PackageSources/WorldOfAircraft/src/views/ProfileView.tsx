@@ -1,10 +1,12 @@
 /**
  * ProfileView - Profile tab render function
  * Extracted from WorldOfAircraft.tsx for better maintainability
+ * V2.0: Added flight history sub-tab
  */
 import { FSComponent, VNode, Subject, MappedSubject, NodeReference } from "@microsoft/msfs-sdk";
 import { Button } from "@efb/efb-api";
 import type { Language, UserInfo, ProfileSubTab, ProfileInventoryItem } from "../types";
+import { calculateLevel, formatFlightTime, formatDistance, getCountryFlag } from "../helpers";
 
 // Import translations
 import frTranslations from "../locales/fr.json";
@@ -37,11 +39,17 @@ export interface ProfileViewProps {
   profileIcaoFilter: Subject<string>;
   profileItemFilter: Subject<string>;
   profileTierFilter: Subject<number | null>;
+  profileOwnerFilter: Subject<"all" | "player" | "company">;  // V4.1: Ownership filter
   profileIcaoFilterRef: NodeReference<HTMLInputElement>;
   profileItemFilterRef: NodeReference<HTMLInputElement>;
   profileInventoryListRef: NodeReference<HTMLDivElement>;
   onFetchProfileInventory: () => void;
   onSetProfileTierFilter: (tier: number | null) => void;
+  onSetProfileOwnerFilter: (owner: "all" | "player" | "company") => void;  // V4.1
+  // Flight history
+  profileFlightHistoryRef: NodeReference<HTMLDivElement>;
+  profileFlightHistoryLoading: Subject<boolean>;
+  onFetchFlightHistory: () => void;
 }
 
 /**
@@ -60,11 +68,16 @@ export function renderProfileTab(props: ProfileViewProps): VNode {
     profileIcaoFilter,
     profileItemFilter,
     profileTierFilter,
+    profileOwnerFilter,  // V4.1
     profileIcaoFilterRef,
     profileItemFilterRef,
     profileInventoryListRef,
     onFetchProfileInventory,
     onSetProfileTierFilter,
+    onSetProfileOwnerFilter,  // V4.1
+    profileFlightHistoryRef,
+    profileFlightHistoryLoading,
+    onFetchFlightHistory,
   } = props;
 
   return (
@@ -82,8 +95,8 @@ export function renderProfileTab(props: ProfileViewProps): VNode {
               {currentLanguage.map(l => translations[l].profile.overview)}
             </div>
           </Button>
-          <Button callback={(): void => profileSubTab.set("licences")}>
-            <div style={profileSubTab.map(t => t === "licences"
+          <Button callback={(): void => profileSubTab.set("certifications")}>
+            <div style={profileSubTab.map(t => t === "certifications"
               ? "padding: 6px 12px; background: #3b82f6; border: 1px solid #3b82f6; border-radius: 6px; font-size: 11px; color: white; font-weight: 600;"
               : "padding: 6px 12px; background: rgba(59, 130, 246, 0.2); border: 1px solid #3b82f6; border-radius: 6px; font-size: 11px; color: white;")}>
               {currentLanguage.map(l => translations[l].profile.licenses)}
@@ -96,11 +109,11 @@ export function renderProfileTab(props: ProfileViewProps): VNode {
               {currentLanguage.map(l => translations[l].profile.inventory)}
             </div>
           </Button>
-          <Button callback={(): void => profileSubTab.set("transactions")}>
-            <div style={profileSubTab.map(t => t === "transactions"
+          <Button callback={(): void => profileSubTab.set("historique")}>
+            <div style={profileSubTab.map(t => t === "historique"
               ? "padding: 6px 12px; background: #3b82f6; border: 1px solid #3b82f6; border-radius: 6px; font-size: 11px; color: white; font-weight: 600;"
               : "padding: 6px 12px; background: rgba(59, 130, 246, 0.2); border: 1px solid #3b82f6; border-radius: 6px; font-size: 11px; color: white;")}>
-              {currentLanguage.map(l => translations[l].profile.transactions)}
+              {currentLanguage.map(l => (translations[l].profile as any).flightHistory || "Flight History")}
             </div>
           </Button>
           <Button callback={(): void => profileSubTab.set("messagerie")}>
@@ -137,7 +150,32 @@ export function renderProfileTab(props: ProfileViewProps): VNode {
                 <div style="font-size: 18px; font-weight: 600; color: white;">
                   {MappedSubject.create(([u, lang]) => u?.username || translations[lang].settings.notConnected, currentUser, currentLanguage)}
                 </div>
-                <div style="font-size: 11px; color: #9ca3af;">{currentLanguage.map(l => translations[l].profile.level)} 1</div>
+                <div style="font-size: 11px; color: #9ca3af;">
+                  {MappedSubject.create(([u, lang]) => {
+                    const xp = u?.xp || 0;
+                    const levelInfo = calculateLevel(xp);
+                    return `${translations[lang].profile.level} ${levelInfo.level}`;
+                  }, currentUser, currentLanguage)}
+                </div>
+                {/* Nationality, Home Airport, and Current Position */}
+                <div style="font-size: 10px; color: #6b7280; margin-top: 2px;">
+                  {MappedSubject.create(([u, lang]) => {
+                    const parts: string[] = [];
+                    if (u?.nationality) {
+                      parts.push(getCountryFlag(u.nationality) + " " + u.nationality);
+                    }
+                    if (u?.preferred_airport) {
+                      const baseLabel = lang === "fr" ? "Base" : "Home";
+                      parts.push(`${baseLabel}: ${u.preferred_airport}`);
+                    }
+                    // V4.1: Show current position if different from home
+                    if (u?.current_airport && u.current_airport !== u.preferred_airport) {
+                      const posLabel = lang === "fr" ? "Position" : "At";
+                      parts.push(`${posLabel}: ${u.current_airport}`);
+                    }
+                    return parts.join(" | ") || "";
+                  }, currentUser, currentLanguage)}
+                </div>
               </div>
             </div>
 
@@ -145,10 +183,20 @@ export function renderProfileTab(props: ProfileViewProps): VNode {
             <div style="margin-bottom: 8px;">
               <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px;">
                 <span style="color: #9ca3af;">XP</span>
-                <span style="color: #60a5fa;">0 / 1,000</span>
+                <span style="color: #60a5fa;">
+                  {MappedSubject.create(([u]) => {
+                    const xp = u?.xp || 0;
+                    const levelInfo = calculateLevel(xp);
+                    return `${levelInfo.currentXp.toLocaleString()} / ${levelInfo.nextLevelXp.toLocaleString()}`;
+                  }, currentUser)}
+                </span>
               </div>
               <div style="height: 6px; background: #1a1a24; border-radius: 3px; overflow: hidden;">
-                <div style="width: 0%; height: 100%; background: linear-gradient(90deg, #3b82f6, #8b5cf6); border-radius: 3px;"></div>
+                <div style={MappedSubject.create(([u]) => {
+                  const xp = u?.xp || 0;
+                  const levelInfo = calculateLevel(xp);
+                  return `width: ${levelInfo.progress}%; height: 100%; background: linear-gradient(90deg, #3b82f6, #8b5cf6); border-radius: 3px;`;
+                }, currentUser)}></div>
               </div>
             </div>
           </div>
@@ -156,21 +204,41 @@ export function renderProfileTab(props: ProfileViewProps): VNode {
           {/* Stats */}
           <div style="background: #252532; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
             <div style="font-size: 12px; font-weight: 600; color: #9ca3af; text-transform: uppercase; margin-bottom: 12px;">{currentLanguage.map(l => translations[l].profile.statistics)}</div>
-            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
-              <div>
-                <div style="font-size: 20px; font-weight: 700; color: white;">0</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 12px;">
+              <div style="width: calc(50% - 6px);">
+                <div style="font-size: 20px; font-weight: 700; color: white;">
+                  {MappedSubject.create(([u]) => {
+                    const stats = u?.career_stats;
+                    return stats?.total_missions?.toString() || "0";
+                  }, currentUser)}
+                </div>
                 <div style="font-size: 10px; color: #6b7280;">{currentLanguage.map(l => translations[l].profile.missions)}</div>
               </div>
-              <div>
-                <div style="font-size: 20px; font-weight: 700; color: white;">0h</div>
+              <div style="width: calc(50% - 6px);">
+                <div style="font-size: 20px; font-weight: 700; color: white;">
+                  {MappedSubject.create(([u]) => {
+                    const stats = u?.career_stats;
+                    return formatFlightTime(stats?.total_flight_time_minutes || 0);
+                  }, currentUser)}
+                </div>
                 <div style="font-size: 10px; color: #6b7280;">{currentLanguage.map(l => translations[l].profile.flightHours)}</div>
               </div>
-              <div>
-                <div style="font-size: 20px; font-weight: 700; color: white;">0 nm</div>
+              <div style="width: calc(50% - 6px);">
+                <div style="font-size: 20px; font-weight: 700; color: white;">
+                  {MappedSubject.create(([u]) => {
+                    const stats = u?.career_stats;
+                    return formatDistance(stats?.total_distance_nm || 0);
+                  }, currentUser)}
+                </div>
                 <div style="font-size: 10px; color: #6b7280;">{currentLanguage.map(l => translations[l].map.distance)}</div>
               </div>
-              <div>
-                <div style="font-size: 20px; font-weight: 700; color: white;">-</div>
+              <div style="width: calc(50% - 6px);">
+                <div style="font-size: 20px; font-weight: 700; color: white;">
+                  {MappedSubject.create(([u]) => {
+                    const stats = u?.career_stats;
+                    return stats?.average_grade || "-";
+                  }, currentUser)}
+                </div>
                 <div style="font-size: 10px; color: #6b7280;">{currentLanguage.map(l => translations[l].profile.averageGrade)}</div>
               </div>
             </div>
@@ -197,21 +265,16 @@ export function renderProfileTab(props: ProfileViewProps): VNode {
           </div>
         </div>
 
-        {/* Licences Sub-Tab */}
-        <div style={profileSubTab.map(t => t === "licences" ? "padding: 16px; color: white;" : "display: none;")}>
-          <div style="background: #252532; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
-            <div style="font-size: 12px; font-weight: 600; color: #9ca3af; text-transform: uppercase; margin-bottom: 12px;">{currentLanguage.map(l => translations[l].profile.licenses)}</div>
-            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-              <span style="background: rgba(34, 197, 94, 0.2); color: #22c55e; padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 500;">PPL</span>
-              <span style="background: rgba(107, 114, 128, 0.2); color: #6b7280; padding: 4px 12px; border-radius: 12px; font-size: 11px;">IFR</span>
-              <span style="background: rgba(107, 114, 128, 0.2); color: #6b7280; padding: 4px 12px; border-radius: 12px; font-size: 11px;">CPL</span>
-              <span style="background: rgba(107, 114, 128, 0.2); color: #6b7280; padding: 4px 12px; border-radius: 12px; font-size: 11px;">ATPL</span>
-            </div>
-          </div>
-          <div style="background: rgba(96, 165, 250, 0.1); border: 1px solid rgba(96, 165, 250, 0.3); border-radius: 8px; padding: 12px;">
-            <p style="font-size: 11px; color: #9ca3af; margin: 0;">
-              {currentLanguage.map(l => translations[l].profile.licensesInfo)}
-            </p>
+        {/* Certifications Sub-Tab */}
+        <div style={profileSubTab.map(t => t === "certifications" ? "padding: 16px; color: white;" : "display: none;")}>
+          <div style="background: #1e1e2e; border-radius: 12px; padding: 24px; text-align: center;">
+            <svg style="width: 48px; height: 48px; margin-bottom: 12px;" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="1.5">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              <path d="M9 12l2 2 4-4"/>
+            </svg>
+            <div style="color: #60a5fa; font-size: 16px; font-weight: 600; margin-bottom: 8px;">{currentLanguage.map(l => translations[l].profile.licenses)}</div>
+            <div style="color: #6b7280; font-size: 12px;">Coming soon - Phase 5</div>
+            <div style="color: #4b5563; font-size: 10px; margin-top: 8px;">{currentLanguage.map(l => translations[l].profile.licensesInfo)}</div>
           </div>
         </div>
 
@@ -244,6 +307,31 @@ export function renderProfileTab(props: ProfileViewProps): VNode {
                 onkeypress={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
               />
             </div>
+          </div>
+
+          {/* V4.1: Ownership Filters */}
+          <div style="display: flex; gap: 4px; margin-bottom: 8px; flex-wrap: wrap;">
+            <Button callback={(): void => { onSetProfileOwnerFilter("all"); }}>
+              <div style={profileOwnerFilter.map(o => o === "all"
+                ? "padding: 6px 10px; background: #3b82f6; color: white; border-radius: 6px; font-size: 10px; font-weight: 600;"
+                : "padding: 6px 10px; background: #252532; color: #6b7280; border-radius: 6px; font-size: 10px;")}>
+                {currentLanguage.map(l => translations[l].common.all)}
+              </div>
+            </Button>
+            <Button callback={(): void => { onSetProfileOwnerFilter("player"); }}>
+              <div style={profileOwnerFilter.map(o => o === "player"
+                ? "padding: 6px 10px; background: #3b82f6; color: white; border-radius: 6px; font-size: 10px; font-weight: 600;"
+                : "padding: 6px 10px; background: #252532; color: #3b82f6; border-radius: 6px; font-size: 10px;")}>
+                {currentLanguage.map(l => l === "fr" ? "Perso" : "Personal")}
+              </div>
+            </Button>
+            <Button callback={(): void => { onSetProfileOwnerFilter("company"); }}>
+              <div style={profileOwnerFilter.map(o => o === "company"
+                ? "padding: 6px 10px; background: #f59e0b; color: #1a1a24; border-radius: 6px; font-size: 10px; font-weight: 600;"
+                : "padding: 6px 10px; background: #252532; color: #f59e0b; border-radius: 6px; font-size: 10px;")}>
+                {currentLanguage.map(l => l === "fr" ? "Company" : "Company")}
+              </div>
+            </Button>
           </div>
 
           {/* Tier Filters */}
@@ -322,42 +410,70 @@ export function renderProfileTab(props: ProfileViewProps): VNode {
           </div>
         </div>
 
-        {/* Transactions Sub-Tab */}
-        <div style={profileSubTab.map(t => t === "transactions" ? "padding: 16px; color: white;" : "display: none;")}>
-          <div style="background: #252532; border-radius: 12px; padding: 24px; text-align: center;">
-            <svg style="width: 40px; height: 40px; margin-bottom: 12px; opacity: 0.4;" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="1.5">
-              <path d="M12 2v20"/>
-              <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
-            </svg>
-            <div style="color: #6b7280; font-size: 12px;">{currentLanguage.map(l => translations[l].profile.transactionHistory)}</div>
-            <div style="color: #4b5563; font-size: 10px; margin-top: 4px;">{currentLanguage.map(l => translations[l].profile.comingSoon)}</div>
+        {/* Historique des vols Sub-Tab */}
+        <div style={profileSubTab.map(t => t === "historique" ? "padding: 16px; color: white;" : "display: none;")}>
+          {/* Title */}
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <div style="font-size: 12px; font-weight: 600; color: #9ca3af; text-transform: uppercase;">
+              {currentLanguage.map(l => (translations[l].profile as any).flightHistory || "Flight History")}
+            </div>
+          </div>
+
+          {/* Loading state */}
+          <div style={profileFlightHistoryLoading.map(l => l ? "display: flex; justify-content: center; padding: 24px;" : "display: none;")}>
+            <div style="color: #9ca3af; font-size: 12px;">{currentLanguage.map(l => translations[l].common.loading)}</div>
+          </div>
+
+          {/* History list */}
+          <div style={profileFlightHistoryLoading.map(l => l ? "display: none;" : "display: block;")}>
+            <div ref={profileFlightHistoryRef}>
+              <div style="background: #252532; border-radius: 12px; padding: 24px; text-align: center;">
+                <svg style="width: 40px; height: 40px; margin-bottom: 12px; opacity: 0.4;" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="1.5">
+                  <path d="M12 8v4l3 3"/>
+                  <circle cx="12" cy="12" r="10"/>
+                </svg>
+                <div style="color: #6b7280; font-size: 12px;">{currentLanguage.map(l => translations[l].common.loading)}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Refresh button */}
+          <div style="margin-top: 12px;">
+            <Button callback={(): void => { onFetchFlightHistory(); }} disabled={profileFlightHistoryLoading}>
+              <div style={profileFlightHistoryLoading.map(l => l
+                ? "background: #374151; color: #6b7280; padding: 10px; border-radius: 8px; text-align: center; font-size: 11px;"
+                : "background: #3b82f6; color: white; padding: 10px; border-radius: 8px; text-align: center; font-size: 11px; font-weight: 500;")}>
+                {MappedSubject.create(([loading, lang]) => loading ? translations[lang].common.loading : translations[lang].common.refresh, profileFlightHistoryLoading, currentLanguage)}
+              </div>
+            </Button>
           </div>
         </div>
 
         {/* Messagerie Sub-Tab */}
         <div style={profileSubTab.map(t => t === "messagerie" ? "padding: 16px; color: white;" : "display: none;")}>
-          <div style="background: #252532; border-radius: 12px; padding: 24px; text-align: center;">
-            <svg style="width: 40px; height: 40px; margin-bottom: 12px; opacity: 0.4;" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="1.5">
+          <div style="background: #1e1e2e; border-radius: 12px; padding: 24px; text-align: center;">
+            <svg style="width: 48px; height: 48px; margin-bottom: 12px;" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="1.5">
               <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z"/>
             </svg>
-            <div style="color: #6b7280; font-size: 12px;">{currentLanguage.map(l => translations[l].profile.messages)}</div>
-            <div style="color: #4b5563; font-size: 10px; margin-top: 4px;">{currentLanguage.map(l => translations[l].profile.comingSoon)}</div>
+            <div style="color: #60a5fa; font-size: 16px; font-weight: 600; margin-bottom: 8px;">{currentLanguage.map(l => translations[l].profile.messages)}</div>
+            <div style="color: #6b7280; font-size: 12px;">Coming soon - Phase 7</div>
           </div>
         </div>
 
         {/* Social Sub-Tab */}
         <div style={profileSubTab.map(t => t === "social" ? "padding: 16px; color: white;" : "display: none;")}>
-          <div style="background: #252532; border-radius: 12px; padding: 24px; text-align: center;">
-            <svg style="width: 40px; height: 40px; margin-bottom: 12px; opacity: 0.4;" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="1.5">
+          <div style="background: #1e1e2e; border-radius: 12px; padding: 24px; text-align: center;">
+            <svg style="width: 48px; height: 48px; margin-bottom: 12px;" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="1.5">
               <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
               <circle cx="9" cy="7" r="4"/>
               <path d="M23 21v-2a4 4 0 00-3-3.87"/>
               <path d="M16 3.13a4 4 0 010 7.75"/>
             </svg>
-            <div style="color: #6b7280; font-size: 12px;">{currentLanguage.map(l => translations[l].profile.friendsAndRankings)}</div>
-            <div style="color: #4b5563; font-size: 10px; margin-top: 4px;">{currentLanguage.map(l => translations[l].profile.comingSoon)}</div>
+            <div style="color: #60a5fa; font-size: 16px; font-weight: 600; margin-bottom: 8px;">{currentLanguage.map(l => translations[l].profile.friendsAndRankings)}</div>
+            <div style="color: #6b7280; font-size: 12px;">Coming soon - Phase 7</div>
           </div>
         </div>
+
       </div>
     </div>
   );

@@ -98,10 +98,10 @@
   }
 }
 
-// Data Grid
+// Data Grid (Flexbox for Coherent GT compatibility)
 .data-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   padding: 16px;
   flex: 1;
@@ -113,9 +113,11 @@
   border-radius: 8px;
   padding: 12px;
   border: 1px solid transparent;
+  width: calc(50% - 6px);
+  box-sizing: border-box;
 
   &.wide {
-    grid-column: span 2;
+    width: 100%;
   }
 }
 

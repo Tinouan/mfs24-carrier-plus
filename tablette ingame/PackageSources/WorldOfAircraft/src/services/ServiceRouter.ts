@@ -194,6 +194,14 @@ export const MarketRouter = {
   async getCompanyBalance(): Promise<number> {
     return Services.market.getCompanyBalance();
   },
+
+  async transferToCompany(amount: number): Promise<void> {
+    return Services.market.transferToCompany(amount);
+  },
+
+  async transferFromCompany(amount: number): Promise<void> {
+    return Services.market.transferFromCompany(amount);
+  },
 };
 
 // ═══════════════════════════════════════════════════════════

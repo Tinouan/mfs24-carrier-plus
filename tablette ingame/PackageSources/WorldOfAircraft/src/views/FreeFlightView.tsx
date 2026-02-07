@@ -174,20 +174,20 @@ export function renderFreeFlightView(props: FreeFlightViewProps): VNode {
             <div style={todayStats.map(s => s ? "display: block;" : "display: none;")}>
               <div style="background: #252532; border-radius: 8px; padding: 12px;">
                 <div style="font-size: 10px; color: #9ca3af; text-transform: uppercase; margin-bottom: 8px;">Aujourd'hui</div>
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
-                  <div style="text-align: center;">
+                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                  <div style="text-align: center; width: calc(33.33% - 6px);">
                     <div style="font-size: 16px; font-weight: 700; color: #22c55e;">
                       {todayStats.map(s => s ? formatFlightTime(s.totalFlightTime) : "0m")}
                     </div>
                     <div style="font-size: 9px; color: #6b7280;">Temps de vol</div>
                   </div>
-                  <div style="text-align: center;">
+                  <div style="text-align: center; width: calc(33.33% - 6px);">
                     <div style="font-size: 16px; font-weight: 700; color: #60a5fa;">
                       {todayStats.map(s => s?.totalLandings || 0)}
                     </div>
                     <div style="font-size: 9px; color: #6b7280;">Atterrissages</div>
                   </div>
-                  <div style="text-align: center;">
+                  <div style="text-align: center; width: calc(33.33% - 6px);">
                     <div style="font-size: 16px; font-weight: 700; color: #f59e0b;">
                       {todayStats.map(s => s ? Math.round(s.totalDistanceNm) : 0)} nm
                     </div>
@@ -250,10 +250,10 @@ export function renderFreeFlightView(props: FreeFlightViewProps): VNode {
               </div>
             </div>
 
-            {/* Real-time Stats Grid */}
-            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
+            {/* Real-time Stats Grid (Flexbox for Coherent GT) */}
+            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
               {/* Flight Time */}
-              <div style="background: #252532; border-radius: 8px; padding: 12px;">
+              <div style="background: #252532; border-radius: 8px; padding: 12px; width: calc(50% - 4px);">
                 <div style="font-size: 9px; color: #6b7280; text-transform: uppercase; margin-bottom: 4px;">Temps de vol</div>
                 <div style="font-size: 24px; font-weight: 700; color: #22c55e;">
                   {flightTimeMinutes.map(m => formatFlightTime(m))}
@@ -261,7 +261,7 @@ export function renderFreeFlightView(props: FreeFlightViewProps): VNode {
               </div>
 
               {/* Distance */}
-              <div style="background: #252532; border-radius: 8px; padding: 12px;">
+              <div style="background: #252532; border-radius: 8px; padding: 12px; width: calc(50% - 4px);">
                 <div style="font-size: 9px; color: #6b7280; text-transform: uppercase; margin-bottom: 4px;">Distance</div>
                 <div style="font-size: 24px; font-weight: 700; color: #60a5fa;">
                   {distanceFlownNm.map(d => Math.round(d))} <span style="font-size: 12px; color: #9ca3af;">nm</span>
@@ -269,7 +269,7 @@ export function renderFreeFlightView(props: FreeFlightViewProps): VNode {
               </div>
 
               {/* Landings */}
-              <div style="background: #252532; border-radius: 8px; padding: 12px;">
+              <div style="background: #252532; border-radius: 8px; padding: 12px; width: calc(50% - 4px);">
                 <div style="font-size: 9px; color: #6b7280; text-transform: uppercase; margin-bottom: 4px;">Atterrissages</div>
                 <div style="font-size: 24px; font-weight: 700; color: #f59e0b;">
                   {landingsCount}
@@ -277,7 +277,7 @@ export function renderFreeFlightView(props: FreeFlightViewProps): VNode {
               </div>
 
               {/* Fuel Used */}
-              <div style="background: #252532; border-radius: 8px; padding: 12px;">
+              <div style="background: #252532; border-radius: 8px; padding: 12px; width: calc(50% - 4px);">
                 <div style="font-size: 9px; color: #6b7280; text-transform: uppercase; margin-bottom: 4px;">Carburant</div>
                 <div style="font-size: 24px; font-weight: 700; color: #ef4444;">
                   {fuelUsedGallons.map(f => Math.round(f))} <span style="font-size: 12px; color: #9ca3af;">gal</span>
@@ -370,24 +370,24 @@ export function renderFreeFlightView(props: FreeFlightViewProps): VNode {
 
             {/* Summary stats */}
             <div style="background: #252532; border-radius: 8px; padding: 12px;">
-              <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
-                <div>
+              <div style="display: flex; flex-wrap: wrap; gap: 12px;">
+                <div style="width: calc(50% - 6px);">
                   <div style="font-size: 9px; color: #6b7280;">Temps de vol</div>
                   <div style="font-size: 16px; font-weight: 600; color: white;">
                     {flightTimeMinutes.map(m => formatFlightTime(m))}
                   </div>
                 </div>
-                <div>
+                <div style="width: calc(50% - 6px);">
                   <div style="font-size: 9px; color: #6b7280;">Distance</div>
                   <div style="font-size: 16px; font-weight: 600; color: white;">
                     {distanceFlownNm.map(d => Math.round(d))} nm
                   </div>
                 </div>
-                <div>
+                <div style="width: calc(50% - 6px);">
                   <div style="font-size: 9px; color: #6b7280;">Atterrissages</div>
                   <div style="font-size: 16px; font-weight: 600; color: white;">{landingsCount}</div>
                 </div>
-                <div>
+                <div style="width: calc(50% - 6px);">
                   <div style="font-size: 9px; color: #6b7280;">Carburant utilise</div>
                   <div style="font-size: 16px; font-weight: 600; color: white;">
                     {fuelUsedGallons.map(f => Math.round(f))} gal

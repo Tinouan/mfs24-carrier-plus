@@ -37,6 +37,9 @@ export { InitService } from "./InitService";
 // AI Economy Service (solo mode dynamic economy)
 export { AIEconomyService } from "./AIEconomyService";
 
+// Sync Service (SEED server communication for Online mode)
+export { SyncService } from "./SyncService";
+
 // ═══════════════════════════════════════════════════════════
 // TYPE RE-EXPORTS (from local services)
 // ═══════════════════════════════════════════════════════════

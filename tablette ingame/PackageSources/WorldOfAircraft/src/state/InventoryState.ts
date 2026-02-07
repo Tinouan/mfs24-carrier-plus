@@ -39,6 +39,7 @@ export interface InventoryStateType {
   profileIcaoFilter: Subject<string>;
   profileItemFilter: Subject<string>;
   profileTierFilter: Subject<number | null>;  // null = all tiers
+  profileOwnerFilter: Subject<"all" | "player" | "company">;  // V4.1: Ownership filter
 
   // Company inventory (for display in Company tab)
   companyInventory: Subject<ProfileInventoryItem[]>;
@@ -46,6 +47,15 @@ export interface InventoryStateType {
   companyIcaoFilter: Subject<string>;
   companyItemFilter: Subject<string>;
   companyTierFilter: Subject<number | null>;  // null = all tiers
+  companyOwnerFilter: Subject<"all" | "player" | "company">;  // V4.1: Ownership filter
+
+  // Market inventory (for display in Market > Inventory tab)
+  marketInventory: Subject<ProfileInventoryItem[]>;
+  marketInventoryLoading: Subject<boolean>;
+  marketInvIcaoFilter: Subject<string>;
+  marketInvItemFilter: Subject<string>;
+  marketInvTierFilter: Subject<number | null>;
+  marketInvOwnerFilter: Subject<"all" | "player" | "company">;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -66,6 +76,7 @@ export const inventoryState: InventoryStateType = {
   profileIcaoFilter: Subject.create<string>(""),
   profileItemFilter: Subject.create<string>(""),
   profileTierFilter: Subject.create<number | null>(null),  // null = all tiers
+  profileOwnerFilter: Subject.create<"all" | "player" | "company">("all"),  // V4.1: Ownership filter
 
   // Company inventory (for display in Company tab)
   companyInventory: Subject.create<ProfileInventoryItem[]>([]),
@@ -73,6 +84,15 @@ export const inventoryState: InventoryStateType = {
   companyIcaoFilter: Subject.create<string>(""),
   companyItemFilter: Subject.create<string>(""),
   companyTierFilter: Subject.create<number | null>(null),  // null = all tiers
+  companyOwnerFilter: Subject.create<"all" | "player" | "company">("all"),  // V4.1: Ownership filter
+
+  // Market inventory (for display in Market > Inventory tab)
+  marketInventory: Subject.create<ProfileInventoryItem[]>([]),
+  marketInventoryLoading: Subject.create(false),
+  marketInvIcaoFilter: Subject.create<string>(""),
+  marketInvItemFilter: Subject.create<string>(""),
+  marketInvTierFilter: Subject.create<number | null>(null),
+  marketInvOwnerFilter: Subject.create<"all" | "player" | "company">("all"),
 };
 
 // ═══════════════════════════════════════════════════════════

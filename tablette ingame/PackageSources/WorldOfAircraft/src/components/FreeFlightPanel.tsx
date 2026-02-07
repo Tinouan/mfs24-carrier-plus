@@ -203,20 +203,20 @@ export function renderFreeFlightPanel(props: FreeFlightPanelProps): VNode {
 
           {/* Stats Summary */}
           <div style="background: #1a1a24; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-              <div style="text-align: center;">
+            <div style="display: flex; flex-wrap: wrap; gap: 12px;">
+              <div style="text-align: center; width: calc(50% - 6px);">
                 <div style="font-size: 20px; font-weight: 700; color: #f59e0b;">+{xp}</div>
                 <div style="font-size: 9px; color: #6b7280; text-transform: uppercase;">XP Gagnes</div>
               </div>
-              <div style="text-align: center;">
+              <div style="text-align: center; width: calc(50% - 6px);">
                 <div style="font-size: 20px; font-weight: 700; color: white;">{flightTime.map(t => formatFlightTime(t))}</div>
                 <div style="font-size: 9px; color: #6b7280; text-transform: uppercase;">Temps de vol</div>
               </div>
-              <div style="text-align: center;">
+              <div style="text-align: center; width: calc(50% - 6px);">
                 <div style="font-size: 16px; font-weight: 600; color: white;">{distance.map(d => d.toFixed(1))} nm</div>
                 <div style="font-size: 9px; color: #6b7280; text-transform: uppercase;">Distance</div>
               </div>
-              <div style="text-align: center;">
+              <div style="text-align: center; width: calc(50% - 6px);">
                 <div style="font-size: 16px; font-weight: 600; color: white;">{landings}</div>
                 <div style="font-size: 9px; color: #6b7280; text-transform: uppercase;">Atterrissages</div>
               </div>

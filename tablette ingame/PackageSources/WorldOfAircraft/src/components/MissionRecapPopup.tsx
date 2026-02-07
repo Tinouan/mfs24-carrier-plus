@@ -58,20 +58,30 @@ const LANDING_COLORS: Record<string, string> = {
   "Crash": "#7f1d1d",
 };
 
+// Labels sans emojis pour compatibilite Coherent GT (emojis = carres noirs)
 const MODIFIER_LABELS: Record<string, string> = {
-  night: "🌙 Nuit",
-  real_weather: "🌧️ Meteo",
-  no_autopilot: "✈️ Manuel",
-  atc_compliance: "📻 ATC",
-  fuel_saver: "⛽ Eco",
+  night: "[NUIT]",
+  real_weather: "[METEO]",
+  no_autopilot: "[MANUEL]",
+  atc_compliance: "[ATC]",
+  fuel_saver: "[ECO]",
 };
 
 const MODIFIER_LABELS_WITH_BONUS: Record<string, string> = {
-  night: "🌙 Nuit +30%",
-  real_weather: "🌧️ Meteo +20%",
-  no_autopilot: "✈️ Manuel +50%",
-  atc_compliance: "📻 ATC +30%",
-  fuel_saver: "⛽ Eco +20%",
+  night: "[NUIT] +30%",
+  real_weather: "[METEO] +20%",
+  no_autopilot: "[MANUEL] +50%",
+  atc_compliance: "[ATC] +30%",
+  fuel_saver: "[ECO] +20%",
+};
+
+// Couleurs pour les labels de modifiers
+const MODIFIER_COLORS: Record<string, string> = {
+  night: "#7c3aed",      // violet
+  real_weather: "#3b82f6", // bleu
+  no_autopilot: "#f59e0b", // orange
+  atc_compliance: "#22c55e", // vert
+  fuel_saver: "#10b981",  // teal
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -113,8 +123,8 @@ export function renderMissionRecapPopup(props: MissionRecapPopupProps): VNode {
         </div>
 
         {/* Flight summary */}
-        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 12px;">
-          <div style="background: #252532; border-radius: 6px; padding: 8px; text-align: center;">
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
+          <div style="background: #252532; border-radius: 6px; padding: 8px; text-align: center; width: calc(33.33% - 6px);">
             <div style="font-size: 9px; color: #6b7280; text-transform: uppercase;">Temps</div>
             <div style="font-size: 14px; color: white; font-weight: 600;">{missionRecapData.map(d => {
               const mins = d?.flight_time_minutes || 0;
@@ -123,11 +133,11 @@ export function renderMissionRecapPopup(props: MissionRecapPopupProps): VNode {
               return h > 0 ? `${h}h${m.toString().padStart(2, '0')}` : `${m}min`;
             })}</div>
           </div>
-          <div style="background: #252532; border-radius: 6px; padding: 8px; text-align: center;">
+          <div style="background: #252532; border-radius: 6px; padding: 8px; text-align: center; width: calc(33.33% - 6px);">
             <div style="font-size: 9px; color: #6b7280; text-transform: uppercase;">Cargo</div>
             <div style="font-size: 14px; color: white; font-weight: 600;">{missionRecapData.map(d => `${Math.round(d?.cargo_weight_kg || 0)}kg`)}</div>
           </div>
-          <div style="background: #252532; border-radius: 6px; padding: 8px; text-align: center;">
+          <div style="background: #252532; border-radius: 6px; padding: 8px; text-align: center; width: calc(33.33% - 6px);">
             <div style="font-size: 9px; color: #6b7280; text-transform: uppercase;">Fuel</div>
             <div style="font-size: 14px; color: white; font-weight: 600;">{missionRecapData.map(d => `${Math.round(d?.fuel_remaining_percent || 0)}%`)}</div>
           </div>
@@ -182,7 +192,7 @@ export function renderMissionRecapPopup(props: MissionRecapPopupProps): VNode {
           <div style={missionRecapData.map(d => (d?.modifiers_validated?.length)
             ? "font-size: 9px; color: #22c55e;"
             : "display: none;")}>
-            ✓ Valides
+            [OK] Valides
           </div>
 
           {/* Failed modifiers */}
@@ -197,7 +207,7 @@ export function renderMissionRecapPopup(props: MissionRecapPopupProps): VNode {
           <div style={missionRecapData.map(d => (d?.modifiers_failed?.length)
             ? "font-size: 9px; color: #ef4444;"
             : "display: none;")}>
-            ✗ Echoues
+            [KO] Echoues
           </div>
         </div>
 
@@ -253,7 +263,7 @@ export function renderMissionRecapPopup(props: MissionRecapPopupProps): VNode {
           ? "background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; border-radius: 8px; padding: 10px; margin-bottom: 16px;"
           : "display: none;")}>
           <div style="font-size: 11px; color: #ef4444; font-weight: 600; text-align: center;">
-            ⚠ TRICHE DETECTEE - XP DIVISE PAR 2
+            [!] TRICHE DETECTEE - XP DIVISE PAR 2
           </div>
         </div>
 

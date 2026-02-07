@@ -116,13 +116,16 @@ class NetworkStateClass {
 
   /**
    * Clear all pending actions
+   * PASSE 7: Migrated from localStorage to NativePersistence (MSFS GetStoredData/SetStoredData)
    */
   clearPendingActions(): void {
     this.pendingActions.set([]);
     try {
-      localStorage.removeItem(this.PENDING_KEY);
+      if (typeof SetStoredData === "function") {
+        SetStoredData(this.PENDING_KEY, "");
+      }
     } catch (e) {
-      console.warn("[NetworkState] Could not clear localStorage:", e);
+      console.warn("[NetworkState] Could not clear native storage:", e);
     }
     console.log("[NetworkState] Cleared all pending actions");
   }
@@ -146,29 +149,36 @@ class NetworkStateClass {
   // ═══════════════════════════════════════════════════════════
 
   /**
-   * Save pending actions to localStorage
+   * Save pending actions to native storage (MSFS persistent)
+   * PASSE 7: Migrated from localStorage to NativePersistence
+   * This survives MSFS restarts unlike localStorage which Coherent GT may clear
    */
   private savePendingActions(): void {
     try {
-      localStorage.setItem(this.PENDING_KEY, JSON.stringify(this.pendingActions.get()));
+      if (typeof SetStoredData === "function") {
+        SetStoredData(this.PENDING_KEY, JSON.stringify(this.pendingActions.get()));
+      }
     } catch (e) {
-      console.warn("[NetworkState] Could not save to localStorage:", e);
+      console.warn("[NetworkState] Could not save to native storage:", e);
     }
   }
 
   /**
-   * Load pending actions from localStorage (call on app init)
+   * Load pending actions from native storage (call on app init)
+   * PASSE 7: Migrated from localStorage to NativePersistence
    */
   loadPendingActions(): void {
     try {
-      const saved = localStorage.getItem(this.PENDING_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved) as OfflineAction[];
-        this.pendingActions.set(parsed);
-        console.log(`[NetworkState] Loaded ${parsed.length} pending actions from storage`);
+      if (typeof GetStoredData === "function") {
+        const saved = GetStoredData(this.PENDING_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved) as OfflineAction[];
+          this.pendingActions.set(parsed);
+          console.log(`[NetworkState] Loaded ${parsed.length} pending actions from native storage`);
+        }
       }
     } catch (e) {
-      console.warn("[NetworkState] Could not load from localStorage:", e);
+      console.warn("[NetworkState] Could not load from native storage:", e);
     }
   }
 
@@ -190,3 +200,10 @@ class NetworkStateClass {
 // ═══════════════════════════════════════════════════════════
 
 export const NetworkState = new NetworkStateClass();
+
+// ═══════════════════════════════════════════════════════════
+// NATIVE API DECLARATIONS (MSFS GetStoredData/SetStoredData)
+// ═══════════════════════════════════════════════════════════
+
+declare function GetStoredData(key: string): string;
+declare function SetStoredData(key: string, value: string): void;

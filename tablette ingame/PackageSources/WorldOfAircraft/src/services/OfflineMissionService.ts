@@ -226,6 +226,20 @@ class OfflineMissionServiceClass {
       player.updated_at = new Date().toISOString();
       await DatabaseManager.savePlayer(player);
 
+      // V4.1: Log transaction
+      if (moneyEarned > 0) {
+        await DatabaseManager.saveTransaction({
+          timestamp: new Date().toISOString(),
+          type: "mission_reward",
+          amount: moneyEarned,
+          balance_after: player.money,
+          wallet: "player",
+          description: `Mission ${mission.origin_icao}→${flightStats.arrival_icao} (${score.grade})`,
+          related_id: missionId,
+          airport_icao: flightStats.arrival_icao,
+        });
+      }
+
       // MISE À JOUR MISSION
       mission.status = "completed";
       mission.completed_at = new Date().toISOString();

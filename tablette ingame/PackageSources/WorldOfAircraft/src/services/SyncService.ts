@@ -31,6 +31,43 @@ export interface AirportInventory {
   price: number;
 }
 
+export interface PlayerInventoryItem {
+  id: string;
+  item_id: string;
+  item_code: string;
+  item_name: string;
+  quantity: number;
+  airport_icao: string;
+  weight_kg?: number;
+  tier?: number;
+}
+
+export interface AirportInventoryRaw {
+  containers: Array<{
+    id: string;
+    name: string;
+    type: string;
+    items: Array<{
+      item_id: string;
+      item_name: string;
+      qty: number;
+      weight_kg: number;
+    }>;
+  }>;
+}
+
+export interface AircraftCargoResponse {
+  items: Array<{
+    item_id: string;
+    item_name: string;
+    qty: number;
+    weight_kg: number;
+    total_weight_kg: number;
+  }>;
+  current_cargo_kg: number;
+  cargo_capacity_kg: number;
+}
+
 export interface WorldFactory {
   id: string;
   name: string;
@@ -49,6 +86,8 @@ export interface SeedPlayer {
   home_airport: string;
   created_at: string;
   updated_at: string;
+  /** Player inventory - items owned by the player at various locations */
+  inventory?: PlayerInventoryItem[];
 }
 
 export interface SeedAircraft {
@@ -74,6 +113,8 @@ export interface SeedCompany {
   home_airport_ident: string;
   balance: number;
   created_at: string;
+  /** Company inventory - items owned by the company at various locations */
+  inventory?: PlayerInventoryItem[];
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -995,6 +1036,187 @@ class SyncServiceClass {
     } catch (e) {
       console.error("[Sync] Update airport inventory failed:", e);
       return false;
+    }
+  }
+
+  /**
+   * Get player inventory from SEED
+   * Uses GET /players/:id which includes inventory field
+   * Returns items owned by the player at all locations
+   */
+  async getPlayerInventory(): Promise<PlayerInventoryItem[]> {
+    if (!this.connected || !this.playerId) return [];
+
+    try {
+      // Use the main player endpoint which includes inventory
+      const response = await fetch(`${this.SEED_URL}/players/${this.playerId}`, {
+        headers: this.getHeaders(),
+      });
+      if (response.ok) {
+        const player: SeedPlayer = await response.json();
+        console.log(`[Sync] getPlayerInventory: Player has ${player.inventory?.length || 0} inventory items`);
+        return player.inventory || [];
+      }
+    } catch (e) {
+      console.error("[Sync] Get player inventory failed:", e);
+    }
+    return [];
+  }
+
+  /**
+   * Get company inventory from SEED
+   * Uses GET /players/:id/company which includes inventory field
+   * Returns items owned by the player's company
+   */
+  async getCompanyInventory(): Promise<PlayerInventoryItem[]> {
+    if (!this.connected || !this.playerId) return [];
+
+    try {
+      // Use the company endpoint which includes inventory
+      const response = await fetch(`${this.SEED_URL}/players/${this.playerId}/company`, {
+        headers: this.getHeaders(),
+      });
+      if (response.ok) {
+        const company: SeedCompany = await response.json();
+        console.log(`[Sync] getCompanyInventory: Company has ${company.inventory?.length || 0} inventory items`);
+        return company.inventory || [];
+      }
+      // 404 is expected if no company exists
+      if (response.status === 404) return [];
+    } catch (e) {
+      console.error("[Sync] Get company inventory failed:", e);
+    }
+    return [];
+  }
+
+  /**
+   * Get airport inventory with containers structure (for cargo UI)
+   */
+  async getAirportInventoryRaw(icao: string): Promise<AirportInventoryRaw> {
+    if (!this.connected) return { containers: [] };
+
+    try {
+      const response = await fetch(`${this.SEED_URL}/world/inventories/${icao}/detailed`, {
+        headers: this.getHeaders(),
+      });
+      if (response.ok) {
+        return response.json();
+      }
+    } catch (e) {
+      console.error("[Sync] Get airport inventory raw failed:", e);
+    }
+    return { containers: [] };
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // CARGO OPERATIONS
+  // ═══════════════════════════════════════════════════════════
+
+  /**
+   * Get aircraft cargo from SEED
+   */
+  async getAircraftCargo(aircraftId: string): Promise<AircraftCargoResponse> {
+    if (!this.connected) return { items: [], current_cargo_kg: 0, cargo_capacity_kg: 0 };
+
+    try {
+      const response = await fetch(`${this.SEED_URL}/aircraft/${aircraftId}/cargo`, {
+        headers: this.getHeaders(),
+      });
+      if (response.ok) {
+        return response.json();
+      }
+    } catch (e) {
+      console.error("[Sync] Get aircraft cargo failed:", e);
+    }
+    return { items: [], current_cargo_kg: 0, cargo_capacity_kg: 0 };
+  }
+
+  /**
+   * Load cargo onto aircraft via SEED
+   */
+  async loadCargo(aircraftId: string, fromLocationId: string, itemId: string, qty: number): Promise<boolean> {
+    if (!this.connected) return false;
+
+    try {
+      const response = await fetch(`${this.SEED_URL}/aircraft/${aircraftId}/cargo/load`, {
+        method: "POST",
+        headers: this.getHeaders(),
+        body: JSON.stringify({
+          from_location_id: fromLocationId,
+          item_id: itemId,
+          quantity: qty,
+        }),
+      });
+      return response.ok;
+    } catch (e) {
+      console.error("[Sync] Load cargo failed:", e);
+      return false;
+    }
+  }
+
+  /**
+   * Unload cargo from aircraft via SEED
+   */
+  async unloadCargo(aircraftId: string, toLocationId: string, itemId: string, qty: number): Promise<boolean> {
+    if (!this.connected) return false;
+
+    try {
+      const response = await fetch(`${this.SEED_URL}/aircraft/${aircraftId}/cargo/unload`, {
+        method: "POST",
+        headers: this.getHeaders(),
+        body: JSON.stringify({
+          to_location_id: toLocationId,
+          item_id: itemId,
+          quantity: qty,
+        }),
+      });
+      return response.ok;
+    } catch (e) {
+      console.error("[Sync] Unload cargo failed:", e);
+      return false;
+    }
+  }
+
+  /**
+   * End a free flight session and get XP reward from SEED
+   * Server calculates XP based on raw flight stats (anti-cheat)
+   */
+  async endFreeFlight(
+    aircraftId: string,
+    stats: {
+      flight_time_minutes: number;
+      distance_nm: number;
+      landing_fpm: number;
+      max_g_force: number;
+      overspeed_count: number;
+      departure_icao: string;
+      arrival_icao: string;
+      landings: number;
+    }
+  ): Promise<{ success: boolean; xp_earned: number; message?: string }> {
+    if (!this.connected) {
+      return { success: false, xp_earned: 0, message: "Not connected to SEED" };
+    }
+
+    try {
+      const response = await fetch(`${this.SEED_URL}/aircraft/${aircraftId}/free-flight-end`, {
+        method: "POST",
+        headers: this.getHeaders(),
+        body: JSON.stringify(stats),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("[Sync] Free flight end failed:", errorText);
+        return { success: false, xp_earned: 0, message: errorText };
+      }
+
+      const result = await response.json() as { success: boolean; xp_earned: number; message?: string };
+      console.log(`[Sync] Free flight ended: +${result.xp_earned} XP`);
+      return result;
+    } catch (e) {
+      console.error("[Sync] Free flight end failed:", e);
+      return { success: false, xp_earned: 0, message: String(e) };
     }
   }
 
