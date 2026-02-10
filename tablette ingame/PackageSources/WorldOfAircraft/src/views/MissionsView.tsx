@@ -7,6 +7,7 @@ import { FSComponent, VNode, Subject, MappedSubject, NodeReference } from "@micr
 import { Button } from "@efb/efb-api";
 import type { Language, ActiveMission, MissionRecapData, MissionAircraftInfo, MissionsSubTab, MissionCreationStatus } from "../types";
 import type { FlightPhaseId } from "../state/CheckpointState";
+import type { AntiCheatInfo } from "../state/MissionCreationState";
 import { renderMissionRecapPopup, renderCargoTransferPopup, renderMissionTrackingPanel, type CargoPopupItem } from "../components";
 
 // Re-export CargoPopupItem for use in WorldOfAircraft.tsx
@@ -120,6 +121,8 @@ export interface MissionsViewProps {
   // Mission status
   missionStatus: Subject<MissionCreationStatus>;
   missionError: Subject<string | null>;
+  missionWarnings: Subject<string[]>;
+  antiCheatInfo: Subject<AntiCheatInfo | null>;
   creationErrorMsg: Subject<string>;
   canCreateMissionFlag: Subject<boolean>;
 
@@ -148,6 +151,7 @@ export interface MissionsViewProps {
   onModifyFlightPlan: () => void;
   onCloseCargoPopup: () => void;
   onConfirmCargoTransfer: () => Promise<void>;
+  onSetCargoQty: (qty: number) => void;
   onCreateMission: () => Promise<void>;
   t: (cat: string, key: string) => string;
 }
@@ -220,6 +224,8 @@ export function renderMissionsTab(props: MissionsViewProps): VNode {
     fpDestinationInputRef,
     missionStatus,
     missionError,
+    missionWarnings,
+    antiCheatInfo,
     creationErrorMsg,
     canCreateMissionFlag,
     showCargoPopup,
@@ -240,6 +246,7 @@ export function renderMissionsTab(props: MissionsViewProps): VNode {
     onModifyFlightPlan,
     onCloseCargoPopup,
     onConfirmCargoTransfer,
+    onSetCargoQty,
     onCreateMission,
     t,
   } = props;
@@ -422,6 +429,44 @@ export function renderMissionsTab(props: MissionsViewProps): VNode {
                     </div>
                   </div>
 
+                  {/* Anti-cheat 3-position diagnostic banner */}
+                  <div style={antiCheatInfo.map(info => info
+                    ? "background: rgba(239, 68, 68, 0.15); border: 2px solid #ef4444; border-radius: 8px; padding: 14px 16px; margin: 12px 0;"
+                    : "display: none;")}>
+                    <div style="color: #ef4444; font-size: 15px; font-weight: bold; margin-bottom: 10px; text-align: center;">
+                      {antiCheatInfo.map(info => info ? t("missions", "antiCheatTitle") : "")}
+                    </div>
+                    {/* Position pilote (jeu) - always green, it's the reference */}
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0;">
+                      <span style="color: #9ca3af; font-size: 12px;">{antiCheatInfo.map(info => info ? t("missions", "positionGame") : "")}</span>
+                      <span style={antiCheatInfo.map(() => "font-size: 14px; font-weight: bold; font-family: monospace; color: #22c55e;")}>
+                        {antiCheatInfo.map(info => info ? info.refAirport : "")}
+                      </span>
+                    </div>
+                    {/* Position physique (simulateur) - green if matches ref, red if not */}
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0;">
+                      <span style="color: #9ca3af; font-size: 12px;">{antiCheatInfo.map(info => info ? t("missions", "positionSim") : "")}</span>
+                      <span style={antiCheatInfo.map(info => info && info.simAirport && info.simAirport === info.refAirport
+                        ? "font-size: 14px; font-weight: bold; font-family: monospace; color: #22c55e;"
+                        : "font-size: 14px; font-weight: bold; font-family: monospace; color: #ef4444;")}>
+                        {antiCheatInfo.map(info => info ? (info.simAirport || t("missions", "positionNotDetectedShort")) : "")}
+                      </span>
+                    </div>
+                    {/* Position avion (jeu) - green if matches ref, red if not */}
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0;">
+                      <span style="color: #9ca3af; font-size: 12px;">{antiCheatInfo.map(info => info ? info.acType : "")}</span>
+                      <span style={antiCheatInfo.map(info => info && info.acAirport !== info.refAirport
+                        ? "font-size: 14px; font-weight: bold; font-family: monospace; color: #ef4444;"
+                        : "font-size: 14px; font-weight: bold; font-family: monospace; color: #22c55e;")}>
+                        {antiCheatInfo.map(info => info ? info.acAirport : "")}
+                      </span>
+                    </div>
+                    {/* Contextual help message */}
+                    <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(239, 68, 68, 0.3); color: #fca5a5; font-size: 12px; text-align: center;">
+                      {antiCheatInfo.map(info => info ? info.helpMsg : "")}
+                    </div>
+                  </div>
+
                   {/* V1.1: Aircraft Systems Warnings */}
                   <div style={missionAircraftSystems.map(sys => {
                     if (!sys) return "display: none;";
@@ -478,9 +523,12 @@ export function renderMissionsTab(props: MissionsViewProps): VNode {
             </div>
 
             {/* ===== STEP 2: CARGO ===== */}
-            <div style={missionCurrentAircraft.map(ac => ac
-              ? "background: #252532; border-radius: 8px; overflow: visible;"
-              : "background: #252532; border-radius: 8px; overflow: visible; opacity: 0.5;")}>
+            <div style={MappedSubject.create(([step1, ac]) => !step1
+              ? "display: none;"
+              : ac
+                ? "background: #252532; border-radius: 8px; overflow: visible;"
+                : "background: #252532; border-radius: 8px; overflow: visible; opacity: 0.5;",
+              creationStep1Valid, missionCurrentAircraft)}>
               {/* Step Header */}
               <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: #1a1a24;">
                 <div style={creationStep2Valid.map(v => v
@@ -528,7 +576,7 @@ export function renderMissionsTab(props: MissionsViewProps): VNode {
                         <div style={cargoSourceFilter.map(f => f === "company"
                           ? "padding: 4px 10px; background: #f59e0b; border-radius: 4px; font-size: 10px; color: #1a1a24; font-weight: 600;"
                           : "padding: 4px 10px; background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; border-radius: 4px; font-size: 10px; color: #f59e0b;")}>
-                          {currentLanguage.map(l => translations[l].company?.tabTitle || "Company")}
+                          {currentLanguage.map(l => (translations[l].company as any)?.tabTitle || "Company")}
                         </div>
                       </Button>
                     </div>
@@ -650,9 +698,12 @@ export function renderMissionsTab(props: MissionsViewProps): VNode {
             </div>
 
             {/* ===== STEP 3: PLAN DE VOL ===== */}
-            <div style={cargoValidated.map(v => v
-              ? "background: #252532; border-radius: 8px; overflow: hidden;"
-              : "background: #252532; border-radius: 8px; overflow: hidden; opacity: 0.5;")}>
+            <div style={MappedSubject.create(([step1, v]) => !step1
+              ? "display: none;"
+              : v
+                ? "background: #252532; border-radius: 8px; overflow: hidden;"
+                : "background: #252532; border-radius: 8px; overflow: hidden; opacity: 0.5;",
+              creationStep1Valid, cargoValidated)}>
               {/* Step Header */}
               <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: #1a1a24;">
                 <div style="font-size: 11px; font-weight: 600; color: #22c55e;">
@@ -741,7 +792,7 @@ export function renderMissionsTab(props: MissionsViewProps): VNode {
                       <span style="font-family: monospace; font-size: 16px; font-weight: 700; color: #60a5fa;">
                         {fpOriginIcao.map(o => o || missionOriginIcao.get() || "----")}
                       </span>
-                      <span style="color: #6b7280;">→</span>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" style="width:14px;height:14px;"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                       <span style="font-family: monospace; font-size: 16px; font-weight: 700; color: #22c55e;">
                         {fpDestinationIcao}
                       </span>
@@ -774,6 +825,7 @@ export function renderMissionsTab(props: MissionsViewProps): VNode {
               currentLanguage,
               onCloseCargoPopup,
               onConfirmCargoTransfer,
+              onSetCargoQty,
             })}
 
             {/* Mission Recap Popup - V2.4: Extracted to component */}
@@ -800,7 +852,7 @@ export function renderMissionsTab(props: MissionsViewProps): VNode {
                 <span style="font-family: monospace; font-size: 16px; font-weight: 700; color: #60a5fa;">
                   {activeMission.map(m => m?.origin_icao || "")}
                 </span>
-                <span style="color: #6b7280;">→</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" style="width:14px;height:14px;"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                 <span style="font-family: monospace; font-size: 16px; font-weight: 700; color: #22c55e;">
                   {activeMission.map(m => m?.destination_icao || "")}
                 </span>
@@ -837,7 +889,9 @@ export function renderMissionsTab(props: MissionsViewProps): VNode {
             </div>
 
             {/* Create Mission Button + Error Message (responsive) */}
-            <div style="margin-top: auto; padding-top: 8px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px;">
+            <div style={creationStep1Valid.map(v => v
+              ? "margin-top: auto; padding-top: 8px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px;"
+              : "display: none;")}>
               <Button
                 callback={(): void => { void onCreateMission(); }}
                 disabled={missionStatus.map(s => s === "creating" || s === "loading")}>

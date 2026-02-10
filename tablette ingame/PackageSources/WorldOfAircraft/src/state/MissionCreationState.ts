@@ -12,6 +12,18 @@ import { Subject } from "@microsoft/msfs-sdk";
 export type FlightPlanSource = "gps";
 
 // ═══════════════════════════════════════════════════════════
+// ANTI-CHEAT INFO TYPE
+// ═══════════════════════════════════════════════════════════
+
+export interface AntiCheatInfo {
+  refAirport: string;   // DB player.current_airport (the reference)
+  simAirport: string;   // SimVar GPS closest airport
+  acAirport: string;    // DB aircraft.location_icao
+  acType: string;       // Aircraft type name (e.g., "Cessna 172 Skyhawk")
+  helpMsg: string;      // Contextual help message
+}
+
+// ═══════════════════════════════════════════════════════════
 // MISSION CREATION STATE TYPE
 // ═══════════════════════════════════════════════════════════
 
@@ -22,6 +34,7 @@ export interface MissionCreationStateType {
   creationStep3Valid: Subject<boolean>;  // Flight plan validated
   cargoValidated: Subject<boolean>;      // Cargo applied
   creationErrorMsg: Subject<string>;
+  antiCheatInfo: Subject<AntiCheatInfo | null>;
   canCreateMissionFlag: Subject<boolean>;
 
   // Flight plan data (MSFS 2024)
@@ -55,6 +68,7 @@ export const missionCreationState: MissionCreationStateType = {
   creationStep3Valid: Subject.create(false),
   cargoValidated: Subject.create(false),
   creationErrorMsg: Subject.create(""),
+  antiCheatInfo: Subject.create<AntiCheatInfo | null>(null),
   canCreateMissionFlag: Subject.create(false),
 
   // Flight plan data
@@ -91,6 +105,7 @@ export const resetMissionCreation = (): void => {
   missionCreationState.creationStep3Valid.set(false);
   missionCreationState.cargoValidated.set(false);
   missionCreationState.creationErrorMsg.set("");
+  missionCreationState.antiCheatInfo.set(null);
   missionCreationState.canCreateMissionFlag.set(false);
   missionCreationState.fpValidated.set(false);
 };

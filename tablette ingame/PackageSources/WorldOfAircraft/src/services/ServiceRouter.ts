@@ -4,6 +4,8 @@
  */
 
 import { Services } from "./ServiceAdapter";
+import { LocalSocialService } from "./LocalSocialService";
+import { LocalTransferService } from "./LocalTransferService";
 import type {
   AircraftDetails,
   AircraftListItem,
@@ -21,6 +23,11 @@ import type {
   CompanyMember,
   CompanyFleetItem,
   AirportInventoryResponse,
+  ContractOffer,
+  ActiveContract,
+  Friend,
+  DirectMessage,
+  PlayerSearchResult,
 } from "../types";
 import type {
   CreateMissionRequest,
@@ -29,7 +36,7 @@ import type {
   CompleteMissionV1Request,
   CheckpointValidateRequest,
   MissionResponse,
-} from "./MissionService";
+} from "./LocalMissionService";
 
 // ═══════════════════════════════════════════════════════════
 // FLEET SERVICE ROUTER
@@ -98,6 +105,10 @@ export const FleetRouter = {
 
   async updateRegistration(aircraftId: string, registration: string): Promise<AircraftDetails> {
     return Services.fleet.updateRegistration(aircraftId, registration);
+  },
+
+  async updateDescription(aircraftId: string, description: string): Promise<AircraftDetails> {
+    return Services.fleet.updateDescription(aircraftId, description);
   },
 
   async updateLocation(aircraftId: string, icao: string): Promise<void> {
@@ -261,8 +272,8 @@ export const WorldRouter = {
   async getAvailableSlots(icao: string): Promise<number> {
     // Get factory slots from airport database
     const airport = await Services.world.getAirport(icao);
-    if (airport && airport.factory_slots !== undefined) {
-      return airport.factory_slots;
+    if (airport && airport.max_factory_slots !== undefined) {
+      return airport.max_factory_slots;
     }
     // Fallback based on type if factory_slots not defined
     if (airport) {
@@ -303,11 +314,11 @@ export const PlayerRouter = {
   },
 
   async updateMoney(delta: number): Promise<any> {
-    return Services.player.updateMoney(delta);
+    return (Services.player as any).updateMoney?.(delta);
   },
 
   async updateXP(delta: number): Promise<any> {
-    return Services.player.updateXP(delta);
+    return (Services.player as any).updateXP?.(delta);
   },
 };
 
@@ -340,5 +351,120 @@ export const FreeFlightRouter = {
 
   async endSession(sessionId: string, endAirport: string): Promise<any> {
     return Services.freeFlight.endSession(sessionId, endAirport);
+  },
+};
+
+// ═══════════════════════════════════════════════════════════
+// CONTRACT ROUTER (V5)
+// ═══════════════════════════════════════════════════════════
+
+export const ContractRouter = {
+  async getAvailableContracts(): Promise<ContractOffer[]> {
+    return Services.contracts.getAvailableContracts();
+  },
+
+  async getActiveContracts(): Promise<ActiveContract[]> {
+    return Services.contracts.getActiveContracts();
+  },
+
+  async getCompletedContracts(): Promise<ActiveContract[]> {
+    return Services.contracts.getCompletedContracts();
+  },
+
+  async acceptContract(offerId: string, wallet: "player" | "company"): Promise<ActiveContract> {
+    return Services.contracts.acceptContract(offerId, wallet);
+  },
+
+  async completeContract(contractId: string): Promise<{ reward: number; xp: number }> {
+    return Services.contracts.completeContract(contractId);
+  },
+
+  async cancelContract(contractId: string): Promise<void> {
+    return Services.contracts.cancelContract(contractId);
+  },
+
+  async refreshContracts(): Promise<void> {
+    return Services.contracts.refreshContracts();
+  },
+};
+
+// ═══════════════════════════════════════════════════════════
+// SOCIAL ROUTER (V6)
+// ═══════════════════════════════════════════════════════════
+
+export const SocialRouter = {
+  async getFriends(playerId: string): Promise<Friend[]> {
+    // TODO Phase 8: Online mode via SEED server
+    return LocalSocialService.getFriends(playerId);
+  },
+
+  async searchPlayers(query: string): Promise<PlayerSearchResult[]> {
+    return LocalSocialService.searchPlayers(query);
+  },
+
+  async addFriend(playerId: string, friendId: string): Promise<void> {
+    return LocalSocialService.addFriend(playerId, friendId);
+  },
+
+  async removeFriend(friendId: string): Promise<void> {
+    return LocalSocialService.removeFriend(friendId);
+  },
+
+  async acceptFriend(friendId: string): Promise<void> {
+    return LocalSocialService.acceptFriend(friendId);
+  },
+
+  async declineFriend(friendId: string): Promise<void> {
+    return LocalSocialService.declineFriend(friendId);
+  },
+
+  async getConversations(playerId: string): Promise<DirectMessage[]> {
+    return LocalSocialService.getConversations(playerId);
+  },
+
+  async getMessages(conversationId: string): Promise<DirectMessage[]> {
+    return LocalSocialService.getMessages(conversationId);
+  },
+
+  async sendMessage(to: string, content: string): Promise<void> {
+    return LocalSocialService.sendMessage(to, content);
+  },
+
+  async transferCR(fromId: string, toId: string, amount: number): Promise<void> {
+    return LocalSocialService.transferCR(fromId, toId, amount);
+  },
+};
+
+// ═══════════════════════════════════════════════════════════
+// TRANSFER ROUTER (Phase 7)
+// ═══════════════════════════════════════════════════════════
+
+export const TransferRouter = {
+  async estimatePilotTransfer(
+    originIcao: string,
+    destIcao: string
+  ): Promise<{ distance_nm: number; cost_cr: number }> {
+    return LocalTransferService.estimatePilotTransfer(originIcao, destIcao);
+  },
+
+  async estimateAircraftTransfer(
+    originIcao: string,
+    destIcao: string
+  ): Promise<{ distance_nm: number; cost_cr: number }> {
+    return LocalTransferService.estimateAircraftTransfer(originIcao, destIcao);
+  },
+
+  async transferPilot(
+    playerId: string,
+    destIcao: string
+  ): Promise<{ success: boolean; error?: string }> {
+    return LocalTransferService.transferPilot(playerId, destIcao);
+  },
+
+  async transferAircraft(
+    aircraftId: string,
+    destIcao: string
+  ): Promise<{ success: boolean; error?: string }> {
+    return LocalTransferService.transferAircraft(aircraftId, destIcao);
   },
 };

@@ -204,13 +204,9 @@ class InitServiceClass {
 
     // DEBUG: Raw storage values
     try {
-      // @ts-ignore - GetStoredData is a global MSFS function
       const rawSetupNew = typeof GetStoredData === "function" ? GetStoredData("WOA_Solo_SetupComplete") : "N/A";
-      // @ts-ignore
       const rawSetupOld = typeof GetStoredData === "function" ? GetStoredData("WOA_SoloSetupComplete") : "N/A";
-      // @ts-ignore
       const rawSaveData = typeof GetStoredData === "function" ? GetStoredData("WOA_Solo_SaveData") : "N/A";
-      // @ts-ignore
       const rawPlayerId = typeof GetStoredData === "function" ? GetStoredData("WOA_Solo_PlayerId") : "N/A";
       console.log("[DEBUG] WOA_Solo_SetupComplete =", rawSetupNew);
       console.log("[DEBUG] WOA_SoloSetupComplete (old) =", rawSetupOld);
@@ -255,6 +251,9 @@ class InitServiceClass {
 
     // FIX 5: Realign new player aircraft to current_airport (if 0 missions/flights)
     await this.realignNewPlayerAircraft();
+
+    // FIX 6: Ensure all aircraft have passenger_seats from catalog
+    await this.fixAircraftPassengerSeats();
 
     // 3. Generate AI market if needed
     this.reportProgress("Chargement du marché IA...", 70);
@@ -394,7 +393,7 @@ class InitServiceClass {
         owner_type: "player",
         company_id: null,
         location_icao: seedAc.current_airport_ident,
-        status: seedAc.status || "parked",
+        status: (seedAc.status || "parked") as "parked" | "in_flight" | "maintenance" | "stored",
         fuel_gallons: seedAc.fuel_gallons,
         condition: seedAc.condition,
         flight_hours: seedAc.hours,
@@ -508,7 +507,7 @@ class InitServiceClass {
         owner_type: "player",
         company_id: null,
         location_icao: seedAc.current_airport_ident,  // KEY FIX: Map field name
-        status: seedAc.status || "parked",
+        status: (seedAc.status || "parked") as "parked" | "in_flight" | "maintenance" | "stored",
         fuel_gallons: seedAc.fuel_gallons,
         condition: seedAc.condition,
         flight_hours: seedAc.hours,
@@ -1085,6 +1084,42 @@ class InitServiceClass {
     console.log(`[InitService] realignNewPlayerAircraft: Realigned ${aircraft.length} aircraft to ${player.current_airport}`);
   }
 
+  /**
+   * FIX 6: Ensure all aircraft have passenger_seats and cargo_capacity_kg from catalog
+   * Fixes aircraft created before these fields were properly set
+   */
+  async fixAircraftPassengerSeats(): Promise<void> {
+    const allAircraft = await DatabaseManager.getAll<Aircraft>("aircraft");
+    const catalog = await DatabaseManager.getAll<AircraftCatalog>("aircraft_catalog");
+    let fixed = 0;
+
+    for (const ac of allAircraft) {
+      const catEntry = catalog.find(c => c.icaoType === ac.type_code || c.id === ac.type_code);
+      let needsUpdate = false;
+
+      if (!ac.passenger_seats || ac.passenger_seats === 0) {
+        ac.passenger_seats = catEntry?.passengerSeats || getPassengerSeats(ac.type_code) || 4;
+        needsUpdate = true;
+      }
+
+      if (!ac.cargo_capacity_kg || ac.cargo_capacity_kg === 0) {
+        ac.cargo_capacity_kg = catEntry?.cargoCapacityKg || 200;
+        needsUpdate = true;
+      }
+
+      if (needsUpdate) {
+        ac.updated_at = new Date().toISOString();
+        await DatabaseManager.put("aircraft", ac, false);
+        fixed++;
+        console.log(`[InitService] Fixed aircraft ${ac.registration}: seats=${ac.passenger_seats}, cargo=${ac.cargo_capacity_kg}kg`);
+      }
+    }
+
+    if (fixed > 0) {
+      console.log(`[InitService] fixAircraftPassengerSeats: Fixed ${fixed}/${allAircraft.length} aircraft`);
+    }
+  }
+
   // ─────────────────────────────────────────────────────────
   // CLEANUP HELPERS
   // ─────────────────────────────────────────────────────────
@@ -1322,7 +1357,6 @@ class InitServiceClass {
     // V4.1 FIX: Clear DatabaseManager's own backup (DATASTORE_KEY = "WorldOfAircraftData")
     // This is a SEPARATE persistence system from NativePersistence!
     try {
-      // @ts-ignore - SetStoredData is a global MSFS function
       if (typeof SetStoredData === "function") {
         SetStoredData("WorldOfAircraftData", "");
         console.log("[InitService] Cleared WorldOfAircraftData from SetStoredData");
@@ -1347,7 +1381,6 @@ class InitServiceClass {
 
       // V4.1 FIX: Clear OLD migration key WOA_SaveData (legacy from before mode separation)
       try {
-        // @ts-ignore - SetStoredData is a global MSFS function
         if (typeof SetStoredData === "function") {
           SetStoredData("WOA_SaveData", "");
           console.log("[InitService] Cleared legacy migration key WOA_SaveData");

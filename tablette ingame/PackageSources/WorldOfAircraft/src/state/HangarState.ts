@@ -31,6 +31,9 @@ export interface HangarStateType {
 
   // Cargo
   hangarCargoItems: Subject<HangarCargoItem[]>;
+
+  // Note editing
+  hangarNoteEditing: Subject<boolean>;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -52,6 +55,9 @@ export const hangarState: HangarStateType = {
 
   // Cargo
   hangarCargoItems: Subject.create<HangarCargoItem[]>([]),
+
+  // Note editing
+  hangarNoteEditing: Subject.create(false),
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -66,4 +72,5 @@ export const clearHangarSelection = (): void => {
   hangarState.hangarSystems.set(null);
   hangarState.hangarRepairQuote.set(null);
   hangarState.hangarCargoItems.set([]);
+  hangarState.hangarNoteEditing.set(false);
 };

@@ -201,9 +201,4 @@ class NetworkStateClass {
 
 export const NetworkState = new NetworkStateClass();
 
-// ═══════════════════════════════════════════════════════════
-// NATIVE API DECLARATIONS (MSFS GetStoredData/SetStoredData)
-// ═══════════════════════════════════════════════════════════
-
-declare function GetStoredData(key: string): string;
-declare function SetStoredData(key: string, value: string): void;
+// Global MSFS declarations in src/types/msfs-globals.d.ts

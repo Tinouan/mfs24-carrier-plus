@@ -234,7 +234,7 @@ class OfflineMissionServiceClass {
           amount: moneyEarned,
           balance_after: player.money,
           wallet: "player",
-          description: `Mission ${mission.origin_icao}→${flightStats.arrival_icao} (${score.grade})`,
+          description: `Mission ${mission.origin_icao} > ${flightStats.arrival_icao} (${score.grade})`,
           related_id: missionId,
           airport_icao: flightStats.arrival_icao,
         });

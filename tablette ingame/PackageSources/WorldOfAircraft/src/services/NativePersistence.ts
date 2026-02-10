@@ -34,9 +34,7 @@ export interface SaveData {
   checksum: string;
 }
 
-// Declare MSFS native APIs (available in Coherent GT)
-declare function GetStoredData(key: string): string;
-declare function SetStoredData(key: string, value: string): void;
+// Global MSFS declarations in src/types/msfs-globals.d.ts
 
 // ═══════════════════════════════════════════════════════════
 // NATIVE PERSISTENCE CLASS
@@ -603,7 +601,7 @@ class NativePersistenceClass {
     const allMissions = await DatabaseManager.getAll<Mission>("missions");
     const recentMissions = allMissions.filter((m) => {
       // Garder: en cours, ou terminées depuis moins de 7 jours
-      if (m.status === "in_progress" || m.status === "active") return true;
+      if (m.status === "in_progress" || m.status === "in_flight") return true;
       if (m.completed_at) {
         const completedDate = new Date(m.completed_at);
         const daysSinceCompletion = (Date.now() - completedDate.getTime()) / (1000 * 60 * 60 * 24);

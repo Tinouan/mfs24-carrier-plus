@@ -16,11 +16,7 @@ import { MissionRouter } from "../services";
 import { isGameReady } from "../state/GameModeState";
 import type { ActiveMission, MissionCheckpoint, MissionAircraftInfo, LandingRating } from "../types";
 
-// Declare SimVar for TypeScript
-declare const SimVar: {
-  GetSimVarValue(name: string, unit: string): number | boolean | string;
-  SetSimVarValue(name: string, unit: string, value: number): void;
-};
+// Global MSFS declarations in src/types/msfs-globals.d.ts
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES

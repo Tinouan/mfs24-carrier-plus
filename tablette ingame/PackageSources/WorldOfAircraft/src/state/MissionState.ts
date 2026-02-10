@@ -51,6 +51,9 @@ export interface MissionStateType {
   missionAircraftLoading: Subject<boolean>;
   missionAircraftNotFound: Subject<boolean>;
   missionAircraftSystems: Subject<Pick<AircraftSystemsStatus, "warnings" | "critical" | "can_takeoff"> | null>;
+
+  // Anti-cheat warnings (orange, non-blocking during preparation)
+  missionWarnings: Subject<string[]>;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -90,6 +93,9 @@ export const missionState: MissionStateType = {
   missionAircraftLoading: Subject.create(false),
   missionAircraftNotFound: Subject.create(false),
   missionAircraftSystems: Subject.create<Pick<AircraftSystemsStatus, "warnings" | "critical" | "can_takeoff"> | null>(null),
+
+  // Anti-cheat warnings (orange, non-blocking during preparation)
+  missionWarnings: Subject.create<string[]>([]),
 };
 
 // ═══════════════════════════════════════════════════════════

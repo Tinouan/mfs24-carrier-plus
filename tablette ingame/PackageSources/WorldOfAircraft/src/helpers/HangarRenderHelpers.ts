@@ -53,10 +53,13 @@ export interface RepairItemData {
 }
 
 export interface HangarCargoItem {
+  item_code: string;
   item_name: string;
   qty: number;
   total_weight_kg: number;
   tier: number;
+  source?: string;
+  contract_id?: string;
 }
 
 export interface HangarSystemData {
@@ -75,7 +78,11 @@ export interface HangarAircraftItem {
   aircraft_type: string;
   icao_type: string | null;
   current_airport_ident: string | null;
+  status: string;
+  required_license: string | null;
   owner_type: string;
+  thumbnail_url?: string | null;
+  for_sale?: boolean;
 }
 
 export interface HangarListTranslations {
@@ -121,11 +128,14 @@ export function renderHangarCargoHtml(
 
   return items.map(item => {
     const tierColor = item.tier === 1 ? "#9ca3af" : item.tier === 2 ? "#22c55e" : item.tier === 3 ? "#3b82f6" : "#a855f7";
+    const contractBadge = item.source === "contract"
+      ? `<span style="background: rgba(139, 92, 246, 0.25); color: #8b5cf6; font-size: 8px; font-weight: 600; padding: 1px 4px; border-radius: 3px; margin-left: 4px;">CONTRAT</span>`
+      : "";
     return `
       <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #374151;">
         <div style="display: flex; align-items: center; gap: 6px;">
           <span style="width: 6px; height: 6px; border-radius: 50%; background: ${tierColor};"></span>
-          <span style="font-size: 11px; color: white;">${item.item_name}</span>
+          <span style="font-size: 11px; color: white;">${item.item_name}${contractBadge}</span>
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 10px; color: #9ca3af;">x${item.qty}</span>
@@ -568,7 +578,7 @@ export function renderRepairListHtml(
             <div style="width: ${item.currentCondition}%; height: 100%; background: ${barColor};"></div>
           </div>
           <span style="font-size: 9px; color: ${barColor};">${item.currentCondition}%</span>
-          <span style="font-size: 9px; color: #6b7280;">→</span>
+          <span style="font-size: 9px; color: #6b7280;">&gt;</span>
           <span style="font-size: 9px; color: #22c55e;">100%</span>
         </div>
       </div>

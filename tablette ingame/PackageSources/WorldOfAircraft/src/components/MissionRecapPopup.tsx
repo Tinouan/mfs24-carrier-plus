@@ -110,7 +110,7 @@ export function renderMissionRecapPopup(props: MissionRecapPopupProps): VNode {
             </div>
             <div style="text-align: left;">
               <div style="font-family: monospace; font-size: 14px; color: white; font-weight: 600;">
-                {missionRecapData.map(d => d ? `${d.origin_icao} → ${d.final_icao}` : "")}
+                {missionRecapData.map(d => d ? `${d.origin_icao} > ${d.final_icao}` : "")}
               </div>
               <div style={missionRecapData.map(d => {
                 const quality = d?.landing_quality || "--";

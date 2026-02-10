@@ -425,6 +425,7 @@ export interface UnifiedHistoryTranslations {
   missionReward: string;
   transferToCompany?: string;
   transferFromCompany?: string;
+  contractReward?: string;
   loadMore: string;
   noHistory: string;
 }
@@ -493,6 +494,7 @@ export function renderUnifiedHistoryHtml(
       case "mission_reward": return translations.missionReward;
       case "transfer_to_company": return translations.transferToCompany || type;
       case "transfer_from_company": return translations.transferFromCompany || type;
+      case "contract_reward": return translations.contractReward || "Contract reward";
       default: return type;
     }
   };
@@ -606,6 +608,7 @@ export function renderTransactionsHistoryHtml(
       case "mission_reward": return translations.missionReward;
       case "transfer_to_company": return translations.transferToCompany || type;
       case "transfer_from_company": return translations.transferFromCompany || type;
+      case "contract_reward": return translations.contractReward || "Contract reward";
       default: return type;
     }
   };
@@ -623,6 +626,7 @@ export function renderTransactionsHistoryHtml(
       case "company_create": return "#8b5cf6";
       case "transfer_to_company":
       case "transfer_from_company": return "#8b5cf6";
+      case "contract_reward": return "#10b981";
       default: return amount > 0 ? "#22c55e" : "#ef4444";
     }
   };

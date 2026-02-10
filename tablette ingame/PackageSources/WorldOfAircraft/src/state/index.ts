@@ -21,3 +21,5 @@ export * from "./InventoryState";
 export * from "./FreeFlightState";
 export * from "./GameModeState";
 export * from "./NetworkState";
+export * from "./SocialState";
+export * from "./TransferState";

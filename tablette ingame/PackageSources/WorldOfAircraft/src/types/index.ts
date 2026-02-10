@@ -69,6 +69,7 @@ export interface LevelInfo {
 export interface AircraftDetails {
   id: string;
   registration: string | null;
+  description?: string | null;   // Optional note (max 50 chars)
   aircraft_type: string;
   aircraft_model: string;
   icao_type: string | null;  // V2.3: ICAO type code
@@ -149,6 +150,7 @@ export interface AircraftSystemsStatus {
 export interface AircraftDetailsResponse {
   id: string;
   registration: string | null;
+  description?: string | null;
   aircraft_type: string;
   icao_type: string | null;
   current_airport_ident: string | null;
@@ -180,6 +182,7 @@ export interface ActiveMission {
   origin_icao: string;
   destination_icao: string;
   aircraft_type: string;
+  aircraft_id?: string;
   status: string;
   cargo_weight_kg?: number;
   distance_nm?: number;
@@ -301,6 +304,7 @@ export interface ProfileInventoryItem {
   tier?: number;
   owner_type?: "player" | "company";  // V4.1: Ownership tag (default "player")
   category?: string;                   // V4.1: Item category (material, product, personnel)
+  source?: string;                     // V5.1: Origin ("contract", "market", etc.)
 }
 
 export interface AircraftCargoItem {
@@ -312,10 +316,13 @@ export interface AircraftCargoItem {
 }
 
 export interface HangarCargoItem {
+  item_code: string;
   item_name: string;
   qty: number;
   total_weight_kg: number;
   tier: number;
+  source?: string;
+  contract_id?: string;
 }
 
 export interface CargoPopupItem {
@@ -324,6 +331,9 @@ export interface CargoPopupItem {
   max_qty: number;
   weight_kg: number;
   location_id: string;
+  // V5.1: Weight info for popup display
+  aircraft_cargo_kg?: number;
+  aircraft_cargo_max_kg?: number;
 }
 
 // Raw API response for airport inventory (with containers structure)
@@ -337,6 +347,8 @@ export interface AirportInventoryResponse {
       item_name: string;
       qty: number;
       weight_kg: number | string;
+      source?: string;
+      contract_id?: string;
     }>;
   }>;
 }
@@ -351,6 +363,8 @@ export interface AircraftCargoResponse {
     qty: number;
     weight_kg: number | string;
     total_weight_kg: number | string;
+    source?: string;
+    contract_id?: string;
   }>;
 }
 
@@ -525,4 +539,138 @@ export interface FlightHistoryEntry {
   // ATC
   atc_compliance: number;
   atc_violations: number;
+}
+
+// ═══════════════════════════════════════════════════════════
+// CONTRACT TYPES (Phase 5A)
+// ═══════════════════════════════════════════════════════════
+
+export interface ContractCargoItem {
+  item_code: string;
+  item_name: string;
+  quantity: number;
+  weight_kg: number;
+}
+
+export interface ContractOffer {
+  id: string;
+  // Creator
+  creator_id: string;          // "AI" or player_id
+  creator_name: string;        // "IA Transport" or player name
+  creator_type: "ai" | "player";
+  // Route
+  origin_icao: string;
+  destination_icao: string;
+  distance_nm: number;
+  // Cargo
+  cargo_type: "items" | "passengers" | "mixed";
+  cargo_description: string;   // "5x Iron Ore" or "3 passagers"
+  cargo_weight_kg: number;
+  cargo_items?: ContractCargoItem[];
+  passenger_count?: number;
+  // Conditions
+  reward_cr: number;
+  required_license: string;    // "PPL", "IR", "CPL", "ATPL"
+  min_cargo_capacity_kg: number;
+  // Status
+  status: "available" | "accepted";
+  accepted_by?: string;
+  accepted_at?: string;
+  created_at: string;
+}
+
+export interface ActiveContract {
+  id: string;
+  offer_id: string;
+  pilot_id: string;
+  pilot_name: string;
+  // Copied from offer
+  origin_icao: string;
+  destination_icao: string;
+  distance_nm: number;
+  cargo_type: string;
+  cargo_description: string;
+  cargo_weight_kg: number;
+  cargo_items?: ContractCargoItem[];  // Items to spawn/track
+  passenger_count?: number;           // Passengers to spawn/track
+  reward_cr: number;
+  // Timing
+  accepted_at: string;
+  completed_at?: string;
+  // Status
+  status: "in_progress" | "completed" | "cancelled";
+  failure_reason?: string;     // "cancelled"
+  // Result
+  actual_flight_time_min?: number;
+  score?: number;
+  xp_earned?: number;
+  // Wallet
+  wallet: "player" | "company";
+}
+
+// ═══════════════════════════════════════════════════════════
+// SOCIAL TYPES (Phase 6)
+// ═══════════════════════════════════════════════════════════
+
+export interface Friend {
+  id: string;
+  player_id: string;
+  friend_id: string;
+  friend_name: string;
+  friend_level: number;
+  friend_nationality: string;
+  status: "pending" | "accepted" | "blocked";
+  created_at: string;
+}
+
+export interface DirectMessage {
+  id: string;
+  sender_id: string;
+  sender_name: string;
+  recipient_id: string;
+  recipient_name: string;
+  content: string;
+  read: boolean;
+  type: "message" | "system" | "contract_proposal" | "cr_transfer";
+  metadata?: {
+    amount?: number;
+    contract_id?: string;
+  };
+  created_at: string;
+}
+
+export interface PlayerSearchResult {
+  id: string;
+  name: string;
+  level: number;
+  nationality: string;
+  current_airport: string;
+  is_online: boolean;
+  is_friend: boolean;
+}
+
+// ═══════════════════════════════════════════════════════════
+// TRANSFER TYPES (Phase 7)
+// ═══════════════════════════════════════════════════════════
+
+export interface TransferAircraftOption {
+  id: string;
+  registration: string;
+  type: string;
+  location_icao: string;
+  location_name: string;
+  distance_nm: number;
+  cost_cr: number;
+  owner_type: "player" | "company";
+}
+
+export interface Notification {
+  id: string;
+  player_id: string;
+  type: "friend_request" | "friend_accepted" | "message" | "contract" | "transfer";
+  title: string;
+  body: string;
+  read: boolean;
+  metadata?: Record<string, unknown>;
+  created_at: string;
 }

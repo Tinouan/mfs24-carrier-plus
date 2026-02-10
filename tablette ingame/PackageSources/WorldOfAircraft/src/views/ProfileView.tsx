@@ -50,6 +50,17 @@ export interface ProfileViewProps {
   profileFlightHistoryRef: NodeReference<HTMLDivElement>;
   profileFlightHistoryLoading: Subject<boolean>;
   onFetchFlightHistory: () => void;
+  // V6: Social & Messagerie
+  isP2PMode: Subject<boolean>;
+  socialFriendsListRef: NodeReference<HTMLDivElement>;
+  socialSearchInputRef: NodeReference<HTMLInputElement>;
+  socialSearchResultsRef: NodeReference<HTMLDivElement>;
+  socialPendingRef: NodeReference<HTMLDivElement>;
+  socialConversationsRef: NodeReference<HTMLDivElement>;
+  socialMessagesRef: NodeReference<HTMLDivElement>;
+  socialMessageInputRef: NodeReference<HTMLInputElement>;
+  onSearchPlayers: () => void;
+  onSendMessage: () => void;
 }
 
 /**
@@ -78,6 +89,17 @@ export function renderProfileTab(props: ProfileViewProps): VNode {
     profileFlightHistoryRef,
     profileFlightHistoryLoading,
     onFetchFlightHistory,
+    // V6: Social & Messagerie
+    isP2PMode,
+    socialFriendsListRef,
+    socialSearchInputRef,
+    socialSearchResultsRef,
+    socialPendingRef,
+    socialConversationsRef,
+    socialMessagesRef,
+    socialMessageInputRef,
+    onSearchPlayers,
+    onSendMessage,
   } = props;
 
   return (
@@ -449,28 +471,113 @@ export function renderProfileTab(props: ProfileViewProps): VNode {
           </div>
         </div>
 
-        {/* Messagerie Sub-Tab */}
-        <div style={profileSubTab.map(t => t === "messagerie" ? "padding: 16px; color: white;" : "display: none;")}>
-          <div style="background: #1e1e2e; border-radius: 12px; padding: 24px; text-align: center;">
-            <svg style="width: 48px; height: 48px; margin-bottom: 12px;" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="1.5">
+        {/* Messagerie Sub-Tab (V6) */}
+        <div style={profileSubTab.map(t => t === "messagerie" ? "padding: 16px; color: white; height: 100%; display: flex; flex-direction: column;" : "display: none;")}>
+          {/* P2P overlay */}
+          <div style={isP2PMode.map(p2p => p2p
+            ? "background: #1e1e2e; border-radius: 12px; padding: 24px; text-align: center;"
+            : "display: none;")}>
+            <svg style="width: 48px; height: 48px; margin-bottom: 12px;" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="1.5">
               <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z"/>
             </svg>
-            <div style="color: #60a5fa; font-size: 16px; font-weight: 600; margin-bottom: 8px;">{currentLanguage.map(l => translations[l].profile.messages)}</div>
-            <div style="color: #6b7280; font-size: 12px;">Coming soon - Phase 7</div>
+            <div style="color: #f59e0b; font-size: 14px; font-weight: 600; margin-bottom: 8px;">
+              {currentLanguage.map(l => (translations[l] as any).social?.onlineOnly || "Available in Online mode")}
+            </div>
+          </div>
+          {/* Online content */}
+          <div style={isP2PMode.map(p2p => p2p
+            ? "display: none;"
+            : "display: flex; flex: 1; gap: 10px; min-height: 0;")}>
+            {/* Conversations list (left column) */}
+            <div style="width: 35%; display: flex; flex-direction: column; gap: 8px;">
+              <div style="font-size: 11px; color: #9ca3af; text-transform: uppercase; font-weight: 600;">
+                {currentLanguage.map(l => (translations[l] as any).social?.conversations || "Conversations")}
+              </div>
+              <div ref={socialConversationsRef} style="flex: 1; overflow-y: auto; min-height: 0;">
+                <div style="text-align: center; padding: 24px; color: #6b7280; font-size: 12px;">
+                  {currentLanguage.map(l => (translations[l] as any).social?.noConversations || "No conversations")}
+                </div>
+              </div>
+            </div>
+            {/* Messages (right column) */}
+            <div style="flex: 1; display: flex; flex-direction: column; background: #1a1a24; border-radius: 8px; min-height: 0;">
+              <div ref={socialMessagesRef} style="flex: 1; overflow-y: auto; padding: 10px; min-height: 0;">
+                <div style="text-align: center; padding: 24px; color: #6b7280; font-size: 12px;">
+                  {currentLanguage.map(l => (translations[l] as any).social?.noMessages || "No messages")}
+                </div>
+              </div>
+              {/* Message input */}
+              <div style="display: flex; gap: 8px; padding: 8px; border-top: 1px solid #374151;">
+                <input
+                  ref={socialMessageInputRef}
+                  type="text"
+                  placeholder={currentLanguage.map(l => (translations[l] as any).social?.typeMessage || "Type a message...")}
+                  style="flex: 1; padding: 8px 12px; background: #252532; border: 1px solid #374151; border-radius: 6px; color: white; font-size: 12px; outline: none; box-sizing: border-box;"
+                  onkeydown={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+                  onkeyup={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+                  onkeypress={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+                />
+                <Button callback={(): void => { onSendMessage(); }}>
+                  <div style="background: #3b82f6; color: white; border-radius: 6px; padding: 8px 14px; font-size: 12px; font-weight: 600; cursor: pointer;">
+                    {currentLanguage.map(l => (translations[l] as any).social?.send || "Send")}
+                  </div>
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Social Sub-Tab */}
+        {/* Social Sub-Tab (V6) */}
         <div style={profileSubTab.map(t => t === "social" ? "padding: 16px; color: white;" : "display: none;")}>
-          <div style="background: #1e1e2e; border-radius: 12px; padding: 24px; text-align: center;">
-            <svg style="width: 48px; height: 48px; margin-bottom: 12px;" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="1.5">
+          {/* P2P overlay */}
+          <div style={isP2PMode.map(p2p => p2p
+            ? "background: #1e1e2e; border-radius: 12px; padding: 24px; text-align: center;"
+            : "display: none;")}>
+            <svg style="width: 48px; height: 48px; margin-bottom: 12px;" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="1.5">
               <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
               <circle cx="9" cy="7" r="4"/>
               <path d="M23 21v-2a4 4 0 00-3-3.87"/>
               <path d="M16 3.13a4 4 0 010 7.75"/>
             </svg>
-            <div style="color: #60a5fa; font-size: 16px; font-weight: 600; margin-bottom: 8px;">{currentLanguage.map(l => translations[l].profile.friendsAndRankings)}</div>
-            <div style="color: #6b7280; font-size: 12px;">Coming soon - Phase 7</div>
+            <div style="color: #f59e0b; font-size: 14px; font-weight: 600; margin-bottom: 8px;">
+              {currentLanguage.map(l => (translations[l] as any).social?.onlineOnly || "Available in Online mode")}
+            </div>
+          </div>
+          {/* Online content */}
+          <div style={isP2PMode.map(p2p => p2p ? "display: none;" : "display: block;")}>
+            {/* Search bar */}
+            <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+              <input
+                ref={socialSearchInputRef}
+                type="text"
+                placeholder={currentLanguage.map(l => (translations[l] as any).social?.searchPlayers || "Search players...")}
+                style="flex: 1; padding: 8px 12px; background: #252532; border: 1px solid #374151; border-radius: 6px; color: white; font-size: 12px; outline: none; box-sizing: border-box;"
+                onkeydown={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+                onkeyup={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+                onkeypress={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+              />
+              <Button callback={(): void => { onSearchPlayers(); }}>
+                <div style="background: #3b82f6; color: white; border-radius: 6px; padding: 8px 14px; font-size: 12px; font-weight: 600; cursor: pointer;">
+                  {currentLanguage.map(l => (translations[l] as any).social?.search || "Search")}
+                </div>
+              </Button>
+            </div>
+
+            {/* Search results */}
+            <div ref={socialSearchResultsRef} style="margin-bottom: 16px;"></div>
+
+            {/* Pending requests */}
+            <div ref={socialPendingRef} style="margin-bottom: 16px;"></div>
+
+            {/* Friends list */}
+            <div style="font-size: 11px; color: #9ca3af; text-transform: uppercase; font-weight: 600; margin-bottom: 8px;">
+              {currentLanguage.map(l => (translations[l] as any).social?.friends || "Friends")}
+            </div>
+            <div ref={socialFriendsListRef}>
+              <div style="text-align: center; padding: 24px; color: #6b7280; font-size: 12px;">
+                {currentLanguage.map(l => (translations[l] as any).social?.noFriends || "No friends yet")}
+              </div>
+            </div>
           </div>
         </div>
 

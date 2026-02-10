@@ -1163,6 +1163,18 @@
       "isRaw": false,
       "stackSize": 1,
       "description": "A copilot available for transport"
+    },
+    {
+      "id": "passenger",
+      "name": "Passenger",
+      "tier": 0,
+      "tags": ["personnel"],
+      "icon": "person",
+      "baseValue": 0,
+      "weightKg": 80.0,
+      "isRaw": false,
+      "stackSize": 1,
+      "description": "A passenger for contract transport"
     }
   ]
 }

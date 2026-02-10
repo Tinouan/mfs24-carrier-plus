@@ -82,6 +82,7 @@ export interface PopupCallbacks {
 class PopupManagerClass {
   private callbacks: PopupCallbacks | null = null;
   private refuelPricePerGallon = REFUEL_PRICE_PER_GALLON;
+  private cargoSliderHandler: ((e: Event) => void) | null = null;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // INITIALIZATION
@@ -528,6 +529,7 @@ class PopupManagerClass {
     const maxQty = item.max_qty;
     const currentQty = cargoState.cargoPopupQty.get();
 
+    slider.min = "1";
     slider.max = String(maxQty);
     slider.value = String(currentQty);
 
@@ -536,18 +538,21 @@ class PopupManagerClass {
       qtyDisplay.textContent = `${currentQty} (${totalWeight}kg)`;
     }
 
-    // Remove old listeners and add new one
-    const newSlider = slider.cloneNode(true) as HTMLInputElement;
-    slider.parentNode?.replaceChild(newSlider, slider);
+    // Remove old listener before adding new one (no cloneNode to preserve ref)
+    if (this.cargoSliderHandler) {
+      slider.removeEventListener("input", this.cargoSliderHandler);
+    }
 
-    newSlider.addEventListener("input", (e) => {
+    this.cargoSliderHandler = (e: Event) => {
       const val = parseInt((e.target as HTMLInputElement).value, 10);
       cargoState.cargoPopupQty.set(val);
       if (qtyDisplay && item) {
         const totalWeight = (val * item.weight_kg).toFixed(1);
         qtyDisplay.textContent = `${val} (${totalWeight}kg)`;
       }
-    });
+    };
+
+    slider.addEventListener("input", this.cargoSliderHandler);
   }
 
   async confirmCargo(): Promise<void> {

@@ -8,19 +8,7 @@
  * - Flight plan validation helpers
  */
 
-// Declare SimVar for TypeScript
-declare const SimVar: {
-  GetSimVarValue(name: string, unit: string): number | boolean | string;
-  SetSimVarValue(name: string, unit: string, value: number): void;
-};
-
-// Declare Coherent for MSFS flight plan access
-declare const Coherent: {
-  call(name: string, ...args: unknown[]): Promise<unknown>;
-};
-
-// Declare RegisterViewListener for MSFS
-declare function RegisterViewListener(listener: string): void;
+// Global MSFS declarations in src/types/msfs-globals.d.ts
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES

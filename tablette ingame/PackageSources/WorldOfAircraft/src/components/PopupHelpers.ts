@@ -79,11 +79,7 @@ export const inputStopPropagation = {
   onkeypress: (e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); },
 };
 
-// Declare Coherent for MSFS keyboard capture API
-declare const Coherent: {
-  trigger: (event: string, data?: unknown) => void;
-  call: (name: string, ...args: unknown[]) => Promise<unknown>;
-};
+// Global MSFS declarations in src/types/msfs-globals.d.ts
 
 /**
  * Setup Coherent keyboard capture for an input element
@@ -338,7 +334,7 @@ export function renderRepairListHtml(items: RepairItemData[], noRepairText: stri
       <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: #1a1a24; border-radius: 6px; margin-bottom: 6px;">
         <div>
           <div style="font-size: 11px; color: white;">${item.label}</div>
-          <div style="font-size: 9px; color: #6b7280;">${pct}% → 100%</div>
+          <div style="font-size: 9px; color: #6b7280;">${pct}% &gt; 100%</div>
         </div>
         <div style="font-size: 11px; color: #f59e0b; font-weight: 600;">
           $${cost}

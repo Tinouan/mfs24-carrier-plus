@@ -212,9 +212,4 @@ export const resetModeSelection = (): void => {
   }
 };
 
-// ═══════════════════════════════════════════════════════════
-// NATIVE API DECLARATIONS
-// ═══════════════════════════════════════════════════════════
-
-declare function GetStoredData(key: string): string;
-declare function SetStoredData(key: string, value: string): void;
+// Global MSFS declarations in src/types/msfs-globals.d.ts

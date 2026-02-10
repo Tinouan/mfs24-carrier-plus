@@ -16,6 +16,7 @@
 import { localFleetService } from "./LocalFleetService";
 import { localMissionService } from "./LocalMissionService";
 import { localMarketService } from "./LocalMarketService";
+import { localContractService } from "./LocalContractService";
 import { SyncService, type FlightStats, type SeedMission, type MissionCompletionResult, type RefuelResult, type MarketOrder, type PlayerInventoryItem, type AirportInventoryRaw, type AircraftCargoResponse } from "./SyncService";
 import { OfflineMissionService, type OfflineMissionResult } from "./OfflineMissionService";
 import { NetworkState } from "../state/NetworkState";
@@ -152,6 +153,13 @@ class ServiceAdapterClass {
         return result;
       },
 
+      // Update description and sync to SEED
+      updateDescription: async (aircraftId: string, description: string) => {
+        const result = await localFleetService.updateDescription(aircraftId, description);
+        this.syncAircraftToSeed(aircraftId);
+        return result;
+      },
+
       // Update location and sync to SEED
       updateLocation: async (aircraftId: string, icao: string) => {
         const result = await localFleetService.updateLocation(aircraftId, icao);
@@ -175,18 +183,18 @@ class ServiceAdapterClass {
         // Convert to SEED format
         const seedAircraft = {
           id: aircraft.id,
-          owner_id: aircraft.owner_id,
-          registration: aircraft.registration,
+          owner_id: (aircraft as any).owner_id || "",
+          registration: aircraft.registration || "",
           aircraft_type: aircraft.aircraft_type,
-          icao_type: aircraft.icao_type,
-          current_airport_ident: aircraft.current_airport_ident,
+          icao_type: aircraft.icao_type || "",
+          current_airport_ident: aircraft.current_airport_ident || "",
           status: aircraft.status,
           fuel_gallons: aircraft.fuel_gallons,
           fuel_capacity_gallons: aircraft.fuel_capacity_gallons,
-          cargo_kg: aircraft.cargo_kg,
+          cargo_kg: aircraft.current_cargo_kg || 0,
           cargo_capacity_kg: aircraft.cargo_capacity_kg,
-          condition: aircraft.condition,
-          hours: aircraft.hours,
+          condition: aircraft.condition || 100,
+          hours: aircraft.hours || 0,
         };
         await SyncService.updateAircraft(seedAircraft);
       }
@@ -718,6 +726,7 @@ class ServiceAdapterClass {
             return {
               success: true,
               aircraft_id: aircraftId,
+              fuel_added: gallonsToAdd,
               gallons_added: gallonsToAdd,
               new_fuel: newFuel,
               cost: 0, // Free in Solo mode
@@ -756,7 +765,7 @@ class ServiceAdapterClass {
                 amount: -result.cost,
                 balance_after: result.new_balance,
                 wallet: "player",
-                description: `Refuel ${result.gallons_added.toFixed(0)} gal`,
+                description: `Refuel ${(result.gallons_added || result.fuel_added).toFixed(0)} gal`,
                 related_id: aircraftId,
                 airport_icao: airportIcao,
               });
@@ -896,6 +905,23 @@ class ServiceAdapterClass {
         }
         return session;
       },
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // CONTRACT OPERATIONS (V5)
+  // ─────────────────────────────────────────────────────────
+
+  get contracts() {
+    return {
+      getAvailableContracts: () => localContractService.getAvailableContracts(),
+      getActiveContracts: () => localContractService.getActiveContracts(),
+      getCompletedContracts: () => localContractService.getCompletedContracts(),
+      acceptContract: (offerId: string, wallet: "player" | "company") => localContractService.acceptContract(offerId, wallet),
+      completeContract: (contractId: string) => localContractService.completeContract(contractId),
+      cancelContract: (contractId: string) => localContractService.cancelContract(contractId),
+      refreshContracts: () => localContractService.refreshContracts(),
+      generateAIContracts: (playerAirport: string) => localContractService.generateAIContracts(playerAirport),
     };
   }
 

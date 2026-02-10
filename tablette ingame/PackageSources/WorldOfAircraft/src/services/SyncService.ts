@@ -17,7 +17,7 @@ import type { MarketListing } from "../types";
 // ═══════════════════════════════════════════════════════════
 
 export interface WorldData {
-  market_orders: MarketListing[];
+  market_orders: MarketOrder[];
   airport_inventories: Record<string, AirportInventory[]>;
   factories: WorldFactory[];
   prices: Record<string, number>;
@@ -171,6 +171,8 @@ export interface MissionCompletionResult {
 export interface RefuelResult {
   success: boolean;
   fuel_added: number;
+  aircraft_id?: string;
+  gallons_added?: number;
   cost: number;
   new_fuel: number;
   new_balance: number;

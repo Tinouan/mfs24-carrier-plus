@@ -3,11 +3,7 @@
  * Extracted from WorldOfAircraft.tsx for reusability
  */
 
-// Declare global SimVar API (provided by MSFS SDK)
-declare const SimVar: {
-  GetSimVarValue(name: string, unit: string): number | boolean | string;
-  SetSimVarValue(name: string, unit: string, value: number): void;
-};
+// Global MSFS declarations in src/types/msfs-globals.d.ts
 
 // ═══════════════════════════════════════════════════════════════════════════
 // FUEL MANAGEMENT

@@ -36,6 +36,7 @@ export interface InventoryItem {
   airport_icao: string;
   weight_kg?: number;
   tier?: number;
+  source?: string;  // V5.1: Origin ("contract", "market", etc.)
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -70,6 +71,7 @@ class LocalMarketServiceClass {
         airport_icao: inv.location_id,
         weight_kg: item?.weightKg,
         tier: item?.tier,
+        source: inv.source,
       };
     });
   }
@@ -101,6 +103,7 @@ class LocalMarketServiceClass {
         airport_icao: inv.location_id,
         weight_kg: item?.weightKg,
         tier: item?.tier,
+        source: inv.source,
       });
     }
 
@@ -176,6 +179,8 @@ class LocalMarketServiceClass {
           item_name: item?.name || inv.item_code,
           qty: inv.quantity,
           weight_kg: item?.weightKg || 0,
+          source: inv.source,
+          contract_id: inv.contract_id,
         };
       }),
     }));
@@ -339,8 +344,7 @@ class LocalMarketServiceClass {
     await DatabaseManager.put("market_orders", order);
 
     // Add to buyer's inventory at the airport
-    // If personal purchase, store as "player" type; if company, store as "airport" type
-    const locationType = payFrom === "player" ? "player" : "airport";
+    const locationType: "airport" = "airport";
     const existingInventory = await DatabaseManager.getInventoryAt(locationType, orderIcao);
     const existing = existingInventory.find((i) => i.item_code === order.item_code);
 
@@ -682,7 +686,7 @@ class LocalMarketServiceClass {
     if (order.status !== "active") throw new Error("Order is not active");
 
     // Return items to inventory
-    const locationType = order.owner_type === "player" ? "player" : "airport";
+    const locationType: "airport" = "airport";
     const inventory = await DatabaseManager.getInventoryAt(locationType, order.airport_icao);
     const existing = inventory.find(i => i.item_code === order.item_id);
 
@@ -1113,7 +1117,7 @@ class LocalMarketServiceClass {
       catalog = catalog.filter(c => c.category === filters.category);
     }
     if (filters?.maxPrice) {
-      catalog = catalog.filter(c => c.basePrice <= filters.maxPrice);
+      catalog = catalog.filter(c => c.basePrice <= filters.maxPrice!);
     }
     if (filters?.license) {
       catalog = catalog.filter(c => c.requiredLicense === filters.license);

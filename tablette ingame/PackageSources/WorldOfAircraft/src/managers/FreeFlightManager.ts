@@ -19,10 +19,7 @@ import { missionState } from "../state/MissionState";
 import { WorldRouter, FreeFlightRouter } from "../services";
 import { DatabaseManager } from "./DatabaseManager";
 
-// Declare SimVar for TypeScript
-declare const SimVar: {
-  GetSimVarValue(name: string, unit: string): number | boolean | string;
-};
+// Global MSFS declarations in src/types/msfs-globals.d.ts
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS

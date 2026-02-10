@@ -20,12 +20,16 @@ export {
   PlayerRouter,
   CompanyRouter,
   FreeFlightRouter,
+  ContractRouter,
+  SocialRouter,
+  TransferRouter,
 } from "./ServiceRouter";
 
 // Individual local services (for advanced use cases)
 export { localFleetService } from "./LocalFleetService";
 export { localMissionService } from "./LocalMissionService";
 export { localMarketService } from "./LocalMarketService";
+export { localContractService } from "./LocalContractService";
 
 // DataLayer (P2P local/network abstraction)
 export { DataLayer } from "./DataLayer";

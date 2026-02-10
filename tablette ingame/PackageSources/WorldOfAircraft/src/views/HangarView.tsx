@@ -46,6 +46,25 @@ export interface HangarViewProps {
   onUpdateAircraftRegistration: () => void;
   onOpenRepairPopup: () => void;
   onPerformRepair: (aircraftId: string, systems: string[], wallet: "player" | "company") => void;
+  // V7.1: Aircraft transfer
+  showAircraftTransferPopup: Subject<boolean>;
+  acTransferAircraftReg: Subject<string>;
+  acTransferOriginIcao: Subject<string>;
+  acTransferOwnerType: Subject<"player" | "company">;
+  acTransferDestIcao: Subject<string>;
+  acTransferEstimate: Subject<{ distance_nm: number; cost_cr: number } | null>;
+  walletPersonal: Subject<number>;
+  companyBalance: Subject<number>;
+  transferIcaoInputRef: NodeReference<HTMLInputElement>;
+  onOpenAircraftTransferPopup: () => void;
+  onTransferIcaoInput: (icao: string) => void;
+  onConfirmAircraftTransfer: () => void;
+  onCloseAircraftTransferPopup: () => void;
+  // Note/description
+  hangarNoteEditing: Subject<boolean>;
+  onStartEditNote: () => void;
+  onSaveNote: (description: string) => void;
+  setupInputEventBlocker: (el: HTMLInputElement) => void;
 }
 
 /**
@@ -74,7 +93,28 @@ export function renderHangarTab(props: HangarViewProps): VNode {
     onUpdateAircraftRegistration,
     onOpenRepairPopup,
     onPerformRepair,
+    // V7.1: Aircraft transfer
+    showAircraftTransferPopup,
+    acTransferAircraftReg,
+    acTransferOriginIcao,
+    acTransferOwnerType,
+    acTransferDestIcao,
+    acTransferEstimate,
+    walletPersonal,
+    companyBalance,
+    transferIcaoInputRef,
+    onOpenAircraftTransferPopup,
+    onTransferIcaoInput,
+    onConfirmAircraftTransfer,
+    onCloseAircraftTransferPopup,
+    // Note/description
+    hangarNoteEditing,
+    onStartEditNote,
+    onSaveNote,
+    setupInputEventBlocker,
   } = props;
+
+  const noteInputRef = FSComponent.createRef<HTMLInputElement>();
 
   return (
     <div>
@@ -188,6 +228,54 @@ export function renderHangarTab(props: HangarViewProps): VNode {
                   </div>
                 </div>
 
+                {/* Aircraft Note/Description */}
+                <div style="margin-bottom: 8px;">
+                  {/* Display mode */}
+                  <div style={hangarNoteEditing.map(e => e ? "display: none;" : "display: block;")}>
+                    <Button callback={(): void => {
+                      onStartEditNote();
+                      setTimeout(() => {
+                        const input = noteInputRef.getOrDefault();
+                        if (input) {
+                          const ac = hangarSelectedAircraft.get();
+                          input.value = ac?.description || "";
+                          setupInputEventBlocker(input);
+                          input.focus();
+                          input.select();
+                        }
+                      }, 50);
+                    }}>
+                      <div style={hangarSelectedAircraft.map(a =>
+                        a?.description
+                          ? "font-size: 11px; color: #9ca3af; cursor: pointer; padding: 4px 0;"
+                          : "font-size: 11px; color: #6b7280; font-style: italic; cursor: pointer; padding: 4px 0;"
+                      )}>
+                        {MappedSubject.create(([a, lang]) =>
+                          a?.description || translations[lang].hangar.addNote,
+                          hangarSelectedAircraft, currentLanguage
+                        )}
+                      </div>
+                    </Button>
+                  </div>
+                  {/* Edit mode */}
+                  <div style={hangarNoteEditing.map(e => e ? "display: block;" : "display: none;")}>
+                    <input
+                      ref={noteInputRef}
+                      type="text"
+                      maxLength={50}
+                      style="width: 100%; background: #1f2937; border: 1px solid #3b82f6; border-radius: 4px; padding: 4px 8px; color: white; font-size: 11px; outline: none; box-sizing: border-box;"
+                      onBlur={(e: FocusEvent): void => {
+                        onSaveNote((e.target as HTMLInputElement).value);
+                      }}
+                      onKeyDown={(e: KeyboardEvent): void => {
+                        if (e.key === "Enter") {
+                          onSaveNote((e.target as HTMLInputElement).value);
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+
                 {/* Aircraft Thumbnail */}
                 <div style="background: #1a1a24; border-radius: 8px; overflow: hidden; margin-bottom: 12px;">
                   <img
@@ -297,6 +385,19 @@ export function renderHangarTab(props: HangarViewProps): VNode {
                   <span style="font-size: 10px; color: white; font-weight: 600;">
                     {hangarSelectedAircraft.map(a => a?.required_license || "PPL")}
                   </span>
+                </div>
+
+                {/* V7.1: Transfer Aircraft Button — only visible when parked */}
+                <div style={hangarSelectedAircraft.map(a =>
+                  a?.status === "parked"
+                    ? "margin-top: 12px; text-align: center;"
+                    : "display: none;"
+                )}>
+                  <Button callback={(): void => { onOpenAircraftTransferPopup(); }}>
+                    <div style="display: inline-block; padding: 10px 30px; background: #8b5cf6; border-radius: 8px; color: #ffffff; font-size: 12px; font-weight: 600;">
+                      {currentLanguage.map(l => translations[l].transfer?.transferAircraft || "Transfer Aircraft")}
+                    </div>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -409,6 +510,137 @@ export function renderHangarTab(props: HangarViewProps): VNode {
               }}>
                 <div style="flex: 1; background: #f59e0b; color: #1a1a24; border-radius: 8px; padding: 12px; font-size: 13px; font-weight: 700; text-align: center;">
                   {currentLanguage.map(l => translations[l].hangar.repairAll)}
+                </div>
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════ */}
+        {/* V7.1: Aircraft Transfer Popup (ICAO input)                 */}
+        {/* ═══════════════════════════════════════════════════════════ */}
+        <div style={showAircraftTransferPopup.map(show => show
+          ? "position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 1000;"
+          : "display: none;")}>
+          <div style="background: #252532; border-radius: 12px; padding: 20px; min-width: 320px; max-width: 90%; border: 1px solid #8b5cf6;">
+            {/* Header */}
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+              <div style="font-size: 14px; font-weight: 600; color: #8b5cf6;">
+                {currentLanguage.map(l => translations[l].transfer?.aircraftTransferTitle || "Aircraft Transfer")}
+              </div>
+              <Button callback={(): void => { onCloseAircraftTransferPopup(); }}>
+                <div style="width: 28px; height: 28px; background: #374151; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+                  <span style="color: #9ca3af; font-size: 16px; font-weight: bold; line-height: 1;">X</span>
+                </div>
+              </Button>
+            </div>
+
+            {/* Aircraft info */}
+            <div style="background: #1a1a24; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <span style="font-size: 13px; color: white; font-weight: 600;">{acTransferAircraftReg}</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span style="font-size: 11px; color: #60a5fa; font-family: monospace; font-weight: 600;">{acTransferOriginIcao}</span>
+                  <span style={acTransferOwnerType.map(t => t === "player"
+                    ? "font-size: 9px; padding: 2px 6px; background: #10b981; color: white; border-radius: 3px; font-weight: 600;"
+                    : "font-size: 9px; padding: 2px 6px; background: #6366f1; color: white; border-radius: 3px; font-weight: 600;"
+                  )}>
+                    {MappedSubject.create(([t, lang]) => t === "player" ? translations[lang].hangar.personal : translations[lang].hangar.companyOwned, acTransferOwnerType, currentLanguage)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* ICAO Destination Input */}
+            <div style="margin-bottom: 12px;">
+              <div style="font-size: 11px; color: #9ca3af; margin-bottom: 4px;">
+                {currentLanguage.map(l => translations[l].transfer?.destinationIcao || "Destination ICAO")}
+              </div>
+              <input
+                ref={transferIcaoInputRef}
+                type="text"
+                maxLength={4}
+                placeholder="LFPG"
+                style="width: 100%; padding: 10px 12px; background: #1a1a24; border: 1px solid #374151; border-radius: 6px; color: white; font-size: 16px; font-weight: 700; text-transform: uppercase; font-family: monospace; letter-spacing: 3px; text-align: center; outline: none; box-sizing: border-box;"
+                onkeydown={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+                onkeyup={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+                onkeypress={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
+              />
+            </div>
+
+            {/* Estimate Display */}
+            <div style={acTransferEstimate.map(e => e
+              ? "background: #1a1a24; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px;"
+              : "display: none;")}>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                <span style="color: #9ca3af; font-size: 11px;">{currentLanguage.map(l => translations[l].transfer?.distance || "Distance")}:</span>
+                <span style="color: white; font-size: 11px; font-weight: 600;">
+                  {acTransferEstimate.map(e => e ? `${e.distance_nm} NM` : "")}
+                </span>
+              </div>
+              <div style="display: flex; justify-content: space-between; padding-top: 6px; border-top: 1px solid #374151;">
+                <span style="color: #f59e0b; font-size: 13px; font-weight: 700;">{currentLanguage.map(l => translations[l].transfer?.cost || "Cost")}:</span>
+                <span style="color: #f59e0b; font-size: 13px; font-weight: 700;">
+                  {acTransferEstimate.map(e => e ? `${e.cost_cr} CR` : "")}
+                </span>
+              </div>
+              {/* Balance check */}
+              <div style="display: flex; justify-content: space-between; margin-top: 6px;">
+                <span style="color: #9ca3af; font-size: 10px;">
+                  {MappedSubject.create(([t, lang]) => t === "player"
+                    ? (translations[lang].transfer?.yourBalance || "Your balance")
+                    : (translations[lang].transfer?.companyBalance || "Company balance"),
+                    acTransferOwnerType, currentLanguage)}:
+                </span>
+                <span style={MappedSubject.create(([ownerType, est, playerBal, compBal]) => {
+                  const cost = est?.cost_cr || 0;
+                  const bal = ownerType === "player" ? playerBal : compBal;
+                  return bal >= cost
+                    ? "color: #22c55e; font-size: 10px; font-weight: 600;"
+                    : "color: #ef4444; font-size: 10px; font-weight: 600;";
+                }, acTransferOwnerType, acTransferEstimate, walletPersonal, companyBalance)}>
+                  {MappedSubject.create(([ownerType, playerBal, compBal]) => {
+                    const bal = ownerType === "player" ? playerBal : compBal;
+                    return `${Math.round(bal)} CR`;
+                  }, acTransferOwnerType, walletPersonal, companyBalance)}
+                </span>
+              </div>
+            </div>
+
+            {/* No estimate hint */}
+            <div style={MappedSubject.create(([est, icao]) =>
+              !est && icao.length >= 3
+                ? "text-align: center; padding: 8px; color: #ef4444; font-size: 10px; margin-bottom: 12px;"
+                : !est
+                  ? "text-align: center; padding: 8px; color: #6b7280; font-size: 10px; margin-bottom: 12px;"
+                  : "display: none;",
+              acTransferEstimate, acTransferDestIcao)}>
+              {MappedSubject.create(([est, icao, lang]) => {
+                if (!est && icao.length >= 3) return translations[lang].transfer?.invalidIcao || "Unknown airport";
+                if (!est) return translations[lang].transfer?.enterIcao || "Enter destination ICAO code";
+                return "";
+              }, acTransferEstimate, acTransferDestIcao, currentLanguage)}
+            </div>
+
+            {/* Action buttons */}
+            <div style="display: flex; gap: 10px;">
+              <Button callback={(): void => { onCloseAircraftTransferPopup(); }}>
+                <div style="flex: 1; background: #374151; color: #9ca3af; border-radius: 8px; padding: 12px; font-size: 13px; font-weight: 600; text-align: center;">
+                  {currentLanguage.map(l => translations[l].transfer?.cancel || "Cancel")}
+                </div>
+              </Button>
+              <Button callback={(): void => { onConfirmAircraftTransfer(); }}>
+                <div style={MappedSubject.create(([est, ownerType, playerBal, compBal]) => {
+                  const cost = est?.cost_cr || 0;
+                  const bal = ownerType === "player" ? playerBal : compBal;
+                  const canAfford = est && bal >= cost;
+                  return canAfford
+                    ? "flex: 1; background: #8b5cf6; color: white; border-radius: 8px; padding: 12px; font-size: 13px; font-weight: 700; text-align: center;"
+                    : "flex: 1; background: #374151; color: #6b7280; border-radius: 8px; padding: 12px; font-size: 13px; font-weight: 600; text-align: center; pointer-events: none;";
+                }, acTransferEstimate, acTransferOwnerType, walletPersonal, companyBalance)}>
+                  {currentLanguage.map(l => translations[l].transfer?.confirm || "Confirm")}
                 </div>
               </Button>
             </div>

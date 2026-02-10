@@ -56,7 +56,7 @@ class LocalFleetServiceClass {
         aircraft_type: catEntry?.name || ac.type_code,
         icao_type: ac.type_code,
         current_airport_ident: ac.location_icao,
-        status: ac.condition > 50 ? "operational" : "needs_repair",
+        status: ac.status || "parked",
         required_license: catEntry?.requiredLicense || "PPL",
         owner_type: "player",
         thumbnail_url: null,
@@ -77,7 +77,7 @@ class LocalFleetServiceClass {
           aircraft_type: catEntry?.name || ac.type_code,
           icao_type: ac.type_code,
           current_airport_ident: ac.location_icao,
-          status: ac.condition > 50 ? "operational" : "needs_repair",
+          status: ac.status || "parked",
           required_license: catEntry?.requiredLicense || "PPL",
           owner_type: "company",
           thumbnail_url: null,
@@ -317,19 +317,20 @@ class LocalFleetServiceClass {
     return {
       id: ac.id,
       registration: ac.registration,
+      description: ac.description || null,
       aircraft_type: catEntry?.name || ac.type_code,
       aircraft_model: catEntry?.manufacturer || "Unknown",
       icao_type: ac.type_code,
       current_airport_ident: ac.location_icao,
-      status: ac.condition > 50 ? "operational" : "needs_repair",
+      status: ac.status || "parked",
       required_license: catEntry?.requiredLicense || "PPL",
       owner_type: ownerType,
       fuel_gallons: ac.fuel_gallons,
       fuel_capacity_gallons: catEntry ? Math.round(catEntry.maxRangeNm / 10) : 50,
       cargo_kg: cargoKg,
-      cargo_capacity_kg: catEntry?.cargoCapacityKg || 200,
+      cargo_capacity_kg: ac.cargo_capacity_kg || catEntry?.cargoCapacityKg || 200,
       passengers: 0,
-      passenger_capacity: catEntry?.category === "airliner" ? 100 : 4,
+      passenger_capacity: ac.passenger_seats || catEntry?.passengerSeats || 4,
       condition: ac.condition / 100,
       hours: ac.flight_hours,
       landing_gear: systemStatuses.landing_gear,
@@ -466,10 +467,13 @@ class LocalFleetServiceClass {
     return inventory.map((inv) => {
       const item = items.find((i) => i.id === inv.item_code || i.code === inv.item_code);
       return {
+        item_code: inv.item_code,
         item_name: item?.name || inv.item_code,
         qty: inv.quantity,
         total_weight_kg: item ? item.weightKg * inv.quantity : 0,
         tier: item?.tier || 0,
+        source: inv.source,
+        contract_id: inv.contract_id,
       };
     });
   }
@@ -485,11 +489,13 @@ class LocalFleetServiceClass {
       current_cargo_kg: cargo.reduce((sum, c) => sum + c.total_weight_kg, 0),
       cargo_capacity_kg: details.cargo_capacity_kg,
       items: cargo.map((c) => ({
-        item_id: c.item_name, // Note: would need item_id stored
+        item_id: c.item_code,
         item_name: c.item_name,
         qty: c.qty,
         weight_kg: c.total_weight_kg / c.qty,
         total_weight_kg: c.total_weight_kg,
+        source: c.source,
+        contract_id: c.contract_id,
       })),
     };
   }
@@ -509,6 +515,20 @@ class LocalFleetServiceClass {
 
     if (!sourceItem || sourceItem.quantity < qty) {
       throw new Error("Insufficient quantity at source");
+    }
+
+    // Seat limit check for personnel items
+    const PERSONNEL_ITEMS = ["worker", "engineer", "pilot", "copilot", "passenger"];
+    if (PERSONNEL_ITEMS.includes(itemId)) {
+      const ac = await DatabaseManager.get<Aircraft>("aircraft", aircraftId);
+      const maxSeats = ac?.passenger_seats || 0;
+      const aircraftInventory = await DatabaseManager.getInventoryAt("aircraft", aircraftId);
+      const currentPersonnel = aircraftInventory
+        .filter((i) => PERSONNEL_ITEMS.includes(i.item_code))
+        .reduce((sum, i) => sum + i.quantity, 0);
+      if (currentPersonnel + qty > maxSeats) {
+        throw new Error(`Not enough seats: ${currentPersonnel + qty}/${maxSeats}`);
+      }
     }
 
     // Update source (reduce)
@@ -953,6 +973,19 @@ class LocalFleetServiceClass {
     if (!ac) throw new Error("Aircraft not found");
 
     ac.registration = registration;
+    await DatabaseManager.put("aircraft", ac);
+
+    return this.getAircraftDetails(aircraftId);
+  }
+
+  /**
+   * Update aircraft description/note
+   */
+  async updateDescription(aircraftId: string, description: string): Promise<AircraftDetails> {
+    const ac = await DatabaseManager.get<Aircraft>("aircraft", aircraftId);
+    if (!ac) throw new Error("Aircraft not found");
+
+    ac.description = description;
     await DatabaseManager.put("aircraft", ac);
 
     return this.getAircraftDetails(aircraftId);

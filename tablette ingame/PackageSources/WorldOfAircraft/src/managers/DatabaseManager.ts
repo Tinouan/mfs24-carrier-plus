@@ -4,6 +4,8 @@
  * Note: Uses localStorage instead of IndexedDB for Coherent GT compatibility
  */
 
+import type { ContractOffer, ActiveContract } from "../types";
+
 // ═══════════════════════════════════════════════════════════
 // TYPES - Complete interfaces matching backend PostgreSQL schema
 // ═══════════════════════════════════════════════════════════
@@ -112,6 +114,7 @@ export interface Aircraft {
   id: string;
   registration: string;
   name?: string;                 // Optional nickname for the aircraft
+  description?: string;          // Optional note/description (max 50 chars)
   type_code: string;             // References AircraftCatalog.icaoType (e.g., "C172")
   company_id: string | null;     // null for personal aircraft
   owner_id: string | null;       // player_id for personal aircraft
@@ -260,6 +263,8 @@ export interface InventoryItem {
   quantity: number;
   reserved_quantity?: number;    // Quantity reserved for pending orders (defaults to 0)
   owner_type?: "player" | "company";  // V4.1: Ownership tag (default "player")
+  source?: string;               // Origin: "contract", "market", "production", etc.
+  contract_id?: string;          // Link to contract if spawned by contract acceptance
   created_at?: string;
   updated_at?: string;
 }
@@ -327,6 +332,8 @@ export interface MarketOrder {
   price_per_unit?: number;       // Alias for unit_price
   icao?: string;                 // Alias for airport_icao
   seller_id?: string;            // Alias for company_id
+  item_name?: string;            // Resolved item display name
+  owner_type?: "player" | "company";
   is_active?: boolean;           // Derived from status === "open"
 }
 
@@ -600,6 +607,7 @@ export interface PilotCareerStats {
   average_score?: number;
   best_score: number;
   worst_score?: number;
+  average_grade?: string;
 
   // Fuel
   total_fuel_used_lbs: number;
@@ -681,7 +689,10 @@ export type TransactionType =
   | "transfer_in"
   | "transfer_out"
   | "transfer_to_company"
-  | "transfer_from_company";
+  | "transfer_from_company"
+  | "contract_reward"
+  | "pilot_transfer"
+  | "aircraft_transfer";
 
 export interface TransactionLog {
   id: string;              // UUID
@@ -751,6 +762,8 @@ type StoreName =
   | "transaction_log"      // V4.1: Financial transaction log
   | "sell_orders"          // V4.1: Player sell orders
   | "company_messages"
+  | "contract_offers"       // V5: Contract offers board
+  | "active_contracts"      // V5: Active/completed contracts
   | "airports"
   | "sync_log";
 
@@ -785,6 +798,8 @@ const KEY_PATHS: Record<StoreName, string> = {
   transaction_log: "id", // V4.1: Transaction log
   sell_orders: "id",     // V4.1: Player sell orders
   company_messages: "id", // V4: Company messaging
+  contract_offers: "id",  // V5: Contract offers
+  active_contracts: "id", // V5: Active contracts
   airports: "ident",
   sync_log: "id",
 };
@@ -813,16 +828,11 @@ const PERSISTENT_STORES: StoreName[] = [
   "factories",
   "workers",
   "company_messages",
+  "contract_offers",        // V5: Contract offers
+  "active_contracts",       // V5: Active contracts
 ];
 
-// Declare global Coherent API for DataStore
-declare const Coherent: {
-  call(name: string, ...args: unknown[]): Promise<unknown>;
-};
-
-// Declare MSFS native persistence APIs (global functions, NOT via Coherent.call!)
-declare function GetStoredData(key: string): string;
-declare function SetStoredData(key: string, value: string): void;
+// Global MSFS declarations in src/types/msfs-globals.d.ts
 
 class DatabaseManagerClass {
   private callbacks: DatabaseCallbacks = {};
@@ -1592,6 +1602,50 @@ class DatabaseManagerClass {
     }
 
     console.log(`[DatabaseManager] Pruned transaction log: ${entries.length} -> ${toKeep.length}`);
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // CONTRACT OPERATIONS (V5)
+  // ─────────────────────────────────────────────────────────
+
+  async getAvailableContracts(): Promise<ContractOffer[]> {
+    const all = await this.getAll<ContractOffer>("contract_offers");
+    return all.filter(c => c.status === "available");
+  }
+
+  async getContractOffer(id: string): Promise<ContractOffer | undefined> {
+    return this.get<ContractOffer>("contract_offers", id);
+  }
+
+  async saveContractOffer(offer: ContractOffer): Promise<void> {
+    await this.put("contract_offers", offer);
+  }
+
+  async getActiveContracts(playerId: string): Promise<ActiveContract[]> {
+    const all = await this.getAll<ActiveContract>("active_contracts");
+    return all.filter(c => c.pilot_id === playerId);
+  }
+
+  async getActiveContract(id: string): Promise<ActiveContract | undefined> {
+    return this.get<ActiveContract>("active_contracts", id);
+  }
+
+  async saveActiveContract(contract: ActiveContract): Promise<void> {
+    await this.put("active_contracts", contract);
+  }
+
+  async getCompletedContracts(playerId: string): Promise<ActiveContract[]> {
+    const all = await this.getAll<ActiveContract>("active_contracts");
+    return all.filter(c => c.pilot_id === playerId && (c.status === "completed" || (c.status as string) === "failed" || c.status === "cancelled"));
+  }
+
+  async removeContractCargo(contractId: string, airportIcao: string): Promise<void> {
+    const inventory = await this.getInventoryAt("airport", airportIcao);
+    for (const item of inventory) {
+      if (item.contract_id === contractId) {
+        await this.delete("inventory", item.id);
+      }
+    }
   }
 
   // ─────────────────────────────────────────────────────────

@@ -65,6 +65,16 @@ export interface MapViewProps {
   onOpenCreateFactory: (airport: AirportInfo) => void;
   onOpenManageFactory: (factory: FactoryAtAirport) => void;
   onSetDestinationAirport: (airport: AirportInfo) => void;
+  // V7: Pilot transfer props
+  currentUserAirport: Subject<string>;
+  walletPersonal: Subject<number>;
+  showPilotTransferPopup: Subject<boolean>;
+  transferEstimate: Subject<{ distance_nm: number; cost_cr: number } | null>;
+  transferDestIcao: Subject<string>;
+  transferDestName: Subject<string>;
+  onMovePilotHere: (airport: AirportInfo) => void;
+  onConfirmPilotTransfer: () => void;
+  onClosePilotTransferPopup: () => void;
   t: (category: string, key: string) => string;
 }
 
@@ -108,6 +118,16 @@ export function renderMapTab(props: MapViewProps): VNode {
     onOpenCreateFactory,
     onOpenManageFactory,
     onSetDestinationAirport,
+    // V7: Pilot transfer
+    currentUserAirport,
+    walletPersonal,
+    showPilotTransferPopup,
+    transferEstimate,
+    transferDestIcao,
+    transferDestName,
+    onMovePilotHere,
+    onConfirmPilotTransfer,
+    onClosePilotTransferPopup,
     t,
   } = props;
 
@@ -293,6 +313,22 @@ export function renderMapTab(props: MapViewProps): VNode {
               </div>
             </Button>
           </div>
+
+          {/* V7: Move Pilot Here Button — visible only if airport != player's current airport */}
+          <div style={MappedSubject.create(([airport, userAirport]) => {
+            if (!airport || airport.icao === userAirport) return "display: none;";
+            return "margin: 6px 0; text-align: center;";
+          }, selectedAirport, currentUserAirport)}>
+            <Button callback={(): void => {
+              const airport = selectedAirport.get();
+              if (airport) onMovePilotHere(airport);
+            }}>
+              <div style="display: inline-block; padding: 12px 40px; background: #f59e0b; border-radius: 8px; color: #1a1a24; font-size: 13px; font-weight: 600;">
+                {currentLanguage.map(l => translations[l].transfer?.movePilotHere || "Move Pilot Here")}
+              </div>
+            </Button>
+          </div>
+
         </div>
 
         {/* Current Destination Display */}
@@ -305,6 +341,76 @@ export function renderMapTab(props: MapViewProps): VNode {
           </span>
         </div>
       </div>
+      {/* ═══════════════════════════════════════════════════════════ */}
+      {/* V7: Pilot Transfer Confirmation Popup                      */}
+      {/* ═══════════════════════════════════════════════════════════ */}
+      <div style={showPilotTransferPopup.map(show => show
+        ? "position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 2000; display: flex; align-items: center; justify-content: center;"
+        : "display: none;")}>
+        <div style="background: #1e2433; border: 2px solid #f59e0b; border-radius: 16px; min-width: 320px; max-width: 400px; box-shadow: 0 12px 40px rgba(0,0,0,0.8);">
+          {/* Header */}
+          <div style="padding: 16px 20px; border-bottom: 1px solid #374151; text-align: center;">
+            <div style="font-size: 16px; font-weight: 700; color: #f59e0b;">
+              {currentLanguage.map(l => translations[l].transfer?.pilotTransferTitle || "Pilot Transfer")}
+            </div>
+          </div>
+          {/* Body */}
+          <div style="padding: 16px 20px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+              <span style="color: #9ca3af; font-size: 12px;">{currentLanguage.map(l => translations[l].transfer?.from || "From")}:</span>
+              <span style="color: #60a5fa; font-size: 12px; font-family: monospace; font-weight: 600;">
+                {currentUserAirport}
+              </span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+              <span style="color: #9ca3af; font-size: 12px;">{currentLanguage.map(l => translations[l].transfer?.to || "To")}:</span>
+              <span style="color: #22c55e; font-size: 12px; font-family: monospace; font-weight: 600;">
+                {MappedSubject.create(([icao, name]) => `${name} (${icao})`, transferDestIcao, transferDestName)}
+              </span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+              <span style="color: #9ca3af; font-size: 12px;">{currentLanguage.map(l => translations[l].transfer?.distance || "Distance")}:</span>
+              <span style="color: white; font-size: 12px; font-weight: 600;">
+                {transferEstimate.map(e => e ? `${e.distance_nm} NM` : "...")}
+              </span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 12px; padding-top: 8px; border-top: 1px solid #374151;">
+              <span style="color: #f59e0b; font-size: 14px; font-weight: 700;">{currentLanguage.map(l => translations[l].transfer?.cost || "Cost")}:</span>
+              <span style="color: #f59e0b; font-size: 14px; font-weight: 700;">
+                {transferEstimate.map(e => e ? `${e.cost_cr} CR` : "...")}
+              </span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+              <span style="color: #9ca3af; font-size: 11px;">{currentLanguage.map(l => translations[l].transfer?.yourBalance || "Your balance")}:</span>
+              <span style={MappedSubject.create(([bal, est]) => {
+                const cost = est?.cost_cr || 0;
+                return bal >= cost ? "color: #22c55e; font-size: 11px; font-weight: 600;" : "color: #ef4444; font-size: 11px; font-weight: 600;";
+              }, walletPersonal, transferEstimate)}>
+                {walletPersonal.map(b => `${Math.round(b)} CR`)}
+              </span>
+            </div>
+          </div>
+          {/* Buttons */}
+          <div style="padding: 12px 20px; border-top: 1px solid #374151; display: flex; gap: 10px; justify-content: center;">
+            <Button callback={(): void => { onClosePilotTransferPopup(); }}>
+              <div style="padding: 10px 30px; background: #374151; border-radius: 8px; color: #9ca3af; font-size: 13px; font-weight: 600;">
+                {currentLanguage.map(l => translations[l].transfer?.cancel || "Cancel")}
+              </div>
+            </Button>
+            <Button callback={(): void => { onConfirmPilotTransfer(); }}>
+              <div style={MappedSubject.create(([bal, est]) => {
+                const cost = est?.cost_cr || 0;
+                return bal >= cost
+                  ? "padding: 10px 30px; background: #f59e0b; border-radius: 8px; color: #1a1a24; font-size: 13px; font-weight: 600;"
+                  : "padding: 10px 30px; background: #374151; border-radius: 8px; color: #6b7280; font-size: 13px; font-weight: 600; pointer-events: none;";
+              }, walletPersonal, transferEstimate)}>
+                {currentLanguage.map(l => translations[l].transfer?.confirm || "Confirm")}
+              </div>
+            </Button>
+          </div>
+        </div>
+      </div>
+
     </div>
   );
 }

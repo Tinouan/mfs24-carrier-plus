@@ -7,6 +7,7 @@ import { DatabaseManager } from "../managers/DatabaseManager";
 import type { Item, MarketOrder, InventoryItem, SellOrder } from "../managers/DatabaseManager";
 import { marketState } from "../state/MarketState";
 import { localMarketService } from "./LocalMarketService";
+import { localContractService } from "./LocalContractService";
 
 // ═══════════════════════════════════════════════════════════
 // TYPES
@@ -49,6 +50,9 @@ const ENGINEERS_PER_LARGE_AIRPORT = { min: 1, max: 2 };
 
 // V4.1: AI buyer config (for player sell orders)
 const AI_BUYER_INTERVAL_SIM_SECONDS = 900; // 15 min sim time
+
+// V5: Contract refresh config
+const CONTRACT_REFRESH_INTERVAL_SIM_SECONDS = 300; // 5 min sim time
 const AI_BUY_BASE_PROBABILITY = 0.15; // 15% base chance per tick
 const AI_BUY_PRICE_FACTOR = 0.3; // +30% chance if price is 20% below market
 
@@ -68,6 +72,7 @@ class AIEconomyServiceClass {
   private lastOrderGeneration = 0;
   private lastPersonnelSpawn = 0;  // V4.1: Track personnel spawn time
   private lastAIBuyerTick = 0;  // V4.1: Track AI buyer tick
+  private lastContractRefresh = 0;  // V5: Track contract refresh
   private priceHistory: Map<string, PriceHistory> = new Map();
   private isRunning = false;
   private tickInterval: number | null = null;
@@ -129,6 +134,12 @@ class AIEconomyServiceClass {
     if (simTimeSeconds - this.lastAIBuyerTick >= AI_BUYER_INTERVAL_SIM_SECONDS) {
       this.processAIBuyer();
       this.lastAIBuyerTick = simTimeSeconds;
+    }
+
+    // V5: Refresh contracts every 5 min sim time
+    if (simTimeSeconds - this.lastContractRefresh >= CONTRACT_REFRESH_INTERVAL_SIM_SECONDS) {
+      localContractService.refreshContracts();
+      this.lastContractRefresh = simTimeSeconds;
     }
   }
 
