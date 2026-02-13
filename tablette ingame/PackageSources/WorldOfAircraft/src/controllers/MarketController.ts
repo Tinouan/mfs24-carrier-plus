@@ -8,7 +8,8 @@ import {
   type SellableItem, type SellAircraftData,
 } from "../state";
 import { isGameReady } from "../state/GameModeState";
-import { renderMarketListingsHtml, formatMoney } from "../helpers";
+import { renderMarketListingsHtml, renderItemIcon, formatMoney } from "../helpers";
+import { ItemService } from "../services/ItemService";
 
 export class MarketController {
   private t: (section: string, key: string) => string;
@@ -220,13 +221,17 @@ export class MarketController {
                           order.status === "sold" ? (lang === "fr" ? "Vendu" : "Sold") :
                           (lang === "fr" ? "Annulé" : "Cancelled");
 
+      const orderItemData = ItemService.getItemById(order.item_id);
       html += `
         <div class="sell-order-item" data-order-id="${order.id}" style="background: #252532; border-radius: 8px; padding: 12px; cursor: ${order.status === "active" ? "pointer" : "default"};">
           <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-            <div>
-              <div style="font-size: 13px; font-weight: 600; color: white;">${order.item_name}</div>
-              <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">
-                @ ${order.airport_icao} • ${order.quantity}x ${formatMoney(order.price_per_unit)}
+            <div style="display: flex; align-items: center; gap: 8px;">
+              ${renderItemIcon(orderItemData?.icon_path, orderItemData?.icon || order.item_id.substring(0, 2).toUpperCase(), order.item_tier || 0, 32)}
+              <div>
+                <div style="font-size: 13px; font-weight: 600; color: white;">${order.item_name}</div>
+                <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">
+                  @ ${order.airport_icao} • ${order.quantity}x ${formatMoney(order.price_per_unit)}
+                </div>
               </div>
             </div>
             <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
@@ -390,10 +395,11 @@ export class MarketController {
         const sellBtn = isContract
           ? `<span style="font-size: 8px; color: #6b7280; padding: 3px 8px;">--</span>`
           : `<button class="inv-sell-btn" data-item-code="${item.item_code}" data-airport="${item.airport_icao}" style="padding: 3px 8px; background: #f59e0b; color: #1a1a24; border: none; border-radius: 4px; font-size: 9px; font-weight: 600; cursor: pointer;">${sellLabel}</button>`;
+        const itemData = ItemService.getItemById(item.item_code);
         html += `<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; background: #1a1a24; border-radius: 4px;">
           <div style="display: flex; align-items: center; gap: 8px;">
             <span style="width: 8px; height: 8px; border-radius: 50%; background: ${ownerColor}; display: inline-block;"></span>
-            <span style="width: 6px; height: 6px; border-radius: 50%; background: ${tierColor};"></span>
+            ${renderItemIcon(itemData?.icon_path, itemData?.icon || item.item_code.substring(0, 2).toUpperCase(), item.tier || 0, 28)}
             <span style="font-size: 11px; color: white;">${item.item_name}${contractBadge}</span>
           </div>
           <div style="display: flex; align-items: center; gap: 8px;">
@@ -1098,13 +1104,11 @@ export class MarketController {
       for (const item of airportItems) {
         // V4.1: Ownership badge color (blue=player, orange=company)
         const ownerColor = (item.owner_type || "player") === "player" ? "#3b82f6" : "#f59e0b";
-        // V4.1: Tier/category color (violet for personnel, otherwise tier-based)
-        const isPersonnel = item.category === "personnel" || ["worker", "engineer", "pilot", "copilot"].includes(item.item_code);
-        const tierColor = isPersonnel ? "#a855f7" : (item.tier === 0 ? "#6b7280" : item.tier === 1 ? "#22c55e" : item.tier === 2 ? "#3b82f6" : "#a855f7");
+        const itemData = ItemService.getItemById(item.item_code);
         html += `<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; background: #1a1a24; border-radius: 4px;">
           <div style="display: flex; align-items: center; gap: 8px;">
             <span style="width: 8px; height: 8px; border-radius: 50%; background: ${ownerColor}; display: inline-block;"></span>
-            <span style="width: 6px; height: 6px; border-radius: 50%; background: ${tierColor};"></span>
+            ${renderItemIcon(itemData?.icon_path, itemData?.icon || item.item_code.substring(0, 2).toUpperCase(), item.tier || 0, 28)}
             <span style="font-size: 11px; color: white;">${item.item_name}</span>
           </div>
           <span style="font-size: 11px; color: #9ca3af; font-weight: 600;">x${item.quantity}</span>

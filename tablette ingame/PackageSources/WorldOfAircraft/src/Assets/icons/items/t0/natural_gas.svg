@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+
+<defs><linearGradient id="ng1" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" style="stop-color:#1565c0"/><stop offset="30%" style="stop-color:#42a5f5"/><stop offset="70%" style="stop-color:#42a5f5"/><stop offset="100%" style="stop-color:#1565c0"/></linearGradient></defs>
+<ellipse cx="32" cy="59" rx="12" ry="3" fill="#000" opacity=".2"/>
+<rect x="16" y="14" width="32" height="42" rx="6" fill="url(#ng1)" stroke="#0d47a1" stroke-width="3"/>
+<ellipse cx="32" cy="14" rx="16" ry="5" fill="#1e88e5" stroke="#0d47a1" stroke-width="2.5"/>
+<ellipse cx="32" cy="13" rx="12" ry="3.5" fill="#42a5f5"/>
+<circle cx="32" cy="13" r="4" fill="#90a4ae" stroke="#607d8b" stroke-width="2"/>
+<rect x="30" y="6" width="4" height="10" rx="2" fill="#78909c" stroke="#546e7a" stroke-width="1.5"/>
+<rect x="22" y="28" width="20" height="14" rx="3" fill="#0d47a1" stroke="#0a3880" stroke-width="1.5"/>
+<text x="32" y="38" text-anchor="middle" font-size="7" fill="#fff" font-weight="bold">GAS</text>
+<path d="M32 42 Q28 46 30 50 Q32 54 34 50 Q36 46 32 42" fill="#f57f17" stroke="#e65100" stroke-width="1.5"/>
+<path d="M32 44 Q30 47 31 49 Q32 51 33 49 Q34 47 32 44" fill="#ffeb3b" opacity=".7"/>
+<rect x="18" y="16" width="4" height="22" rx="2" fill="#64b5f6" opacity=".4"/>
+<circle cx="16" cy="20" r="1.5" fill="#90caf9" opacity=".5"/>
+<circle cx="48" cy="20" r="1.5" fill="#90caf9" opacity=".5"/>
+
+</svg>

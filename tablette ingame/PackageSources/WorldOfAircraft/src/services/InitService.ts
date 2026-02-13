@@ -10,6 +10,7 @@ import type {
 } from "../managers/DatabaseManager";
 import { SyncService, type SeedPlayer, type SeedAircraft } from "./SyncService";
 import { NetworkState } from "../state/NetworkState";
+import { factoryState } from "../state/FactoryState";
 import { SyncManager } from "./SyncManager";
 import { NativePersistence } from "./NativePersistence";
 import {
@@ -21,6 +22,10 @@ import {
   resetModeSelection,
   type GameMode
 } from "../state/GameModeState";
+import { ItemService } from "./ItemService";
+import { RecipeService } from "./RecipeService";
+import { WorkerService } from "./WorkerService";
+import { FactoryScheduler } from "../managers/FactoryScheduler";
 import seedData from "../data/seed.json";
 import itemsData from "../data/items.json";
 import recipesData from "../data/recipes.json";
@@ -256,10 +261,20 @@ class InitServiceClass {
     this.reportProgress("Chargement du marché IA...", 70);
     await this.ensureSoloMarket();
 
-    // 4. Auto-save is handled by DatabaseManager.schedulePersistentSave() → saveToDataStore()
+    // 4. Load factory state (workers, factories, batches) from DatabaseManager
+    this.reportProgress("Chargement des usines...", 80);
+    await this.loadFactoryState();
+
+    // 5. Start factory scheduler (Solo mode: local batch completion + hourly tick)
+    FactoryScheduler.start();
+
+    // 6. Auto-save is handled by DatabaseManager.schedulePersistentSave() → saveToDataStore()
     // which saves to "WorldOfAircraftData". No need for separate NativePersistence auto-save.
 
-    // 5. Ready!
+    // DEBUG: Seed T0 items x100 at LFRK for testing (remove after testing)
+    await this.seedTestInventoryT0();
+
+    // 7. Ready!
     this.initialized = true;
     setModeInitialized(true); // CRITICAL: Enable ServiceAdapter routing now
     this.reportProgress("Mode Solo prêt !", 100);
@@ -430,6 +445,21 @@ class InitServiceClass {
   }
 
   /**
+   * Phase 9: Load factories, workers, and production batches from DB into reactive state
+   */
+  private async loadFactoryState(): Promise<void> {
+    const factories = await DatabaseManager.getAll<import("../managers/DatabaseManager").Factory>("factories");
+    const workers = await DatabaseManager.getAll<import("../managers/DatabaseManager").WorkerInstance>("workers");
+    const batches = await DatabaseManager.getAll<import("../types").ProductionBatch>("production_batches");
+
+    factoryState.factories.set(factories as any);
+    factoryState.workers.set(workers as any);
+    factoryState.productionBatches.set(batches as any);
+
+    console.log(`[InitService] Factory state loaded: ${factories.length} factories, ${workers.length} workers, ${batches.length} batches`);
+  }
+
+  /**
    * Get or create a local player ID (stored via NativePersistence for cross-session persistence)
    * This ID links to the SEED player record
    */
@@ -589,6 +619,11 @@ class InitServiceClass {
     this.reportProgress("Loading airports...", 50);
     await this.loadAirportsMain();
 
+    // 5. Initialize static service caches (Phase 9)
+    await ItemService.init();
+    await RecipeService.init();
+    WorkerService.init();
+
     console.log("[InitService] Catalog loaded, ready for first launch setup");
   }
 
@@ -694,6 +729,9 @@ class InitServiceClass {
     await DatabaseManager.clear("transaction_log");
     await DatabaseManager.clear("sell_orders");
     await DatabaseManager.clear("free_flight_sessions");
+    await DatabaseManager.clear("factories");
+    await DatabaseManager.clear("workers");
+    await DatabaseManager.clear("production_batches");
     // Note: Keep items, recipes, aircraft_catalog, airports (static data)
     console.log("[InitService] All player data stores cleared");
 
@@ -1118,6 +1156,92 @@ class InitServiceClass {
   }
 
   // ─────────────────────────────────────────────────────────
+  // DEBUG: SEED TEST INVENTORY (remove after testing)
+  // ─────────────────────────────────────────────────────────
+
+  /**
+   * DEBUG: Add 100 of each T0 item to company inventory at LFRK
+   * Only runs once (checks for existing debug_seed items)
+   */
+  private async seedTestInventoryT0(): Promise<void> {
+    // Find the company
+    const companies = await DatabaseManager.getAll<Company>("company");
+    if (companies.length === 0) {
+      console.log("[InitService] seedTestInventoryT0: No company found, skipping");
+      return;
+    }
+
+    const now = new Date().toISOString();
+
+    // --- T0 items x100 ---
+    const existingInv = await DatabaseManager.getInventoryAt("airport", "LFRK");
+    const debugItems = existingInv.filter(i => i.source === "debug_seed");
+    if (debugItems.length > 0) {
+      console.log(`[InitService] seedTestInventoryT0: Items already seeded (${debugItems.length}), skipping items`);
+    } else {
+      const t0Items = [
+        "raw-fish", "raw-meat", "raw-vegetables", "raw-wheat", "raw-fruits",
+        "raw-salt", "raw-sugar", "raw-milk", "raw-cocoa", "raw-vanilla",
+        "iron-ore", "copper-ore", "raw-wood", "raw-stone", "sand",
+        "clay", "limestone", "aluminum-ore", "titanium-ore", "granite",
+        "crude-oil", "coal", "natural-gas", "uranium-ore", "biomass",
+        "raw-rubber", "cotton", "raw-silicon", "rare-earth-metals",
+        "sulfur", "phosphate", "graphite", "water",
+        "raw-pepper", "raw-egg", "raw-salad", "raw-chili"
+      ];
+      for (const itemCode of t0Items) {
+        const invItem: import("../managers/DatabaseManager").InventoryItem = {
+          id: this.generateUUID(),
+          location_type: "airport",
+          location_id: "LFRK",
+          item_code: itemCode,
+          quantity: 100,
+          owner_type: "company",
+          source: "debug_seed",
+          created_at: now,
+          updated_at: now,
+        };
+        await DatabaseManager.put("inventory", invItem, false);
+      }
+      console.log(`[InitService] seedTestInventoryT0: Added ${t0Items.length} T0 items x100 at LFRK`);
+    }
+
+    // --- 100 workers (separate check) ---
+    const existingWorkers = await DatabaseManager.getWorkersByCompany(companies[0].id);
+    const workersAtLFRK = existingWorkers.filter(w => w.airport_ident === "LFRK");
+    if (workersAtLFRK.length >= 100) {
+      console.log(`[InitService] seedTestInventoryT0: Workers already seeded (${workersAtLFRK.length}), skipping workers`);
+    } else {
+      const toCreate = 100 - workersAtLFRK.length;
+      for (let i = 0; i < toCreate; i++) {
+        const worker: import("../managers/DatabaseManager").WorkerInstance = {
+          id: this.generateUUID(),
+          owner_company_id: companies[0].id,
+          owner_player_id: null,
+          owner_type: "company",
+          item_id: "worker",
+          airport_ident: "LFRK",
+          country_code: "FR",
+          speed: 50 + Math.floor(Math.random() * 15),
+          resistance: 45 + Math.floor(Math.random() * 15),
+          xp: 0,
+          tier: 0,
+          hourly_salary: 15,
+          status: "available",
+          factory_id: null,
+          for_sale: false,
+          sale_price: null,
+          injured_at: null,
+          injury_duration_days: 0,
+          created_at: now,
+        };
+        await DatabaseManager.put("workers", worker, false);
+      }
+      console.log(`[InitService] seedTestInventoryT0: Added ${toCreate} workers at LFRK for ${companies[0].name}`);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────
   // CLEANUP HELPERS
   // ─────────────────────────────────────────────────────────
 
@@ -1275,7 +1399,7 @@ class InitServiceClass {
 
   private async generateInitialMarket(seed: SeedData): Promise<void> {
     const items = await DatabaseManager.getAll<Item>("items");
-    const basicItems = items.filter((i) => i.tier <= 1 && i.category !== "parts");
+    const basicItems = items.filter((i) => i.tier === 0);
 
     let orderCount = 0;
 

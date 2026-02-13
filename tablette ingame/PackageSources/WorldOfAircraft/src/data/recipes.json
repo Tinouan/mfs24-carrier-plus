@@ -601,6 +601,186 @@
       ]
     },
     {
+      "id": "peppered-meat",
+      "name": "Peppered Meat",
+      "tier": 1,
+      "resultItemId": "peppered-meat",
+      "resultQuantity": 8,
+      "productionTimeHours": 2,
+      "baseWorkers": 10,
+      "description": "Meat seasoned with black pepper",
+      "ingredients": [
+        {
+          "itemId": "raw-meat",
+          "quantity": 2
+        },
+        {
+          "itemId": "raw-pepper",
+          "quantity": 2
+        }
+      ]
+    },
+    {
+      "id": "meat-omelette",
+      "name": "Meat Omelette",
+      "tier": 1,
+      "resultItemId": "meat-omelette",
+      "resultQuantity": 12,
+      "productionTimeHours": 1,
+      "baseWorkers": 10,
+      "description": "Hearty omelette with meat chunks",
+      "ingredients": [
+        {
+          "itemId": "raw-egg",
+          "quantity": 3
+        },
+        {
+          "itemId": "raw-meat",
+          "quantity": 2
+        }
+      ]
+    },
+    {
+      "id": "salted-omelette",
+      "name": "Salted Omelette",
+      "tier": 1,
+      "resultItemId": "salted-omelette",
+      "resultQuantity": 15,
+      "productionTimeHours": 1,
+      "baseWorkers": 10,
+      "description": "Simple salted egg omelette",
+      "ingredients": [
+        {
+          "itemId": "raw-egg",
+          "quantity": 3
+        },
+        {
+          "itemId": "raw-salt",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "pepper-omelette",
+      "name": "Pepper Omelette",
+      "tier": 1,
+      "resultItemId": "pepper-omelette",
+      "resultQuantity": 12,
+      "productionTimeHours": 1,
+      "baseWorkers": 10,
+      "description": "Omelette with cracked pepper",
+      "ingredients": [
+        {
+          "itemId": "raw-egg",
+          "quantity": 3
+        },
+        {
+          "itemId": "raw-pepper",
+          "quantity": 2
+        }
+      ]
+    },
+    {
+      "id": "fish-omelette",
+      "name": "Fish Omelette",
+      "tier": 1,
+      "resultItemId": "fish-omelette",
+      "resultQuantity": 10,
+      "productionTimeHours": 1.5,
+      "baseWorkers": 10,
+      "description": "Omelette with flaked fish",
+      "ingredients": [
+        {
+          "itemId": "raw-egg",
+          "quantity": 3
+        },
+        {
+          "itemId": "raw-fish",
+          "quantity": 2
+        }
+      ]
+    },
+    {
+      "id": "meat-salad",
+      "name": "Meat Salad",
+      "tier": 1,
+      "resultItemId": "meat-salad",
+      "resultQuantity": 10,
+      "productionTimeHours": 1,
+      "baseWorkers": 10,
+      "description": "Fresh salad with grilled meat",
+      "ingredients": [
+        {
+          "itemId": "raw-salad",
+          "quantity": 2
+        },
+        {
+          "itemId": "raw-meat",
+          "quantity": 2
+        }
+      ]
+    },
+    {
+      "id": "seafood-salad",
+      "name": "Seafood Salad",
+      "tier": 1,
+      "resultItemId": "seafood-salad",
+      "resultQuantity": 10,
+      "productionTimeHours": 1,
+      "baseWorkers": 10,
+      "description": "Fresh salad with seafood",
+      "ingredients": [
+        {
+          "itemId": "raw-salad",
+          "quantity": 2
+        },
+        {
+          "itemId": "raw-fish",
+          "quantity": 2
+        }
+      ]
+    },
+    {
+      "id": "vanilla-salad",
+      "name": "Vanilla Salad",
+      "tier": 1,
+      "resultItemId": "vanilla-salad",
+      "resultQuantity": 5,
+      "productionTimeHours": 2,
+      "baseWorkers": 10,
+      "description": "Luxury salad with vanilla dressing",
+      "ingredients": [
+        {
+          "itemId": "raw-salad",
+          "quantity": 3
+        },
+        {
+          "itemId": "raw-vanilla",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "chili-meat",
+      "name": "Chili Meat",
+      "tier": 1,
+      "resultItemId": "chili-meat",
+      "resultQuantity": 6,
+      "productionTimeHours": 2.5,
+      "baseWorkers": 10,
+      "description": "Spicy meat with hot chili",
+      "ingredients": [
+        {
+          "itemId": "raw-meat",
+          "quantity": 2
+        },
+        {
+          "itemId": "raw-chili",
+          "quantity": 2
+        }
+      ]
+    },
+    {
       "id": "quality-bread",
       "name": "Quality Bread",
       "tier": 2,

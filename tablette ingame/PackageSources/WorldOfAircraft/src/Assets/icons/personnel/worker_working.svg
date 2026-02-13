@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64" height="64" viewBox="0 0 64 64">
+<defs>
+<linearGradient id="ww_helmet" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" style="stop-color:#f59e0b"/><stop offset="100%" style="stop-color:#d97706"/></linearGradient>
+<radialGradient id="ww_skin" cx="50%" cy="40%" r="50%"><stop offset="0%" style="stop-color:#f5d0a9"/><stop offset="100%" style="stop-color:#d4a574"/></radialGradient>
+<linearGradient id="ww_body" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" style="stop-color:#3b82f6"/><stop offset="100%" style="stop-color:#1d4ed8"/></linearGradient>
+</defs>
+<path d="M20 38 Q20 34 26 32 L38 32 Q44 34 44 38 L46 54 L18 54 Z" fill="url(#ww_body)" stroke="#1e3a5f" stroke-width="2.5"/>
+<path d="M26 32 Q32 36 38 32" fill="#60a5fa" stroke="#1d4ed8" stroke-width="1.5"/>
+<!-- Arm left holding wrench -->
+<rect x="8" y="32" width="10" height="14" rx="5" fill="url(#ww_body)" stroke="#1e3a5f" stroke-width="2" transform="rotate(-20 13 39)"/>
+<!-- Wrench -->
+<rect x="2" y="18" width="4" height="22" rx="2" fill="#9e9e9e" stroke="#616161" stroke-width="2" transform="rotate(-20 4 29)"/>
+<circle cx="4" cy="18" r="4" fill="none" stroke="#9e9e9e" stroke-width="3" transform="rotate(-20 4 18)"/>
+<!-- Arm right -->
+<rect x="44" y="36" width="10" height="14" rx="5" fill="url(#ww_body)" stroke="#1e3a5f" stroke-width="2"/>
+<circle cx="49" cy="52" r="4" fill="url(#ww_skin)" stroke="#b8834a" stroke-width="2"/>
+<rect x="28" y="28" width="8" height="6" rx="2" fill="url(#ww_skin)" stroke="#b8834a" stroke-width="1.5"/>
+<circle cx="32" cy="20" r="12" fill="url(#ww_skin)" stroke="#b8834a" stroke-width="2.5"/>
+<circle cx="27" cy="20" r="2" fill="#1a1a2e"/>
+<circle cx="37" cy="20" r="2" fill="#1a1a2e"/>
+<circle cx="27.5" cy="19.5" r=".7" fill="#fff"/>
+<circle cx="37.5" cy="19.5" r=".7" fill="#fff"/>
+<path d="M29 25 L35 25" stroke="#a0704a" stroke-width="1.5" stroke-linecap="round"/>
+<path d="M18 18 Q18 6 32 6 Q46 6 46 18 Z" fill="url(#ww_helmet)" stroke="#b45309" stroke-width="2.5"/>
+<rect x="14" y="16" width="36" height="5" rx="2.5" fill="#fbbf24" stroke="#b45309" stroke-width="2"/>
+<!-- Sweat drops -->
+<path d="M48 10 Q49 14 48 16" stroke="#60a5fa" stroke-width="1.5" fill="none" opacity=".6"/>
+<circle cx="48" cy="17" r="1.5" fill="#60a5fa" opacity=".6"/>
+<path d="M52 14 Q53 17 52 19" stroke="#60a5fa" stroke-width="1" fill="none" opacity=".4"/>
+<!-- Green status dot -->
+<circle cx="54" cy="6" r="5" fill="#22c55e" stroke="#166534" stroke-width="2"/>
+</svg>

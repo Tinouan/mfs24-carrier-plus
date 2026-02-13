@@ -23,6 +23,8 @@ import type {
   AirportInventoryResponse,
 } from "../types";
 import { SyncService } from "./SyncService";
+import { WorkerService } from "./WorkerService";
+import { factoryState } from "../state/FactoryState";
 
 // ═══════════════════════════════════════════════════════════
 // RESPONSE TYPES
@@ -51,15 +53,18 @@ class LocalMarketServiceClass {
     const player = await DatabaseManager.getPlayer();
     if (!player) throw new Error("No player found");
 
-    // In local mode, player inventory is at "player" location
-    const inventory = await DatabaseManager.query<DbInventoryItem>("inventory", "location_type", "player");
+    // Player inventory = personal storage ("player" location) + airport items owned by player
+    // Personnel items (worker, engineer, pilot…) are company-only and excluded here
+    const PERSONNEL_CODES = new Set(["worker", "engineer", "pilot", "copilot", "passenger"]);
+    const personalItems = await DatabaseManager.query<DbInventoryItem>("inventory", "location_type", "player");
+    const allInventory = await DatabaseManager.getAll<DbInventoryItem>("inventory");
+    const playerAirportItems = allInventory.filter(
+      (inv) => inv.location_type === "airport"
+        && (inv.owner_type === "player" || !inv.owner_type)
+        && !PERSONNEL_CODES.has(inv.item_code)
+    );
+    const inventory = [...personalItems, ...playerAirportItems];
     const items = await DatabaseManager.getAll<Item>("items");
-
-    // DEBUG: Log raw inventory data
-    console.log(`[LocalMarketService] getPlayerInventory: Found ${inventory.length} inventory items (location_type=player)`);
-    inventory.forEach((inv) => {
-      console.log(`[LocalMarketService]   - ${inv.item_code}: ${inv.quantity} at ${inv.location_id}`);
-    });
 
     return inventory.map((inv) => {
       const item = items.find((i) => i.id === inv.item_code || i.code === inv.item_code);
@@ -89,9 +94,14 @@ class LocalMarketServiceClass {
     const items = await DatabaseManager.getAll<Item>("items");
     const result: InventoryItem[] = [];
 
-    // Get all inventory at airports (company purchases are stored with location_type: "airport")
+    // Get company-owned inventory at airports
+    // Personnel items (worker, engineer, pilot…) always belong to company
+    const PERSONNEL_CODES = new Set(["worker", "engineer", "pilot", "copilot", "passenger"]);
     const allInventory = await DatabaseManager.getAll<DbInventoryItem>("inventory");
-    const airportInventory = allInventory.filter((inv) => inv.location_type === "airport");
+    const airportInventory = allInventory.filter(
+      (inv) => inv.location_type === "airport"
+        && (inv.owner_type === "company" || PERSONNEL_CODES.has(inv.item_code))
+    );
 
     for (const inv of airportInventory) {
       const item = items.find((i) => i.id === inv.item_code || i.code === inv.item_code);
@@ -221,6 +231,7 @@ class LocalMarketServiceClass {
         item_name: item?.name || o.item_code,
         item_tier: item?.tier || 0,
         item_icon: item?.icon || null,
+        item_icon_path: item?.icon_path,
         sale_price: o.price_per_unit ?? o.unit_price ?? 0,
         sale_qty: o.quantity,
       };
@@ -343,31 +354,56 @@ class LocalMarketServiceClass {
     order.quantity -= qty;
     await DatabaseManager.put("market_orders", order);
 
-    // Add to buyer's inventory at the airport
-    const locationType: "airport" = "airport";
-    const existingInventory = await DatabaseManager.getInventoryAt(locationType, orderIcao);
-    const existing = existingInventory.find((i) => i.item_code === order.item_code);
+    // Phase 9: Worker purchase — create WorkerInstance instead of regular inventory
+    if (order.item_code === "worker" || order.item_code === "engineer") {
+      const countryCode = order.metadata || "FR"; // Fallback to FR
+      const ownerId = payFrom === "company"
+        ? (await DatabaseManager.getCompanyByOwner(player.id))?.id || player.id
+        : player.id;
 
-    if (existing) {
-      existing.quantity += qty;
-      await DatabaseManager.put("inventory", existing);
-      console.log(`[LocalMarketService] Updated existing inventory: ${existing.id} now has ${existing.quantity} of ${order.item_code}`);
+      for (let i = 0; i < qty; i++) {
+        const worker = WorkerService.generateWorker(
+          countryCode,
+          orderIcao,
+          payFrom === "company" ? "company" : "personal",
+          ownerId
+        );
+        if (order.item_code === "engineer") {
+          worker.item_id = "engineer";
+        }
+        await DatabaseManager.put("workers", worker, false);
+
+        // Update reactive state
+        const current = factoryState.workers.get();
+        factoryState.workers.set([...current, worker]);
+      }
+      console.log(`[LocalMarketService] Created ${qty} ${order.item_code}(s) from ${countryCode} at ${orderIcao}`);
     } else {
-      const newInv: DbInventoryItem = {
-        id: this.generateUUID(),
-        location_type: locationType,
-        location_id: orderIcao,
-        item_code: order.item_code,
-        quantity: qty,
-      };
-      await DatabaseManager.put("inventory", newInv);
-      console.log(`[LocalMarketService] Created new inventory: ${newInv.id} with ${qty}x ${order.item_code} at ${orderIcao} (type: ${locationType})`);
-    }
+      // Regular item — add to inventory at the airport with correct owner_type
+      const locationType: "airport" = "airport";
+      const ownerType: "player" | "company" = payFrom;
+      const existingInventory = await DatabaseManager.getInventoryAt(locationType, orderIcao);
+      const existing = existingInventory.find(
+        (i) => i.item_code === order.item_code && (i.owner_type || "player") === ownerType
+      );
 
-    // DEBUG: Verify inventory was saved to IndexedDB
-    const verifyInventory = await DatabaseManager.getInventoryAt(locationType, orderIcao);
-    const verifyItem = verifyInventory.find((i) => i.item_code === order.item_code);
-    console.log(`[LocalMarketService] VERIFY: Inventory at ${locationType}/${orderIcao} has ${verifyItem?.quantity || 0}x ${order.item_code}`);
+      if (existing) {
+        existing.quantity += qty;
+        await DatabaseManager.put("inventory", existing);
+        console.log(`[LocalMarketService] Updated existing inventory: ${existing.id} now has ${existing.quantity} of ${order.item_code} (owner: ${ownerType})`);
+      } else {
+        const newInv: DbInventoryItem = {
+          id: this.generateUUID(),
+          location_type: locationType,
+          location_id: orderIcao,
+          item_code: order.item_code,
+          quantity: qty,
+          owner_type: ownerType,
+        };
+        await DatabaseManager.put("inventory", newInv);
+        console.log(`[LocalMarketService] Created new inventory: ${newInv.id} with ${qty}x ${order.item_code} at ${orderIcao} (owner: ${ownerType})`);
+      }
+    }
 
     console.log(`[LocalMarketService] Bought ${qty}x ${itemId} for ${totalCost} credits at ${orderIcao} (local)`);
 

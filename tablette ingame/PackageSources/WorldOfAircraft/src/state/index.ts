@@ -23,3 +23,4 @@ export * from "./GameModeState";
 export * from "./NetworkState";
 export * from "./SocialState";
 export * from "./TransferState";
+export * from "./FactoryState";

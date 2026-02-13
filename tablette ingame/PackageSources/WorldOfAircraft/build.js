@@ -71,6 +71,14 @@ const deployPlugin = {
             copyRecursive(assetsDir, path.join(destPath, "Assets"));
           }
 
+          // Copie layout.json au root du package (pour enregistrer les assets auprès de MSFS)
+          const layoutSrc = path.join(__dirname, "..", "..", "layout.json");
+          const packageRoot = path.resolve(destPath, "..", "..", "..", "..", "..");
+          const layoutDest = path.join(packageRoot, "layout.json");
+          if (fs.existsSync(layoutSrc) && fs.existsSync(packageRoot)) {
+            fs.copyFileSync(layoutSrc, layoutDest);
+          }
+
           console.log(`\n✅ Deployed to ${name}`);
         } catch (err) {
           console.log(`\n⚠️  ${name}: ${err.message}`);
@@ -96,6 +104,20 @@ if (fs.existsSync(airportsJsonSrc)) {
   console.log("📦 Copied airports-main.json to dist");
 }
 
+// Plugin: load icon SVGs as raw text strings (inlined in HTML, not data URLs)
+// Coherent GT cannot render percent-encoded data URLs in <img> tags,
+// so we embed raw SVG markup and inject it directly via innerHTML.
+// Matches: icons/items/t0/*.svg, icons/items/t1/*.svg, icons/personnel/*.svg
+const svgTextPlugin = {
+  name: "svg-text-loader",
+  setup(build) {
+    build.onLoad({ filter: /icons[\\/](?:items|personnel)[\\/].*\.svg$/ }, async (args) => {
+      const content = fs.readFileSync(args.path, "utf8");
+      return { contents: `export default ${JSON.stringify(content)}`, loader: "js" };
+    });
+  },
+};
+
 const baseConfig = {
   entryPoints: ["src/WorldOfAircraft.tsx"],
   keepNames: true,
@@ -114,6 +136,7 @@ const baseConfig = {
   target: "es2017",
   define: { BASE_URL: `"coui://html_ui/efb_ui/efb_apps/WorldOfAircraft"` },
   plugins: [
+    svgTextPlugin,
     copyStaticFiles({
       src: "./src/Assets",
       dest: "./dist/Assets",

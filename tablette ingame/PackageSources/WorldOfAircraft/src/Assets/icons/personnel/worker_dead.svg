@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64" height="64" viewBox="0 0 64 64">
+<defs>
+<linearGradient id="wd_body" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" style="stop-color:#64748b"/><stop offset="100%" style="stop-color:#475569"/></linearGradient>
+</defs>
+<path d="M20 38 Q20 34 26 32 L38 32 Q44 34 44 38 L46 54 L18 54 Z" fill="url(#wd_body)" stroke="#334155" stroke-width="2.5"/>
+<rect x="12" y="36" width="10" height="14" rx="5" fill="url(#wd_body)" stroke="#334155" stroke-width="2"/>
+<rect x="42" y="36" width="10" height="14" rx="5" fill="url(#wd_body)" stroke="#334155" stroke-width="2"/>
+<rect x="28" y="28" width="8" height="6" rx="2" fill="#94a3b8" stroke="#64748b" stroke-width="1.5"/>
+<circle cx="32" cy="20" r="12" fill="#94a3b8" stroke="#64748b" stroke-width="2.5"/>
+<!-- X eyes -->
+<line x1="25" y1="18" x2="29" y2="22" stroke="#334155" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="29" y1="18" x2="25" y2="22" stroke="#334155" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="35" y1="18" x2="39" y2="22" stroke="#334155" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="39" y1="18" x2="35" y2="22" stroke="#334155" stroke-width="2.5" stroke-linecap="round"/>
+<!-- Flat mouth -->
+<line x1="27" y1="27" x2="37" y2="27" stroke="#475569" stroke-width="2" stroke-linecap="round"/>
+<!-- Ghost hat tilted -->
+<path d="M20 18 Q20 4 32 4 Q44 4 44 18 Z" fill="#64748b" stroke="#475569" stroke-width="2"/>
+<rect x="16" y="16" width="32" height="4" rx="2" fill="#78909c" stroke="#475569" stroke-width="1.5"/>
+<!-- Halo -->
+<ellipse cx="32" cy="2" rx="8" ry="3" fill="none" stroke="#fbbf24" stroke-width="2" opacity=".6"/>
+</svg>

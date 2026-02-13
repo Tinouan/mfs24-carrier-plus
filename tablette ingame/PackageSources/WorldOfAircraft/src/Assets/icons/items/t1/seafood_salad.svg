@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64" height="64" viewBox="0 0 64 64">
+<defs>
+<radialGradient id="sfs_g" cx="50%" cy="50%" r="50%"><stop offset="0%" style="stop-color:#a5d6a7"/><stop offset="100%" style="stop-color:#4caf50"/></radialGradient>
+</defs>
+<ellipse cx="32" cy="56" rx="20" ry="3" fill="#000" opacity=".2"/>
+<ellipse cx="32" cy="42" rx="22" ry="10" fill="#8d6e63" stroke="#5d4037" stroke-width="2.5"/>
+<ellipse cx="32" cy="36" rx="22" ry="10" fill="url(#sfs_g)" stroke="#2e7d32" stroke-width="2.5"/>
+<path d="M14 36 Q20 28 28 32 Q36 36 44 30 Q50 26 50 34" fill="#66bb6a" stroke="#2e7d32" stroke-width="1.5"/>
+<!-- Fish pieces (pink/salmon) -->
+<ellipse cx="22" cy="32" rx="4" ry="2.5" fill="#ef9a9a" stroke="#c62828" stroke-width="1" transform="rotate(-10 22 32)"/>
+<ellipse cx="36" cy="30" rx="4" ry="2.5" fill="#ef9a9a" stroke="#c62828" stroke-width="1" transform="rotate(10 36 30)"/>
+<ellipse cx="44" cy="34" rx="3" ry="2" fill="#e57373" stroke="#c62828" stroke-width="1"/>
+<!-- Lemon slice -->
+<circle cx="28" cy="36" r="3.5" fill="#fff9c4" stroke="#fdd835" stroke-width="1.5"/>
+<line x1="28" y1="33" x2="28" y2="39" stroke="#fdd835" stroke-width="1" opacity=".5"/>
+<line x1="25" y1="36" x2="31" y2="36" stroke="#fdd835" stroke-width="1" opacity=".5"/>
+</svg>

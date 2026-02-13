@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64" height="64" viewBox="0 0 64 64">
+<defs>
+<radialGradient id="po_g" cx="50%" cy="45%" r="50%"><stop offset="0%" style="stop-color:#fff176"/><stop offset="100%" style="stop-color:#f9a825"/></radialGradient>
+</defs>
+<ellipse cx="32" cy="56" rx="20" ry="3" fill="#000" opacity=".2"/>
+<ellipse cx="32" cy="42" rx="24" ry="10" fill="#e0e0e0" stroke="#9e9e9e" stroke-width="2"/>
+<ellipse cx="32" cy="36" rx="18" ry="10" fill="url(#po_g)" stroke="#f57f17" stroke-width="2.5"/>
+<path d="M16 36 Q24 28 32 32 Q40 36 48 30" fill="#fbc02d" stroke="#f57f17" stroke-width="2"/>
+<!-- Pepper grains -->
+<circle cx="22" cy="32" r="2" fill="#1a1a1a" stroke="#000" stroke-width="1"/>
+<circle cx="30" cy="34" r="1.8" fill="#222" stroke="#000" stroke-width="1"/>
+<circle cx="38" cy="30" r="2" fill="#1a1a1a" stroke="#000" stroke-width="1"/>
+<circle cx="34" cy="36" r="1.5" fill="#222" stroke="#000" stroke-width="1"/>
+<circle cx="26" cy="36" r="1.5" fill="#1a1a1a" stroke="#000" stroke-width="1"/>
+<ellipse cx="28" cy="30" rx="5" ry="3" fill="#fff9c4" opacity=".3"/>
+<path d="M26 22 Q28 16 26 12" stroke="#fff" stroke-width="1.5" fill="none" opacity=".3"/>
+</svg>

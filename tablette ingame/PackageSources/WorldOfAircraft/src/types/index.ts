@@ -10,7 +10,7 @@ export type TabType = "map" | "profile" | "missions" | "contrats" | "company" | 
 export type ProfileSubTab = "apercu" | "certifications" | "inventaire" | "historique" | "messagerie" | "social";
 export type MissionsSubTab = "apercu" | "creation" | "historique";
 export type ContratsSubTab = "dashboard" | "mes-contrats" | "en-cours";
-export type CompanySubTab = "overview" | "membres" | "inventaire" | "historique" | "messagerie";
+export type CompanySubTab = "overview" | "membres" | "inventaire" | "historique" | "messagerie" | "usines";
 export type MarketSubTab = "inventory" | "achats" | "mes-ventes" | "avions" | "historique";
 
 // Flight mode type (for distinguishing mission vs free flight)
@@ -395,12 +395,77 @@ export interface FactoryAtAirport {
   name: string;
 }
 
+// ═══════════════════════════════════════════════════════════
+// FACTORY TYPES (Phase 9)
+// ═══════════════════════════════════════════════════════════
+
+export type FactoryStatusType = "idle" | "producing" | "maintenance" | "offline";
+
 export interface Factory {
   id: string;
-  name: string;
-  airport_ident: string;
   company_id: string;
-  product_type: string;
+  airport_ident: string;
+  name: string;
+  tier: number;              // 0=NPC, 1-10=player
+  factory_type: string;
+  status: FactoryStatusType;
+  current_recipe_id: string | null;
+  is_active: boolean;
+  max_workers: number;
+  max_engineers: number;
+  max_ingredients: number;
+  food_stock: number;
+  food_capacity: number;
+  food_tier_min: number;               // Lowest food tier in stock (determines bonus)
+  food_consumption_per_hour: number;
+  created_at: string;
+}
+
+export type WorkerStatusType = "available" | "working" | "injured" | "dead";
+
+export interface WorkerInstance {
+  id: string;
+  owner_company_id: string | null;
+  owner_player_id: string | null;
+  owner_type: "company" | "personal";
+  item_id: string;
+  airport_ident: string;
+  country_code: string;
+  speed: number;
+  resistance: number;
+  xp: number;
+  tier: number;
+  hourly_salary: number;
+  status: WorkerStatusType;
+  factory_id: string | null;
+  for_sale: boolean;
+  sale_price: number | null;
+  injured_at: string | null;
+  injury_duration_days: number;
+  created_at: string;
+}
+
+export interface ProductionBatch {
+  id: string;
+  factory_id: string;
+  recipe_id: string;
+  status: "pending" | "in_progress" | "completed" | "failed" | "cancelled";
+  quantity: number;
+  started_at: string;
+  estimated_completion: string;
+  completed_at: string | null;
+  result_quantity: number;
+  workers_assigned: number;
+}
+
+export interface CountryWorkerStats {
+  country_code: string;
+  country_name: string;
+  region: string;
+  base_speed: number;
+  base_resistance: number;
+  base_hourly_salary: number;
+  worker_buy_price: number;
 }
 
 // Alias for map view - same as SelectedAirport
@@ -448,6 +513,7 @@ export interface MarketListing {
   item_name: string;
   item_tier: number;
   item_icon: string | null;
+  item_icon_path?: string;
   sale_price: number;
   sale_qty: number;
 }

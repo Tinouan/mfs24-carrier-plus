@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64" height="64" viewBox="0 0 64 64">
+<defs><linearGradient id="cg_g" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" style="stop-color:#546e7a"/><stop offset="30%" style="stop-color:#78909c"/><stop offset="70%" style="stop-color:#78909c"/><stop offset="100%" style="stop-color:#546e7a"/></linearGradient></defs>
+<ellipse cx="32" cy="59" rx="12" ry="3" fill="#000" opacity=".2"/>
+<rect x="18" y="14" width="28" height="42" rx="6" fill="url(#cg_g)" stroke="#37474f" stroke-width="3"/>
+<ellipse cx="32" cy="14" rx="14" ry="5" fill="#607d8b" stroke="#37474f" stroke-width="2.5"/>
+<rect x="28" y="6" width="8" height="12" rx="4" fill="#90a4ae" stroke="#546e7a" stroke-width="2"/>
+<circle cx="32" cy="12" r="3" fill="#b0bec5" stroke="#78909c" stroke-width="1.5"/>
+<rect x="24" y="26" width="16" height="18" rx="2" fill="#455a64" stroke="#37474f" stroke-width="1.5"/>
+<text x="32" y="38" text-anchor="middle" font-size="7" fill="#cfd8dc" font-weight="bold">GAS</text>
+<polygon points="32,28 36,32 32,36 28,32" fill="#f44336" stroke="#c62828" stroke-width="1" opacity=".8"/>
+<rect x="20" y="16" width="4" height="22" rx="2" fill="#90a4ae" opacity=".3"/>
+</svg>

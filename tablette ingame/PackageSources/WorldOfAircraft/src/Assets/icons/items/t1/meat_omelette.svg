@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64" height="64" viewBox="0 0 64 64">
+<defs>
+<radialGradient id="mo_g" cx="50%" cy="45%" r="50%"><stop offset="0%" style="stop-color:#fff176"/><stop offset="100%" style="stop-color:#f9a825"/></radialGradient>
+</defs>
+<ellipse cx="32" cy="56" rx="20" ry="3" fill="#000" opacity=".2"/>
+<!-- Plate -->
+<ellipse cx="32" cy="42" rx="24" ry="10" fill="#e0e0e0" stroke="#9e9e9e" stroke-width="2"/>
+<!-- Omelette -->
+<ellipse cx="32" cy="36" rx="18" ry="10" fill="url(#mo_g)" stroke="#f57f17" stroke-width="2.5"/>
+<!-- Fold -->
+<path d="M16 36 Q24 28 32 32 Q40 36 48 30" fill="#fbc02d" stroke="#f57f17" stroke-width="2"/>
+<!-- Meat chunks visible -->
+<circle cx="24" cy="34" r="3" fill="#a0522d" stroke="#6a2a10" stroke-width="1.5"/>
+<circle cx="36" cy="32" r="2.5" fill="#8b4513" stroke="#6a2a10" stroke-width="1"/>
+<circle cx="30" cy="38" r="2" fill="#a0522d" stroke="#6a2a10" stroke-width="1"/>
+<!-- Highlight -->
+<ellipse cx="26" cy="30" rx="5" ry="3" fill="#fff9c4" opacity=".4"/>
+<!-- Steam -->
+<path d="M26 22 Q28 16 26 12" stroke="#fff" stroke-width="1.5" fill="none" opacity=".3"/>
+<path d="M34 20 Q36 14 34 10" stroke="#fff" stroke-width="1.5" fill="none" opacity=".25"/>
+</svg>

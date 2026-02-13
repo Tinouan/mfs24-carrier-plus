@@ -48,8 +48,13 @@ export interface FactoryData {
   airport_ident: string;
   latitude?: number;
   longitude?: number;
+  tier?: number;
   product_type?: string;
   emoji?: string;
+  /** Raw SVG string of the product icon (from ITEM_ICON_MAP) */
+  productIconSvg?: string;
+  /** true = producing, false = idle/paused */
+  isProducing?: boolean;
 }
 
 export interface MapCallbacks {
@@ -613,16 +618,21 @@ class MapManager {
       });
 
       // Color based on tier
-      const tier = (factory as any).tier || 0;
+      const tier = factory.tier || 0;
       const tierColors: Record<number, string> = {
         0: "#607D8B", 1: "#4CAF50", 2: "#8BC34A", 3: "#CDDC39", 4: "#FFEB3B",
         5: "#FFC107", 6: "#FF9800", 7: "#FF5722", 8: "#F44336", 9: "#E91E63", 10: "#9C27B0",
       };
       const bgColor = tierColors[tier] || "#607D8B";
 
-      // Get icon from factory or default
-      const emoji = factory.emoji || "🏭";
-      const svg = this.getFactoryShapeSvg(emoji, bgColor);
+      // Build marker SVG — use product icon if available, else fallback to shape
+      let svg: string;
+      if (factory.productIconSvg) {
+        svg = this.getFactoryProductSvg(factory.productIconSvg, bgColor, factory.isProducing !== false);
+      } else {
+        const emoji = factory.emoji || "🏭";
+        svg = this.getFactoryShapeSvg(emoji, bgColor);
+      }
       const iconUrl = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
 
       feature.setStyle(
@@ -671,6 +681,36 @@ class MapManager {
       <circle cx="18" cy="18" r="16" fill="${bgColor}" stroke="#ffffff" stroke-width="2"/>
       ${shape}
     </svg>`;
+  }
+
+  /**
+   * Build factory marker SVG with embedded product icon
+   */
+  private getFactoryProductSvg(productSvgRaw: string, bgColor: string, isActive: boolean): string {
+    try {
+      // Strip XML declaration and trim whitespace
+      let innerSvg = productSvgRaw
+        .replace(/<\?xml[^?]*\?>\s*/g, "")
+        .trim();
+
+      // Replace the entire <svg ...> opening tag with a clean positioned/sized one
+      // All icons use viewBox 0 0 64 64 — we scale to 26x26 centered in the 36x36 marker
+      innerSvg = innerSvg.replace(
+        /<svg[^>]*>/,
+        `<svg x="5" y="5" width="26" height="26" viewBox="0 0 64 64">`
+      );
+
+      const opacity = isActive ? "1.0" : "0.4";
+      const borderColor = isActive ? "#22c55e" : "#64748b";
+
+      return `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 36 36">
+        <circle cx="18" cy="18" r="16" fill="${bgColor}" stroke="${borderColor}" stroke-width="2.5"/>
+        <g opacity="${opacity}">${innerSvg}</g>
+      </svg>`;
+    } catch (e) {
+      // Fallback to generic shape if SVG processing fails
+      return this.getFactoryShapeSvg("", bgColor);
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

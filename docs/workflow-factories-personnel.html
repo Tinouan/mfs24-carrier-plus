@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>World of Aircraft — Factory & Personnel Workflow</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Exo+2:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0e1a;
+  --bg2: #111827;
+  --bg3: #1e293b;
+  --t0: #d1d5db;
+  --t1: #22c55e;
+  --t2: #3b82f6;
+  --t3: #a855f7;
+  --t4: #f59e0b;
+  --t5: #ef4444;
+  --worker: #f59e0b;
+  --engineer: #8b5cf6;
+  --pilot: #3b82f6;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --accent: #06b6d4;
+  --danger: #ef4444;
+  --success: #22c55e;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Exo 2', sans-serif;
+  overflow-x: hidden;
+}
+
+/* ─── HEADER ─── */
+.header {
+  text-align: center;
+  padding: 48px 24px 32px;
+  position: relative;
+}
+.header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 10%;
+  width: 80%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+}
+.header h1 {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 42px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  background: linear-gradient(135deg, var(--accent), var(--t1), var(--worker));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-transform: uppercase;
+}
+.header .sub {
+  color: var(--muted);
+  font-size: 14px;
+  margin-top: 8px;
+  letter-spacing: 2px;
+}
+
+/* ─── SECTIONS ─── */
+.section {
+  max-width: 1200px;
+  margin: 48px auto;
+  padding: 0 24px;
+}
+.section-title {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 24px;
+  padding-left: 16px;
+  border-left: 4px solid var(--accent);
+}
+
+/* ─── FLOW CONTAINER ─── */
+.flow {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: relative;
+}
+
+/* ─── FLOW ROW ─── */
+.flow-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  position: relative;
+}
+
+/* ─── ARROW DOWN ─── */
+.arrow-down {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+.arrow-down .line {
+  width: 2px;
+  height: 24px;
+  background: linear-gradient(180deg, var(--accent), transparent);
+}
+.arrow-down .tip {
+  width: 0; height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 8px solid var(--accent);
+  margin-top: -1px;
+}
+.arrow-down .label {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+/* ─── BOXES ─── */
+.box {
+  background: var(--bg2);
+  border: 2px solid var(--bg3);
+  border-radius: 12px;
+  padding: 16px 20px;
+  min-width: 180px;
+  max-width: 280px;
+  position: relative;
+  transition: all 0.3s;
+}
+.box:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.box .icon {
+  font-size: 28px;
+  margin-bottom: 8px;
+  display: block;
+}
+.box h3 {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+}
+.box p {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.box.npc { border-color: var(--t0); }
+.box.npc h3 { color: var(--t0); }
+.box.factory { border-color: var(--t1); }
+.box.factory h3 { color: var(--t1); }
+.box.worker-box { border-color: var(--worker); }
+.box.worker-box h3 { color: var(--worker); }
+.box.engineer-box { border-color: var(--engineer); }
+.box.engineer-box h3 { color: var(--engineer); }
+.box.market-box { border-color: var(--accent); }
+.box.market-box h3 { color: var(--accent); }
+.box.food-box { border-color: var(--t1); }
+.box.food-box h3 { color: var(--t1); }
+.box.result { border-color: var(--success); background: linear-gradient(135deg, var(--bg2), #0a1a0a); }
+.box.result h3 { color: var(--success); }
+.box.danger { border-color: var(--danger); }
+.box.danger h3 { color: var(--danger); }
+
+/* ─── BADGE ─── */
+.badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.badge.t0 { background: var(--t0); color: #000; }
+.badge.t1 { background: var(--t1); color: #000; }
+.badge.auto { background: var(--accent); color: #000; }
+.badge.opt { background: var(--engineer); color: #fff; }
+.badge.warn { background: var(--danger); color: #fff; }
+
+/* ─── CONNECTOR HORIZONTAL ─── */
+.hconn {
+  width: 40px;
+  height: 2px;
+  background: var(--bg3);
+  position: relative;
+  flex-shrink: 0;
+}
+.hconn::after {
+  content: '';
+  position: absolute;
+  right: -1px;
+  top: -4px;
+  width: 0; height: 0;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-left: 7px solid var(--bg3);
+}
+.hconn.accent { background: var(--accent); }
+.hconn.accent::after { border-left-color: var(--accent); }
+.hconn.green { background: var(--t1); }
+.hconn.green::after { border-left-color: var(--t1); }
+.hconn.orange { background: var(--worker); }
+.hconn.orange::after { border-left-color: var(--worker); }
+
+/* ─── BIG WORKFLOW DIAGRAMS ─── */
+.diagram {
+  background: var(--bg2);
+  border: 1px solid #2a3550;
+  border-radius: 16px;
+  padding: 32px;
+  margin-bottom: 32px;
+  position: relative;
+  overflow: hidden;
+}
+.diagram::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--t1), var(--worker));
+}
+.diagram-title {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 28px;
+  text-align: center;
+}
+
+/* ─── TIER TABLE ─── */
+.tier-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+}
+.tier-table th {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--accent);
+  padding: 8px 12px;
+  border-bottom: 2px solid var(--bg3);
+  text-align: left;
+}
+.tier-table td {
+  font-size: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  color: var(--muted);
+}
+.tier-table tr:hover td {
+  background: rgba(6,182,212,0.05);
+}
+.tier-table .val {
+  color: var(--text);
+  font-weight: 600;
+}
+.tier-table .bonus {
+  color: var(--t1);
+  font-weight: 600;
+}
+.tier-table .malus {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* ─── FORMULA ─── */
+.formula {
+  background: #0d1117;
+  border: 1px solid #2a3550;
+  border-radius: 8px;
+  padding: 16px 20px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: var(--accent);
+  margin: 16px 0;
+  text-align: center;
+  letter-spacing: 0.5px;
+}
+.formula .comment { color: var(--muted); font-size: 11px; }
+.formula .highlight { color: var(--t1); font-weight: 700; }
+.formula .warn { color: var(--worker); }
+
+/* ─── GRID LAYOUT ─── */
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin: 16px 0;
+}
+.grid-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+/* ─── STATUS CARDS ─── */
+.status-card {
+  background: var(--bg);
+  border: 1px solid #2a3550;
+  border-radius: 10px;
+  padding: 14px;
+  text-align: center;
+}
+.status-card .status-icon {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+.status-card h4 {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+}
+.status-card p {
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+/* ─── LIFECYCLE ─── */
+.lifecycle {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.life-step {
+  background: var(--bg);
+  border: 1px solid #2a3550;
+  border-radius: 10px;
+  padding: 14px 16px;
+  min-width: 130px;
+  max-width: 160px;
+  text-align: center;
+  position: relative;
+}
+.life-step h4 {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.life-step p { font-size: 10px; color: var(--muted); line-height: 1.3; }
+.life-arrow {
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  color: var(--muted);
+  font-size: 18px;
+}
+
+/* ─── RESPONSIVE ─── */
+@media (max-width: 800px) {
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  .flow-row { flex-wrap: wrap; }
+  .lifecycle { flex-direction: column; align-items: center; }
+  .life-arrow { transform: rotate(90deg); padding: 4px 0; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Factory & Personnel System</h1>
+  <div class="sub">World of Aircraft — Workflow complet</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- SECTION 1 : VUE GLOBALE -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="section">
+<div class="section-title">1. Vue globale — Flux économique</div>
+
+<div class="diagram">
+<div class="diagram-title">De la matière première au produit fini</div>
+
+<div class="flow">
+  <!-- ROW 1: Sources -->
+  <div class="flow-row">
+    <div class="box npc">
+      <span class="badge t0">NPC</span>
+      <h3>Usines NPC (T0)</h3>
+      <p>Production automatique de matières premières. Pas de workers, pas de food. Déjà sur la map, non achetables.</p>
+    </div>
+    <div class="hconn accent"></div>
+    <div class="box market-box">
+      <h3>Marché (HV)</h3>
+      <p>Les usines NPC vendent automatiquement les T0. Le joueur achète ce dont il a besoin.</p>
+    </div>
+    <div class="hconn green"></div>
+    <div class="box factory" style="min-width:220px;">
+      <span class="badge t1">T1-T5</span>
+      <h3>Usine du joueur</h3>
+      <p>Transforme les T0 en T1, T2... selon le tier de l'usine. Nécessite workers + food.</p>
+    </div>
+  </div>
+
+  <div class="arrow-down"><div class="line"></div><div class="tip"></div><div class="label">production</div></div>
+
+  <!-- ROW 2: Output -->
+  <div class="flow-row">
+    <div class="box result" style="min-width:260px;">
+      <h3>Produits finis</h3>
+      <p>Items T1-T5 ajoutés dans l'inventaire company à l'aéroport de l'usine. Le joueur peut les vendre au marché, les transporter, ou les utiliser comme ingrédients T2+.</p>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- SECTION 2 : USINES NPC T0 -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="section">
+<div class="section-title">2. Usines NPC — Production T0 automatique</div>
+
+<div class="diagram">
+<div class="diagram-title">AIEconomyService — Cycle NPC</div>
+
+<div class="flow">
+  <div class="flow-row">
+    <div class="box npc" style="max-width:300px;">
+      <h3>Usine NPC sur la map</h3>
+      <p>Détectée par keyword dans le nom (ex: "boucherie" → Meat, "mine" → Iron Ore, "poulailler" → Egg).<br><br>
+      <span style="color:var(--t0);">Stock max: 1000 items</span><br>
+      <span style="color:var(--t0);">Production: 50 items / 5 min</span><br>
+      <span style="color:var(--t0);">Pas de workers, pas de food</span></p>
+    </div>
+    <div class="hconn accent"></div>
+    <div class="box market-box" style="max-width:300px;">
+      <span class="badge auto">Auto</span>
+      <h3>Mise en vente automatique</h3>
+      <p>Les items produits sont automatiquement mis en vente au marché IA. Les joueurs achètent ces T0 pour alimenter leurs usines T1+.</p>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:20px;">
+<table class="tier-table">
+<tr><th>Keyword NPC</th><th>Item T0 produit</th><th>Catégorie</th></tr>
+<tr><td>céréal, agricole</td><td class="val">Wheat</td><td>food</td></tr>
+<tr><td>élevage, boucherie</td><td class="val">Meat</td><td>food</td></tr>
+<tr><td>laiterie</td><td class="val">Milk</td><td>food</td></tr>
+<tr><td>verger, fruits</td><td class="val">Fruits</td><td>food</td></tr>
+<tr><td>maraîcher, légumes</td><td class="val">Vegetables</td><td>food</td></tr>
+<tr><td>pêcherie, criée</td><td class="val">Fish</td><td>food</td></tr>
+<tr><td>poulailler, avicole</td><td class="val">Egg</td><td>food (NEW)</td></tr>
+<tr><td>maraîcher, salade</td><td class="val">Salad</td><td>food (NEW)</td></tr>
+<tr><td>poivrier, épice</td><td class="val">Pepper</td><td>food (NEW)</td></tr>
+<tr><td>piment</td><td class="val">Chili</td><td>food (NEW)</td></tr>
+<tr><td>raffinerie</td><td class="val">Crude Oil</td><td>fuel</td></tr>
+<tr><td>gisement</td><td class="val">Natural Gas</td><td>fuel</td></tr>
+<tr><td>carrière</td><td class="val">Stone</td><td>mineral</td></tr>
+<tr><td>mine</td><td class="val">Iron Ore</td><td>mineral</td></tr>
+<tr><td>minier</td><td class="val">Coal</td><td>mineral</td></tr>
+<tr><td>bois, forêt</td><td class="val">Wood</td><td>organic</td></tr>
+</table>
+</div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- SECTION 3 : USINE JOUEUR -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="section">
+<div class="section-title">3. Usine Joueur — Cycle de production complet</div>
+
+<div class="diagram">
+<div class="diagram-title">Workflow de production — Une usine T1+</div>
+
+<div class="flow">
+  <!-- STEP 1: Construction -->
+  <div class="flow-row">
+    <div class="box factory" style="max-width:350px;">
+      <h3>1. Construire l'usine</h3>
+      <p>Le joueur achète une usine à un aéroport. Slots limités par taille d'aéroport (large=10, medium=5, small=2). L'usine démarre en status <span style="color:var(--t1);">idle</span>.</p>
+    </div>
+  </div>
+
+  <div class="arrow-down"><div class="line"></div><div class="tip"></div></div>
+
+  <!-- STEP 2: Recipe -->
+  <div class="flow-row">
+    <div class="box market-box" style="max-width:400px;">
+      <h3>2. Choisir une recette + déposer ingrédients</h3>
+      <p>Sélectionner une recette (tier recette ≤ tier usine). Les ingrédients doivent être dans l'inventaire company au même aéroport.<br><br>
+      <span style="color:var(--accent);font-weight:600;">Dès que les ingrédients sont déposés, la production peut démarrer — même SANS workers !</span></p>
+    </div>
+  </div>
+
+  <div class="arrow-down"><div class="line"></div><div class="tip"></div><div class="label">start production</div></div>
+
+  <!-- STEP 3: Production (base 30%) -->
+  <div class="flow-row">
+    <div class="box factory" style="max-width:440px;border-width:3px;">
+      <h3>3. Production en cours</h3>
+      <p>
+        Ingrédients consommés immédiatement depuis company_inventory.<br>
+        Status → <span style="color:var(--t1);">producing</span>.<br><br>
+        <span style="color:var(--danger);font-weight:600;">Sans workers ni food : 30% capacité & 30% vitesse</span><br>
+        L'usine tourne seule au minimum. Les workers et la food sont des <strong>améliorations</strong>, pas des prérequis.
+      </p>
+    </div>
+  </div>
+
+  <div class="arrow-down"><div class="line"></div><div class="tip"></div><div class="label">boosts optionnels</div></div>
+
+  <!-- STEP 4: Boosts -->
+  <div class="flow-row">
+    <div class="box worker-box" style="max-width:200px;">
+      <span class="badge" style="background:var(--t1);color:#000;">Boost</span>
+      <h3>4a. Workers</h3>
+      <p>Assignés = boost capacité + vitesse.<br>
+      <span style="color:var(--worker);">Payés UNIQUEMENT quand assignés.</span><br>
+      En inventaire = pas de salaire.</p>
+    </div>
+    <div class="hconn orange"></div>
+    <div class="box food-box" style="max-width:200px;">
+      <span class="badge" style="background:var(--t1);color:#000;">Boost</span>
+      <h3>4b. Food</h3>
+      <p>Tier de la food = bonus vitesse.<br>
+      <span style="color:var(--t1);">T0=base, T1=+15%</span><br>
+      <span style="color:var(--t1);">T2=+30%, T3=+45%, T4=+60%</span></p>
+    </div>
+    <div class="hconn" style="background:var(--engineer)"></div>
+    <div class="box engineer-box" style="max-width:200px;">
+      <span class="badge opt">Optionnel</span>
+      <h3>4c. Ingénieurs</h3>
+      <p>Bonus vitesse supplémentaire.<br>
+      Rendements décroissants<br>
+      <span style="color:var(--engineer);">(+10%, +8%, +6%...)</span></p>
+    </div>
+  </div>
+
+  <div class="arrow-down"><div class="line"></div><div class="tip"></div><div class="label">completion</div></div>
+
+  <!-- STEP 5: Result -->
+  <div class="flow-row">
+    <div class="box result" style="max-width:350px;border-width:3px;">
+      <h3>5. Produits finis</h3>
+      <p>Items ajoutés dans <span style="color:var(--success);">company_inventory</span> @ même aéroport.<br>
+      Workers gagnent de l'XP. Status usine → <span style="color:var(--t1);">idle</span>.<br>
+      Le joueur peut vendre, transporter ou réutiliser comme ingrédient T2+.</p>
+    </div>
+  </div>
+</div>
+
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- SECTION 4 : SYSTEME FOOD -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="section">
+<div class="section-title">4. Système Food — Bonus par tier</div>
+
+<div class="diagram">
+<div class="diagram-title">Impact du tier de nourriture sur la production</div>
+
+<table class="tier-table">
+<tr><th>Tier Food</th><th>Bonus Vitesse</th><th>Multiplicateur</th><th>Exemples</th></tr>
+<tr>
+  <td><span style="color:var(--t0);font-weight:700;">T0 — Raw</span></td>
+  <td class="val">+0% (base)</td>
+  <td class="val">×1.00</td>
+  <td>Meat, Fish, Wheat, Egg, Salad, Vegetables</td>
+</tr>
+<tr>
+  <td><span style="color:var(--t1);font-weight:700;">T1 — Transformé</span></td>
+  <td class="bonus">+15%</td>
+  <td class="bonus">×1.15</td>
+  <td>Bread, Salted Meat, Flour, Meat Omelette</td>
+</tr>
+<tr>
+  <td><span style="color:var(--t2);font-weight:700;">T2 — Avancé</span></td>
+  <td class="bonus">+30%</td>
+  <td class="bonus">×1.30</td>
+  <td>Cheese, Quality Bread, Sausage, Smoked Fish</td>
+</tr>
+<tr>
+  <td><span style="color:var(--t3);font-weight:700;">T3 — Rare</span></td>
+  <td class="bonus">+45%</td>
+  <td class="bonus">×1.45</td>
+  <td>(futur)</td>
+</tr>
+<tr>
+  <td><span style="color:var(--t4);font-weight:700;">T4 — Épique</span></td>
+  <td class="bonus">+60%</td>
+  <td class="bonus">×1.60</td>
+  <td>(futur)</td>
+</tr>
+<tr style="background:rgba(239,68,68,0.1);">
+  <td><span style="color:var(--danger);font-weight:700;">Pas de food</span></td>
+  <td class="malus">-70%</td>
+  <td class="malus">×0.30</td>
+  <td>Production très lente + risque blessure ×2</td>
+</tr>
+</table>
+
+<div class="formula">
+  <span class="comment">// Règle du tier le plus bas</span><br>
+  food_bonus = bonus du <span class="highlight">tier le plus bas</span> dans le stock<br>
+  <span class="comment">// Ex: stock contient T0 + T1 → bonus = T0 (+0%)</span><br>
+  <span class="comment">// La food T0 est consommée en priorité (FIFO par tier)</span>
+</div>
+
+<div class="grid-2" style="margin-top:20px;">
+  <div class="status-card" style="border-color:var(--danger);">
+    <h4 style="color:var(--danger);">Sans food ni workers</h4>
+    <p>
+      ⚠ Capacité & vitesse à 30%<br>
+      ⚠ Risque blessure ×2 (si workers sans food)<br>
+      ✓ Production possible (pas bloquée !)<br>
+      ✓ Salaires : 0€ si personne assigné
+    </p>
+  </div>
+  <div class="status-card" style="border-color:var(--success);">
+    <h4 style="color:var(--success);">Avec food T1</h4>
+    <p>
+      ✓ Efficacité ×1.15 (+15%)<br>
+      ✓ Risque blessure normal<br>
+      ✓ Salaire payé<br>
+      ✓ Production à vitesse améliorée
+    </p>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- SECTION 5 : CALCUL PRODUCTION -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="section">
+<div class="section-title">5. Calcul de production — Formule complète</div>
+
+<div class="diagram">
+<div class="diagram-title">Les 3 multiplicateurs de vitesse</div>
+
+<div class="grid-3">
+  <div class="status-card" style="border-color:var(--t1);">
+    <h4 style="color:var(--t1);">Food Bonus</h4>
+    <p style="font-size:20px;color:var(--t1);font-weight:700;margin:8px 0;">+0% à +60%</p>
+    <p>Dépend du tier de nourriture dans l'usine</p>
+  </div>
+  <div class="status-card" style="border-color:var(--engineer);">
+    <h4 style="color:var(--engineer);">Ingénieur Bonus</h4>
+    <p style="font-size:20px;color:var(--engineer);font-weight:700;margin:8px 0;">+0% à +50%</p>
+    <p>Rendements décroissants (10%, 8%, 6%, 5%...)</p>
+  </div>
+  <div class="status-card" style="border-color:var(--worker);">
+    <h4 style="color:var(--worker);">Worker Tier Bonus</h4>
+    <p style="font-size:20px;color:var(--worker);font-weight:700;margin:8px 0;">+0% à +25%</p>
+    <p>+5% par tier moyen au-dessus de T1</p>
+  </div>
+</div>
+
+<div class="formula" style="font-size:14px;">
+  <span class="comment">// Sans workers : base à 30%</span><br>
+  <span class="highlight">temps_réel</span> = temps_base / (<span style="color:var(--danger);">base_eff</span> × <span class="warn">food_bonus</span> × <span style="color:var(--engineer);">eng_bonus</span> × <span style="color:var(--worker);">worker_bonus</span>)<br>
+  <span class="comment">// base_eff = 0.30 (sans workers) ou 1.00 (avec workers)</span>
+</div>
+
+<div class="formula">
+  <span class="comment">// EXEMPLE 1 : SANS WORKERS (usine seule)</span><br><br>
+  Recette : Salted Meat (3h/batch, 8 unités), 10 batches<br>
+  temps_base = 3 × 10 = 30h<br>
+  base_eff = <span style="color:var(--danger);">0.30</span> (pas de workers)<br>
+  <span class="highlight">temps_réel = 30 / 0.30 = 100h</span> <span class="comment">(très lent mais ça tourne !)</span><br><br>
+  <span class="comment">// EXEMPLE 2 : AVEC WORKERS + FOOD + INGÉNIEURS</span><br><br>
+  Mêmes 10 batches de Salted Meat<br>
+  Workers assignés → base_eff = <span style="color:var(--success);">1.00</span><br>
+  Food T1 → <span class="warn">×1.15</span><br>
+  2 ingénieurs → <span style="color:var(--engineer);">×1.18</span> (10% + 8%)<br>
+  Workers tier 2 → <span style="color:var(--worker);">×1.05</span><br><br>
+  multiplicateur = 1.00 × 1.15 × 1.18 × 1.05 = <span class="highlight">1.424</span><br>
+  <span class="highlight">temps_réel = 30 / 1.424 = 21.1h</span> <span class="comment">(5× plus rapide que sans workers !)</span><br>
+  quantité = 8 × 10 = <span class="highlight">80 unités</span> <span class="comment">(inchangée)</span>
+</div>
+
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- SECTION 6 : INGÉNIEURS -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="section">
+<div class="section-title">6. Ingénieurs — Bonus détaillé</div>
+
+<div class="diagram">
+<div class="diagram-title">Rendements décroissants par ingénieur</div>
+
+<table class="tier-table">
+<tr><th>Nb Ingénieurs</th><th>Bonus ajouté</th><th>Bonus cumulé</th><th>Multiplicateur</th></tr>
+<tr><td class="val">0</td><td>—</td><td>+0%</td><td class="val">×1.00</td></tr>
+<tr><td class="val">1</td><td class="bonus">+10%</td><td class="bonus">+10%</td><td class="val">×1.10</td></tr>
+<tr><td class="val">2</td><td class="bonus">+8%</td><td class="bonus">+18%</td><td class="val">×1.18</td></tr>
+<tr><td class="val">3</td><td class="bonus">+6%</td><td class="bonus">+24%</td><td class="val">×1.24</td></tr>
+<tr><td class="val">4</td><td class="bonus">+5%</td><td class="bonus">+29%</td><td class="val">×1.29</td></tr>
+<tr><td class="val">5</td><td class="bonus">+4%</td><td class="bonus">+33%</td><td class="val">×1.33</td></tr>
+<tr><td class="val">6+</td><td>+3% chacun</td><td>...</td><td>...</td></tr>
+</table>
+
+<div style="margin-top:16px;">
+<table class="tier-table">
+<tr><th>Tier Usine</th><th>Max Ingénieurs</th><th>Bonus Max</th></tr>
+<tr><td class="val">T1</td><td>2</td><td class="bonus">+18%</td></tr>
+<tr><td class="val">T2</td><td>3</td><td class="bonus">+24%</td></tr>
+<tr><td class="val">T3</td><td>5</td><td class="bonus">+33%</td></tr>
+<tr><td class="val">T4</td><td>7</td><td class="bonus">+42%</td></tr>
+<tr><td class="val">T5</td><td>10</td><td class="bonus">+50%</td></tr>
+</table>
+</div>
+
+<div class="formula">
+  <span class="comment">// Salaire ingénieur = 2× salaire worker du même pays</span><br>
+  Ex: Worker FR = 15€/h → Ingénieur FR = <span class="highlight">30€/h</span>
+</div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- SECTION 7 : WORKERS LIFECYCLE -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="section">
+<div class="section-title">7. Cycle de vie des Workers</div>
+
+<div class="diagram">
+<div class="diagram-title">Du recrutement à la mort</div>
+
+<div class="lifecycle">
+  <div class="life-step" style="border-color:var(--accent);">
+    <h4 style="color:var(--accent);">Achat</h4>
+    <p>Au marché HV<br>(large airports only)<br>Stats par pays<br>(speed, resistance, salaire)</p>
+  </div>
+  <div class="life-arrow">→</div>
+  <div class="life-step" style="border-color:var(--worker);">
+    <h4 style="color:var(--worker);">Transport</h4>
+    <p>Cargo avion<br>80kg par worker<br>Vers l'aéroport<br>de l'usine</p>
+  </div>
+  <div class="life-arrow">→</div>
+  <div class="life-step" style="border-color:var(--t1);">
+    <h4 style="color:var(--t1);">Assigné</h4>
+    <p>Status: working<br>Gagne de l'XP<br>par batch complété<br>Payé chaque heure</p>
+  </div>
+  <div class="life-arrow">→</div>
+  <div class="life-step" style="border-color:var(--worker);">
+    <h4 style="color:var(--worker);">Blessé ?</h4>
+    <p>0.5%/h de risque<br>×2 sans food<br>1-10 jours d'arrêt<br>Ne peut pas travailler</p>
+  </div>
+  <div class="life-arrow">→</div>
+  <div class="life-step" style="border-color:var(--danger);">
+    <h4 style="color:var(--danger);">Mort ?</h4>
+    <p>Si blessure &gt;10j<br>sans soins<br>Pénalité: -10,000 CR<br>Worker perdu</p>
+  </div>
+</div>
+
+<div style="margin-top:24px;">
+<table class="tier-table">
+<tr><th>Tier Worker</th><th>XP Requis</th><th>Bonus Speed</th></tr>
+<tr><td class="val">Novice (1)</td><td>0</td><td>—</td></tr>
+<tr><td class="val">Apprenti (2)</td><td>1,000 XP</td><td class="bonus">+5%</td></tr>
+<tr><td class="val">Compagnon (3)</td><td>5,000 XP</td><td class="bonus">+10%</td></tr>
+<tr><td class="val">Expert (4)</td><td>15,000 XP</td><td class="bonus">+15%</td></tr>
+<tr><td class="val">Maître (5)</td><td>50,000 XP</td><td class="bonus">+20%</td></tr>
+</table>
+</div>
+
+<div class="formula">
+  <span class="comment">// XP gagné par batch complété</span><br>
+  xp_gain = recipe.tier × 10<br><br>
+  <span class="comment">// Bonus tier workers sur la production</span><br>
+  tier_bonus = 1.0 + ((avg_tier - 1) × 0.05)<br>
+  <span class="comment">// Max: +25% (cap)</span>
+</div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- SECTION 8 : TIERS D'USINES -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="section">
+<div class="section-title">8. Tiers d'usines — Progression</div>
+
+<div class="diagram">
+<div class="diagram-title">Capacités par tier d'usine</div>
+
+<table class="tier-table">
+<tr><th>Tier</th><th>Workers Max</th><th>Ingénieurs Max</th><th>Food Capacity</th><th>Recettes dispo</th></tr>
+<tr>
+  <td><span style="color:var(--t0);font-weight:700;">T0 (NPC)</span></td>
+  <td class="val">—</td><td class="val">—</td><td class="val">—</td>
+  <td>Auto (matières premières)</td>
+</tr>
+<tr>
+  <td><span style="color:var(--t1);font-weight:700;">T1</span></td>
+  <td class="val">10</td><td class="val">2</td><td class="val">200</td>
+  <td>T1 uniquement</td>
+</tr>
+<tr>
+  <td><span style="color:var(--t2);font-weight:700;">T2</span></td>
+  <td class="val">20</td><td class="val">3</td><td class="val">500</td>
+  <td>T1, T2</td>
+</tr>
+<tr>
+  <td><span style="color:var(--t3);font-weight:700;">T3</span></td>
+  <td class="val">30</td><td class="val">5</td><td class="val">1,000</td>
+  <td>T1, T2, T3</td>
+</tr>
+<tr>
+  <td><span style="color:var(--t4);font-weight:700;">T4</span></td>
+  <td class="val">40</td><td class="val">7</td><td class="val">2,000</td>
+  <td>T1 à T4</td>
+</tr>
+<tr>
+  <td><span style="color:var(--t5);font-weight:700;">T5</span></td>
+  <td class="val">50</td><td class="val">10</td><td class="val">5,000</td>
+  <td>Toutes</td>
+</tr>
+</table>
+
+<div style="margin-top:16px;">
+<table class="tier-table">
+<tr><th>Type Aéroport</th><th>Max Slots Usines</th></tr>
+<tr><td class="val">large_airport</td><td class="val">10</td></tr>
+<tr><td class="val">medium_airport</td><td class="val">5</td></tr>
+<tr><td class="val">small_airport</td><td class="val">2</td></tr>
+<tr><td class="val">seaplane_base / heliport</td><td class="val">1</td></tr>
+<tr><td>closed</td><td class="malus">0</td></tr>
+</table>
+</div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- SECTION 9 : COÛTS RÉCURRENTS -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="section">
+<div class="section-title">9. Coûts récurrents — Scheduler local</div>
+
+<div class="diagram">
+<div class="diagram-title">Dépenses automatiques chaque heure</div>
+
+<div class="grid-3">
+  <div class="status-card" style="border-color:var(--worker);">
+    <h4 style="color:var(--worker);">Salaires Workers</h4>
+    <p style="font-size:16px;color:var(--worker);font-weight:700;margin:8px 0;">Σ hourly_salary</p>
+    <p><span style="color:var(--danger);">UNIQUEMENT si assignés</span><br>(status = "working")<br>En inventaire = 0€/h<br>Ex: 10 workers FR assignés = 150€/h</p>
+  </div>
+  <div class="status-card" style="border-color:var(--engineer);">
+    <h4 style="color:var(--engineer);">Salaires Ingénieurs</h4>
+    <p style="font-size:16px;color:var(--engineer);font-weight:700;margin:8px 0;">2× worker rate</p>
+    <p><span style="color:var(--danger);">UNIQUEMENT si assignés</span><br>(status = "working")<br>En inventaire = 0€/h<br>Ex: 2 ingénieurs FR assignés = 60€/h</p>
+  </div>
+  <div class="status-card" style="border-color:var(--t1);">
+    <h4 style="color:var(--t1);">Consommation Food</h4>
+    <p style="font-size:16px;color:var(--t1);font-weight:700;margin:8px 0;">1 food / personne / h</p>
+    <p>Workers + Ingénieurs assignés<br>Pendant production uniquement<br>T0 consommé en priorité<br><span style="color:var(--accent);">0 personnel = 0 food mais 30% vitesse</span></p>
+  </div>
+</div>
+
+<div class="formula">
+  <span class="comment">// Coût horaire d'une usine T1 AVEC 10 workers FR + 2 ingénieurs FR assignés</span><br>
+  salaires = (10 × 15€) + (2 × 30€) = <span class="highlight">210€/h</span><br>
+  food = 12 unités/h <span class="comment">(10 workers + 2 ingénieurs)</span><br><br>
+  <span class="comment">// Coût horaire SANS PERSONNEL (usine seule à 30%)</span><br>
+  salaires = <span class="highlight">0€/h</span> <span class="comment">← pas de workers = pas de salaire</span><br>
+  food = <span class="highlight">0 unités/h</span> <span class="comment">← pas de personnel = pas de conso</span>
+</div>
+
+<div style="margin-top:16px;">
+<table class="tier-table">
+<tr><th>Job Scheduler</th><th>Intervalle</th><th>Action</th></tr>
+<tr><td class="val">batch_completion</td><td>1 min</td><td>Complète les batches terminés</td></tr>
+<tr><td class="val">t0_auto_production</td><td>5 min</td><td>Production NPC T0</td></tr>
+<tr><td class="val">food_and_injuries</td><td>1 heure</td><td>Consomme food + check blessures</td></tr>
+<tr><td class="val">salary_payments</td><td>1 heure</td><td>Paie salaires workers + ingénieurs <strong>assignés uniquement</strong></td></tr>
+</table>
+</div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- SECTION 10 : RÉSUMÉ VISUEL -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="section">
+<div class="section-title">10. Résumé — Tout en un coup d'œil</div>
+
+<div class="diagram">
+<div class="diagram-title">Cycle complet simplifié</div>
+
+<div class="formula" style="text-align:left;font-size:12px;line-height:2;">
+  <span style="color:var(--t0);">■</span> Usines NPC (T0) produisent Meat, Fish, Wheat, Egg, etc. → vendus auto au <span style="color:var(--accent);">Marché</span><br>
+  <span style="color:var(--accent);">■</span> Joueur achète T0 au marché → les <span style="color:var(--worker);">transporte</span> par avion → stocke à l'aéroport<br>
+  <span style="color:var(--t1);">■</span> Joueur construit <span style="color:var(--t1);">Usine T1+</span> → choisit recette → dépose ingrédients → <span style="color:var(--accent);">production démarre à 30%</span><br>
+  <span style="color:var(--worker);">■</span> Workers + <span style="color:var(--engineer);">Ingénieurs</span> = <strong>boosts optionnels</strong> (pas des prérequis). Assignés = payés. En inventaire = pas de salaire.<br>
+  <span style="color:var(--t1);">■</span> Food T0 = base | <span class="highlight">T1 = +15%</span> | T2 = +30% | T3 = +45% | T4 = +60%<br>
+  <span style="color:var(--engineer);">■</span> Ingénieurs : +10% le 1er, +8% le 2e, +6% le 3e... (rendements décroissants)<br>
+  <span style="color:var(--success);">■</span> Produits finis → <span style="color:var(--success);">inventaire company</span> → vendre au marché ou utiliser comme ingrédient T2+<br>
+  <span class="warn">■</span> Coûts récurrents : salaires (workers + ingénieurs) + food consommée<br>
+  <span style="color:var(--danger);">■</span> Risques : blessures (0.5%/h, ×2 sans food) → mort si &gt;10j sans soins (-10,000 CR)
+</div>
+</div>
+</div>
+
+<div style="text-align:center;padding:32px;color:var(--muted);font-size:12px;letter-spacing:1px;">
+  World of Aircraft — Factory & Personnel System v1.0 — 107 items · 69 recettes · 42 pays
+</div>
+
+</body>
+</html>

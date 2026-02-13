@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+
+<defs><linearGradient id="sg1" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#fff"/><stop offset="100%" style="stop-color:#e0e0e0"/></linearGradient><linearGradient id="sg2" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#f0f0f0"/><stop offset="100%" style="stop-color:#c8c8c8"/></linearGradient></defs>
+<ellipse cx="32" cy="58" rx="18" ry="3" fill="#000" opacity=".15"/>
+<!-- Back cubes -->
+<polygon points="22,18 34,14 44,20 32,24" fill="url(#sg1)" stroke="#aaa" stroke-width="2"/>
+<polygon points="32,24 44,20 44,32 32,36" fill="url(#sg2)" stroke="#aaa" stroke-width="2"/>
+<polygon points="22,18 32,24 32,36 22,30" fill="#d8d8d8" stroke="#aaa" stroke-width="2"/>
+<!-- Front left cube -->
+<polygon points="8,32 20,28 30,34 18,38" fill="url(#sg1)" stroke="#999" stroke-width="2.5"/>
+<polygon points="18,38 30,34 30,48 18,52" fill="url(#sg2)" stroke="#999" stroke-width="2.5"/>
+<polygon points="8,32 18,38 18,52 8,46" fill="#d0d0d0" stroke="#999" stroke-width="2.5"/>
+<!-- Front right cube -->
+<polygon points="30,34 42,30 52,36 40,40" fill="url(#sg1)" stroke="#999" stroke-width="2.5"/>
+<polygon points="40,40 52,36 52,50 40,54" fill="url(#sg2)" stroke="#999" stroke-width="2.5"/>
+<polygon points="30,34 40,40 40,54 30,48" fill="#d0d0d0" stroke="#999" stroke-width="2.5"/>
+<!-- Highlights -->
+<polygon points="10,34 18,30 26,34 18,36" fill="#fff" opacity=".4"/>
+<polygon points="32,36 40,32 48,36 40,38" fill="#fff" opacity=".35"/>
+<polygon points="24,20 32,16 40,20 32,22" fill="#fff" opacity=".3"/>
+<!-- Sparkle -->
+<line x1="14" y1="34" x2="18" y2="34" stroke="#fff" stroke-width="1.5" opacity=".6"/>
+<line x1="16" y1="32" x2="16" y2="36" stroke="#fff" stroke-width="1.5" opacity=".6"/>
+<!-- Sugar grains scattered -->
+<circle cx="24" cy="52" r="1" fill="#eee" opacity=".5"/>
+<circle cx="46" cy="52" r=".8" fill="#eee" opacity=".4"/>
+<circle cx="34" cy="56" r=".8" fill="#eee" opacity=".3"/>
+
+</svg>

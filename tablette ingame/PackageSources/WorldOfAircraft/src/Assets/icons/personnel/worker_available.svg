@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64" height="64" viewBox="0 0 64 64">
+<defs>
+<linearGradient id="w_helmet" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" style="stop-color:#f59e0b"/><stop offset="100%" style="stop-color:#d97706"/></linearGradient>
+<radialGradient id="w_skin" cx="50%" cy="40%" r="50%"><stop offset="0%" style="stop-color:#f5d0a9"/><stop offset="100%" style="stop-color:#d4a574"/></radialGradient>
+<linearGradient id="w_body" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" style="stop-color:#3b82f6"/><stop offset="100%" style="stop-color:#1d4ed8"/></linearGradient>
+</defs>
+<!-- Body/torso -->
+<path d="M20 38 Q20 34 26 32 L38 32 Q44 34 44 38 L46 54 L18 54 Z" fill="url(#w_body)" stroke="#1e3a5f" stroke-width="2.5"/>
+<!-- Collar -->
+<path d="M26 32 Q32 36 38 32" fill="#60a5fa" stroke="#1d4ed8" stroke-width="1.5"/>
+<!-- Arms -->
+<rect x="12" y="36" width="10" height="14" rx="5" fill="url(#w_body)" stroke="#1e3a5f" stroke-width="2"/>
+<rect x="42" y="36" width="10" height="14" rx="5" fill="url(#w_body)" stroke="#1e3a5f" stroke-width="2"/>
+<!-- Hands -->
+<circle cx="17" cy="52" r="4" fill="url(#w_skin)" stroke="#b8834a" stroke-width="2"/>
+<circle cx="47" cy="52" r="4" fill="url(#w_skin)" stroke="#b8834a" stroke-width="2"/>
+<!-- Neck -->
+<rect x="28" y="28" width="8" height="6" rx="2" fill="url(#w_skin)" stroke="#b8834a" stroke-width="1.5"/>
+<!-- Head -->
+<circle cx="32" cy="20" r="12" fill="url(#w_skin)" stroke="#b8834a" stroke-width="2.5"/>
+<!-- Eyes -->
+<circle cx="27" cy="20" r="2" fill="#1a1a2e"/>
+<circle cx="37" cy="20" r="2" fill="#1a1a2e"/>
+<circle cx="27.5" cy="19.5" r=".7" fill="#fff"/>
+<circle cx="37.5" cy="19.5" r=".7" fill="#fff"/>
+<!-- Mouth (smile) -->
+<path d="M28 25 Q32 28 36 25" stroke="#a0704a" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+<!-- Hard hat -->
+<path d="M18 18 Q18 6 32 6 Q46 6 46 18 Z" fill="url(#w_helmet)" stroke="#b45309" stroke-width="2.5"/>
+<rect x="14" y="16" width="36" height="5" rx="2.5" fill="#fbbf24" stroke="#b45309" stroke-width="2"/>
+<ellipse cx="32" cy="8" rx="4" ry="2" fill="#fcd34d" opacity=".5"/>
+<!-- Helmet shine -->
+<ellipse cx="26" cy="12" rx="5" ry="3" fill="#fde68a" opacity=".4"/>
+</svg>

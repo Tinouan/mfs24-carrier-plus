@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64" height="64" viewBox="0 0 64 64">
+<defs><radialGradient id="sw_g" cx="40%" cy="35%" r="55%"><stop offset="0%" style="stop-color:#7090b0"/><stop offset="100%" style="stop-color:#405060"/></radialGradient></defs>
+<ellipse cx="32" cy="57" rx="16" ry="3" fill="#000" opacity=".2"/>
+<circle cx="32" cy="32" r="22" fill="url(#sw_g)" stroke="#2a3a4a" stroke-width="3"/>
+<circle cx="32" cy="32" r="18" fill="none" stroke="#5878a0" stroke-width="1" opacity=".5"/>
+<circle cx="32" cy="32" r="12" fill="none" stroke="#5878a0" stroke-width="1" opacity=".4"/>
+<circle cx="32" cy="32" r="6" fill="none" stroke="#5878a0" stroke-width="1" opacity=".3"/>
+<line x1="10" y1="32" x2="54" y2="32" stroke="#5878a0" stroke-width=".8" opacity=".3"/>
+<line x1="32" y1="10" x2="32" y2="54" stroke="#5878a0" stroke-width=".8" opacity=".3"/>
+<path d="M46 10 L54 10 L54 18" fill="none" stroke="#2a3a4a" stroke-width="2.5"/>
+<ellipse cx="26" cy="26" rx="5" ry="4" fill="#8ab0d0" opacity=".3"/>
+<circle cx="24" cy="24" r="2" fill="#a0c8e8" opacity=".4"/>
+</svg>

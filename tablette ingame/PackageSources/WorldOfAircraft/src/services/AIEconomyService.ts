@@ -6,8 +6,10 @@
 import { DatabaseManager } from "../managers/DatabaseManager";
 import type { Item, MarketOrder, InventoryItem, SellOrder } from "../managers/DatabaseManager";
 import { marketState } from "../state/MarketState";
+import { factoryState } from "../state/FactoryState";
 import { localMarketService } from "./LocalMarketService";
 import { localContractService } from "./LocalContractService";
+import { WorkerService } from "./WorkerService";
 
 // ═══════════════════════════════════════════════════════════
 // TYPES
@@ -263,7 +265,7 @@ class AIEconomyServiceClass {
 
       // Get items for orders (exclude high-tier parts initially)
       const items = await DatabaseManager.getAll<Item>("items");
-      const tradeableItems = items.filter((i) => i.tier <= 1 && i.category !== "fuel");
+      const tradeableItems = items.filter((i) => i.tier === 0);
 
       let totalOrders = 0;
 
@@ -328,77 +330,72 @@ class AIEconomyServiceClass {
   // ─────────────────────────────────────────────────────────
 
   /**
-   * Spawn workers and engineers at airports
-   * Workers: large + medium airports
-   * Engineers: large airports only
+   * Phase 9: Spawn worker market orders at large airports
+   * Workers available ONLY at large_airport
+   * 3-5 workers per airport, nationality based on region
+   * Price = country_worker_stats.worker_buy_price
    */
   private async spawnPersonnel(): Promise<void> {
     try {
+      if (!WorkerService.isReady()) {
+        console.log("[AIEconomyService] WorkerService not ready, skipping personnel spawn");
+        return;
+      }
+
+      // Remove old AI worker market orders
+      const existingOrders = await DatabaseManager.getAll<MarketOrder>("market_orders");
+      const oldWorkerOrders = existingOrders.filter(
+        o => o.seller_id === "AI" && o.is_active && (o.item_code === "worker" || o.item_code === "engineer")
+      );
+      for (const order of oldWorkerOrders) {
+        order.is_active = false;
+        await DatabaseManager.put("market_orders", order, false);
+      }
+
       const airports = DatabaseManager.getAirportsCache();
       if (airports.length === 0) {
         console.log("[AIEconomyService] No airports in cache, skipping personnel spawn");
         return;
       }
 
+      // Only spawn at large airports
       const largeAirports = airports.filter(a => a.type === "large_airport");
-      const mediumAirports = airports.filter(a => a.type === "medium_airport");
-
       let workersSpawned = 0;
-      let engineersSpawned = 0;
 
-      // Spawn workers and engineers at large airports
-      for (const airport of largeAirports.slice(0, 20)) { // Limit to 20 airports
+      for (const airport of largeAirports.slice(0, 20)) {
         const workerCount = WORKERS_PER_LARGE_AIRPORT.min +
           Math.floor(Math.random() * (WORKERS_PER_LARGE_AIRPORT.max - WORKERS_PER_LARGE_AIRPORT.min + 1));
-        const engineerCount = ENGINEERS_PER_LARGE_AIRPORT.min +
-          Math.floor(Math.random() * (ENGINEERS_PER_LARGE_AIRPORT.max - ENGINEERS_PER_LARGE_AIRPORT.min + 1));
 
-        await this.addOrUpdatePersonnelInventory(airport.ident, "worker", workerCount);
-        await this.addOrUpdatePersonnelInventory(airport.ident, "engineer", engineerCount);
+        // Pick country codes appropriate for the airport's region
+        const countryCodes = WorkerService.pickCountriesForAirport(airport.ident, workerCount);
 
-        workersSpawned += workerCount;
-        engineersSpawned += engineerCount;
+        for (const countryCode of countryCodes) {
+          const stats = WorkerService.getCountryStats(countryCode);
+          if (!stats) continue;
+
+          // Create a market order for this worker
+          const order: MarketOrder = {
+            id: this.generateUUID(),
+            type: "sell",
+            item_code: "worker",
+            quantity: 1,
+            price_per_unit: stats.worker_buy_price,
+            icao: airport.ident,
+            seller_id: "AI",
+            is_active: true,
+            created_at: new Date().toISOString(),
+            // Store country code in the order for worker generation at purchase
+            metadata: countryCode,
+          };
+
+          await DatabaseManager.put("market_orders", order, false);
+          workersSpawned++;
+        }
       }
 
-      // Spawn workers at medium airports (no engineers)
-      for (const airport of mediumAirports.slice(0, 30)) { // Limit to 30 airports
-        const workerCount = WORKERS_PER_MEDIUM_AIRPORT.min +
-          Math.floor(Math.random() * (WORKERS_PER_MEDIUM_AIRPORT.max - WORKERS_PER_MEDIUM_AIRPORT.min + 1));
-
-        await this.addOrUpdatePersonnelInventory(airport.ident, "worker", workerCount);
-        workersSpawned += workerCount;
-      }
-
-      console.log(`[AIEconomyService] Spawned ${workersSpawned} workers, ${engineersSpawned} engineers`);
+      console.log(`[AIEconomyService] Spawned ${workersSpawned} worker market orders at large airports`);
     } catch (error) {
       console.error("[AIEconomyService] Failed to spawn personnel:", error);
-    }
-  }
-
-  /**
-   * Add or update personnel inventory at an airport
-   */
-  private async addOrUpdatePersonnelInventory(icao: string, itemCode: string, quantity: number): Promise<void> {
-    // Check if there's already personnel of this type at the airport
-    const existing = await DatabaseManager.getInventoryAt("airport", icao);
-    const existingItem = existing.find(i => i.item_code === itemCode);
-
-    if (existingItem) {
-      // Update quantity (cap at reasonable maximum)
-      existingItem.quantity = Math.min(existingItem.quantity + quantity, 20);
-      await DatabaseManager.put("inventory", existingItem, false);
-    } else {
-      // Create new inventory entry
-      const inventoryItem: InventoryItem = {
-        id: this.generateUUID(),
-        location_type: "airport",
-        location_id: icao,
-        item_code: itemCode,
-        quantity: quantity,
-        owner_type: "player", // Available for pickup (not owned by anyone specifically)
-        created_at: new Date().toISOString(),
-      };
-      await DatabaseManager.put("inventory", inventoryItem, false);
     }
   }
 

@@ -2,766 +2,1283 @@
   "items": [
     {
       "id": "raw-fish",
-      "name": "Raw Fish",
+      "name": "Fish",
       "tier": 0,
-      "tags": ["food", "raw", "animal"],
-      "icon": "fish",
+      "tags": [
+        "food",
+        "raw",
+        "animal"
+      ],
+      "icon": "Fi",
       "baseValue": 10,
-      "weightKg": 2.0,
+      "weightKg": 2,
       "isRaw": true,
       "stackSize": 100,
-      "description": "Fresh fish caught from coastal waters"
+      "description": "Fresh fish caught from coastal waters",
+      "icon_path": "Assets/icons/items/t0/fish.svg"
     },
     {
       "id": "raw-meat",
-      "name": "Raw Meat",
+      "name": "Meat",
       "tier": 0,
-      "tags": ["food", "raw", "animal"],
-      "icon": "meat",
+      "tags": [
+        "food",
+        "raw",
+        "animal"
+      ],
+      "icon": "Mt",
       "baseValue": 12,
       "weightKg": 2.5,
       "isRaw": true,
       "stackSize": 100,
-      "description": "Raw meat from livestock"
+      "description": "Raw meat from livestock",
+      "icon_path": "Assets/icons/items/t0/meat.svg"
     },
     {
       "id": "raw-vegetables",
-      "name": "Raw Vegetables",
+      "name": "Vegetables",
       "tier": 0,
-      "tags": ["food", "raw", "plant"],
-      "icon": "vegetables",
+      "tags": [
+        "food",
+        "raw",
+        "plant"
+      ],
+      "icon": "Vg",
       "baseValue": 5,
-      "weightKg": 1.0,
+      "weightKg": 1,
       "isRaw": true,
       "stackSize": 150,
-      "description": "Fresh vegetables from farms"
+      "description": "Fresh vegetables from farms",
+      "icon_path": "Assets/icons/items/t0/vegetables.svg"
     },
     {
       "id": "raw-wheat",
-      "name": "Raw Wheat",
+      "name": "Wheat",
       "tier": 0,
-      "tags": ["food", "raw", "plant", "grain"],
-      "icon": "wheat",
+      "tags": [
+        "food",
+        "raw",
+        "plant",
+        "grain"
+      ],
+      "icon": "Wh",
       "baseValue": 8,
       "weightKg": 1.5,
       "isRaw": true,
       "stackSize": 200,
-      "description": "Wheat grains ready for milling"
+      "description": "Wheat grains ready for milling",
+      "icon_path": "Assets/icons/items/t0/wheat.svg"
     },
     {
       "id": "raw-fruits",
-      "name": "Raw Fruits",
+      "name": "Fruits",
       "tier": 0,
-      "tags": ["food", "raw", "plant"],
-      "icon": "fruits",
+      "tags": [
+        "food",
+        "raw",
+        "plant"
+      ],
+      "icon": "Fr",
       "baseValue": 6,
       "weightKg": 1.2,
       "isRaw": true,
       "stackSize": 120,
-      "description": "Assorted fresh fruits"
+      "description": "Assorted fresh fruits",
+      "icon_path": "Assets/icons/items/t0/fruits.svg"
     },
     {
       "id": "raw-salt",
-      "name": "Raw Salt",
+      "name": "Salt",
       "tier": 0,
-      "tags": ["food", "mineral", "raw"],
-      "icon": "salt",
+      "tags": [
+        "food",
+        "mineral",
+        "raw"
+      ],
+      "icon": "Na",
       "baseValue": 5,
-      "weightKg": 1.0,
+      "weightKg": 1,
       "isRaw": true,
       "stackSize": 200,
-      "description": "Sea salt for preservation and cooking"
+      "description": "Sea salt for preservation and cooking",
+      "icon_path": "Assets/icons/items/t0/salt.svg"
     },
     {
       "id": "raw-sugar",
-      "name": "Raw Sugar",
+      "name": "Sugar",
       "tier": 0,
-      "tags": ["food", "raw", "plant"],
-      "icon": "sugar",
+      "tags": [
+        "food",
+        "raw",
+        "plant"
+      ],
+      "icon": "Sg",
       "baseValue": 7,
-      "weightKg": 1.0,
+      "weightKg": 1,
       "isRaw": true,
       "stackSize": 150,
-      "description": "Raw cane sugar"
+      "description": "Raw cane sugar",
+      "icon_path": "Assets/icons/items/t0/sugar.svg"
     },
     {
       "id": "raw-milk",
-      "name": "Raw Milk",
+      "name": "Milk",
       "tier": 0,
-      "tags": ["food", "raw", "animal"],
-      "icon": "milk",
+      "tags": [
+        "food",
+        "raw",
+        "animal"
+      ],
+      "icon": "Mk",
       "baseValue": 4,
-      "weightKg": 2.0,
+      "weightKg": 2,
       "isRaw": true,
       "stackSize": 50,
-      "description": "Fresh milk from dairy farms"
+      "description": "Fresh milk from dairy farms",
+      "icon_path": "Assets/icons/items/t0/milk.svg"
     },
     {
       "id": "raw-cocoa",
-      "name": "Raw Cocoa",
+      "name": "Cocoa",
       "tier": 0,
-      "tags": ["food", "raw", "plant"],
-      "icon": "cocoa",
+      "tags": [
+        "food",
+        "raw",
+        "plant"
+      ],
+      "icon": "Cc",
       "baseValue": 15,
-      "weightKg": 1.0,
+      "weightKg": 1,
       "isRaw": true,
       "stackSize": 100,
-      "description": "Raw cocoa beans"
+      "description": "Raw cocoa beans",
+      "icon_path": "Assets/icons/items/t0/cocoa.svg"
     },
     {
       "id": "raw-vanilla",
-      "name": "Raw Vanilla",
+      "name": "Vanilla",
       "tier": 0,
-      "tags": ["food", "raw", "plant"],
-      "icon": "vanilla",
+      "tags": [
+        "food",
+        "raw",
+        "plant"
+      ],
+      "icon": "Va",
       "baseValue": 50,
       "weightKg": 0.5,
       "isRaw": true,
       "stackSize": 80,
-      "description": "Rare vanilla pods from Madagascar"
+      "description": "Rare vanilla pods from Madagascar",
+      "icon_path": "Assets/icons/items/t0/vanilla.svg"
     },
     {
       "id": "iron-ore",
       "name": "Iron Ore",
       "tier": 0,
-      "tags": ["construction", "mineral", "raw"],
-      "icon": "ore",
+      "tags": [
+        "construction",
+        "mineral",
+        "raw"
+      ],
+      "icon": "Fe",
       "baseValue": 15,
-      "weightKg": 5.0,
+      "weightKg": 5,
       "isRaw": true,
       "stackSize": 100,
-      "description": "Raw iron ore from mines"
+      "description": "Raw iron ore from mines",
+      "icon_path": "Assets/icons/items/t0/iron_ore.svg"
     },
     {
       "id": "copper-ore",
       "name": "Copper Ore",
       "tier": 0,
-      "tags": ["construction", "mineral", "raw", "electronics"],
-      "icon": "copper",
+      "tags": [
+        "construction",
+        "mineral",
+        "raw",
+        "electronics"
+      ],
+      "icon": "Cu",
       "baseValue": 12,
-      "weightKg": 4.0,
+      "weightKg": 4,
       "isRaw": true,
       "stackSize": 100,
-      "description": "Copper ore for processing"
+      "description": "Copper ore for processing",
+      "icon_path": "Assets/icons/items/t0/copper_ore.svg"
     },
     {
       "id": "raw-wood",
-      "name": "Raw Wood",
+      "name": "Wood",
       "tier": 0,
-      "tags": ["construction", "raw", "organic"],
-      "icon": "wood",
+      "tags": [
+        "construction",
+        "raw",
+        "organic"
+      ],
+      "icon": "Wd",
       "baseValue": 8,
-      "weightKg": 3.0,
+      "weightKg": 3,
       "isRaw": true,
       "stackSize": 150,
-      "description": "Freshly cut timber"
+      "description": "Freshly cut timber",
+      "icon_path": "Assets/icons/items/t0/wood.svg"
     },
     {
       "id": "raw-stone",
-      "name": "Raw Stone",
+      "name": "Stone",
       "tier": 0,
-      "tags": ["construction", "mineral", "raw"],
-      "icon": "stone",
+      "tags": [
+        "construction",
+        "mineral",
+        "raw"
+      ],
+      "icon": "St",
       "baseValue": 5,
-      "weightKg": 10.0,
+      "weightKg": 10,
       "isRaw": true,
       "stackSize": 80,
-      "description": "Quarried stone"
+      "description": "Quarried stone",
+      "icon_path": "Assets/icons/items/t0/stone.svg"
     },
     {
       "id": "sand",
       "name": "Sand",
       "tier": 0,
-      "tags": ["construction", "mineral", "raw"],
-      "icon": "sand",
+      "tags": [
+        "construction",
+        "mineral",
+        "raw"
+      ],
+      "icon": "Sd",
       "baseValue": 3,
-      "weightKg": 2.0,
+      "weightKg": 2,
       "isRaw": true,
       "stackSize": 200,
-      "description": "Sand for concrete and glass"
+      "description": "Sand for concrete and glass",
+      "icon_path": "Assets/icons/items/t0/sand.svg"
     },
     {
       "id": "clay",
       "name": "Clay",
       "tier": 0,
-      "tags": ["construction", "mineral", "raw"],
-      "icon": "clay",
+      "tags": [
+        "construction",
+        "mineral",
+        "raw"
+      ],
+      "icon": "Cy",
       "baseValue": 4,
       "weightKg": 2.5,
       "isRaw": true,
       "stackSize": 150,
-      "description": "Clay for bricks and ceramics"
+      "description": "Clay for bricks and ceramics",
+      "icon_path": "Assets/icons/items/t0/clay.svg"
     },
     {
       "id": "limestone",
       "name": "Limestone",
       "tier": 0,
-      "tags": ["construction", "mineral", "raw"],
-      "icon": "limestone",
+      "tags": [
+        "construction",
+        "mineral",
+        "raw"
+      ],
+      "icon": "Ls",
       "baseValue": 6,
-      "weightKg": 8.0,
+      "weightKg": 8,
       "isRaw": true,
       "stackSize": 100,
-      "description": "Limestone for cement production"
+      "description": "Limestone for cement production",
+      "icon_path": "Assets/icons/items/t0/limestone.svg"
     },
     {
       "id": "aluminum-ore",
       "name": "Aluminum Ore",
       "tier": 0,
-      "tags": ["construction", "mineral", "raw"],
-      "icon": "aluminum",
+      "tags": [
+        "construction",
+        "mineral",
+        "raw"
+      ],
+      "icon": "Al",
       "baseValue": 18,
       "weightKg": 4.5,
       "isRaw": true,
       "stackSize": 100,
-      "description": "Bauxite ore for aluminum"
+      "description": "Bauxite ore for aluminum",
+      "icon_path": "Assets/icons/items/t0/aluminum_ore.svg"
     },
     {
       "id": "titanium-ore",
       "name": "Titanium Ore",
       "tier": 0,
-      "tags": ["construction", "mineral", "raw"],
-      "icon": "titanium",
+      "tags": [
+        "construction",
+        "mineral",
+        "raw"
+      ],
+      "icon": "Ti",
       "baseValue": 45,
       "weightKg": 3.5,
       "isRaw": true,
       "stackSize": 80,
-      "description": "Rare titanium ore"
+      "description": "Rare titanium ore",
+      "icon_path": "Assets/icons/items/t0/titanium_ore.svg"
     },
     {
       "id": "granite",
       "name": "Granite",
       "tier": 0,
-      "tags": ["construction", "mineral", "raw"],
-      "icon": "granite",
+      "tags": [
+        "construction",
+        "mineral",
+        "raw"
+      ],
+      "icon": "Gn",
       "baseValue": 10,
-      "weightKg": 12.0,
+      "weightKg": 12,
       "isRaw": true,
       "stackSize": 60,
-      "description": "Hard granite stone"
+      "description": "Hard granite stone",
+      "icon_path": "Assets/icons/items/t0/granite.svg"
     },
     {
       "id": "crude-oil",
       "name": "Crude Oil",
       "tier": 0,
-      "tags": ["fuel", "raw"],
-      "icon": "oil",
+      "tags": [
+        "fuel",
+        "raw"
+      ],
+      "icon": "Oi",
       "baseValue": 25,
-      "weightKg": 5.0,
+      "weightKg": 5,
       "isRaw": true,
       "stackSize": 100,
-      "description": "Unrefined petroleum"
+      "description": "Unrefined petroleum",
+      "icon_path": "Assets/icons/items/t0/crude_oil.svg"
     },
     {
       "id": "coal",
       "name": "Coal",
       "tier": 0,
-      "tags": ["fuel", "raw", "mineral"],
-      "icon": "coal",
+      "tags": [
+        "fuel",
+        "raw",
+        "mineral"
+      ],
+      "icon": "Co",
       "baseValue": 10,
-      "weightKg": 3.0,
+      "weightKg": 3,
       "isRaw": true,
       "stackSize": 150,
-      "description": "Coal for energy and smelting"
+      "description": "Coal for energy and smelting",
+      "icon_path": "Assets/icons/items/t0/coal.svg"
     },
     {
       "id": "natural-gas",
       "name": "Natural Gas",
       "tier": 0,
-      "tags": ["fuel", "raw"],
-      "icon": "gas",
+      "tags": [
+        "fuel",
+        "raw"
+      ],
+      "icon": "Ng",
       "baseValue": 20,
-      "weightKg": 1.0,
+      "weightKg": 1,
       "isRaw": true,
       "stackSize": 80,
-      "description": "Compressed natural gas"
+      "description": "Compressed natural gas",
+      "icon_path": "Assets/icons/items/t0/natural_gas.svg"
     },
     {
       "id": "uranium-ore",
       "name": "Uranium Ore",
       "tier": 0,
-      "tags": ["fuel", "raw", "mineral", "advanced"],
-      "icon": "uranium",
+      "tags": [
+        "fuel",
+        "raw",
+        "mineral",
+        "advanced"
+      ],
+      "icon": "U",
       "baseValue": 100,
-      "weightKg": 8.0,
+      "weightKg": 8,
       "isRaw": true,
       "stackSize": 30,
-      "description": "Radioactive uranium ore"
+      "description": "Radioactive uranium ore",
+      "icon_path": "Assets/icons/items/t0/uranium_ore.svg"
     },
     {
       "id": "biomass",
       "name": "Biomass",
       "tier": 0,
-      "tags": ["fuel", "raw", "organic"],
-      "icon": "biomass",
+      "tags": [
+        "fuel",
+        "raw",
+        "organic"
+      ],
+      "icon": "Bm",
       "baseValue": 5,
-      "weightKg": 2.0,
+      "weightKg": 2,
       "isRaw": true,
       "stackSize": 120,
-      "description": "Organic matter for biofuel"
+      "description": "Organic matter for biofuel",
+      "icon_path": "Assets/icons/items/t0/biomass.svg"
     },
     {
       "id": "raw-rubber",
-      "name": "Raw Rubber",
+      "name": "Rubber",
       "tier": 0,
-      "tags": ["construction", "raw", "organic"],
-      "icon": "rubber",
+      "tags": [
+        "construction",
+        "raw",
+        "organic"
+      ],
+      "icon": "Rb",
       "baseValue": 12,
       "weightKg": 1.5,
       "isRaw": true,
       "stackSize": 100,
-      "description": "Latex from rubber trees"
+      "description": "Latex from rubber trees",
+      "icon_path": "Assets/icons/items/t0/rubber.svg"
     },
     {
       "id": "cotton",
       "name": "Cotton",
       "tier": 0,
-      "tags": ["raw", "organic"],
-      "icon": "cotton",
+      "tags": [
+        "raw",
+        "organic"
+      ],
+      "icon": "Ct",
       "baseValue": 8,
-      "weightKg": 1.0,
+      "weightKg": 1,
       "isRaw": true,
       "stackSize": 150,
-      "description": "Raw cotton fibers"
+      "description": "Raw cotton fibers",
+      "icon_path": "Assets/icons/items/t0/cotton.svg"
     },
     {
       "id": "raw-silicon",
-      "name": "Raw Silicon",
+      "name": "Silicon",
       "tier": 0,
-      "tags": ["electronics", "mineral", "raw"],
-      "icon": "silicon",
+      "tags": [
+        "electronics",
+        "mineral",
+        "raw"
+      ],
+      "icon": "Si",
       "baseValue": 30,
-      "weightKg": 2.0,
+      "weightKg": 2,
       "isRaw": true,
       "stackSize": 80,
-      "description": "Silicon for electronics"
+      "description": "Silicon for electronics",
+      "icon_path": "Assets/icons/items/t0/silicon.svg"
     },
     {
       "id": "rare-earth-metals",
       "name": "Rare Earth Metals",
       "tier": 0,
-      "tags": ["electronics", "mineral", "raw", "advanced"],
-      "icon": "rare-earth",
+      "tags": [
+        "electronics",
+        "mineral",
+        "raw",
+        "advanced"
+      ],
+      "icon": "RE",
       "baseValue": 80,
-      "weightKg": 3.0,
+      "weightKg": 3,
       "isRaw": true,
       "stackSize": 50,
-      "description": "Rare earth elements"
+      "description": "Rare earth elements",
+      "icon_path": "Assets/icons/items/t0/rare_earth.svg"
     },
     {
       "id": "sulfur",
       "name": "Sulfur",
       "tier": 0,
-      "tags": ["chemical", "mineral", "raw"],
-      "icon": "sulfur",
+      "tags": [
+        "chemical",
+        "mineral",
+        "raw"
+      ],
+      "icon": "Su",
       "baseValue": 15,
       "weightKg": 2.5,
       "isRaw": true,
       "stackSize": 100,
-      "description": "Sulfur for chemicals"
+      "description": "Sulfur for chemicals",
+      "icon_path": "Assets/icons/items/t0/sulfur.svg"
     },
     {
       "id": "phosphate",
       "name": "Phosphate",
       "tier": 0,
-      "tags": ["chemical", "mineral", "raw"],
-      "icon": "phosphate",
+      "tags": [
+        "chemical",
+        "mineral",
+        "raw"
+      ],
+      "icon": "Ph",
       "baseValue": 10,
-      "weightKg": 3.0,
+      "weightKg": 3,
       "isRaw": true,
       "stackSize": 120,
-      "description": "Phosphate for fertilizers"
+      "description": "Phosphate for fertilizers",
+      "icon_path": "Assets/icons/items/t0/phosphate.svg"
     },
     {
       "id": "graphite",
       "name": "Graphite",
       "tier": 0,
-      "tags": ["construction", "mineral", "raw"],
-      "icon": "graphite",
+      "tags": [
+        "construction",
+        "mineral",
+        "raw"
+      ],
+      "icon": "Gp",
       "baseValue": 20,
-      "weightKg": 2.0,
+      "weightKg": 2,
       "isRaw": true,
       "stackSize": 100,
-      "description": "Graphite for batteries and lubricants"
+      "description": "Graphite for batteries and lubricants",
+      "icon_path": "Assets/icons/items/t0/graphite.svg"
     },
     {
       "id": "water",
       "name": "Water",
       "tier": 0,
-      "tags": ["food", "raw"],
-      "icon": "water",
+      "tags": [
+        "food",
+        "raw"
+      ],
+      "icon": "Wa",
       "baseValue": 1,
-      "weightKg": 1.0,
+      "weightKg": 1,
       "isRaw": true,
       "stackSize": 500,
-      "description": "Clean water for production"
+      "description": "Clean water for production",
+      "icon_path": "Assets/icons/items/t0/water.svg"
+    },
+    {
+      "id": "raw-pepper",
+      "name": "Pepper",
+      "tier": 0,
+      "tags": [
+        "food",
+        "raw",
+        "plant",
+        "spice"
+      ],
+      "icon": "Pp",
+      "baseValue": 6,
+      "weightKg": 0.3,
+      "isRaw": true,
+      "stackSize": 100,
+      "description": "Black peppercorns for seasoning",
+      "icon_path": "Assets/icons/items/t0/pepper.svg"
+    },
+    {
+      "id": "raw-egg",
+      "name": "Egg",
+      "tier": 0,
+      "tags": [
+        "food",
+        "raw",
+        "animal"
+      ],
+      "icon": "Eg",
+      "baseValue": 3,
+      "weightKg": 0.5,
+      "isRaw": true,
+      "stackSize": 100,
+      "description": "Fresh eggs from poultry farms",
+      "icon_path": "Assets/icons/items/t0/egg.svg"
+    },
+    {
+      "id": "raw-salad",
+      "name": "Salad",
+      "tier": 0,
+      "tags": [
+        "food",
+        "raw",
+        "plant"
+      ],
+      "icon": "Sl",
+      "baseValue": 4,
+      "weightKg": 0.8,
+      "isRaw": true,
+      "stackSize": 100,
+      "description": "Fresh lettuce and greens",
+      "icon_path": "Assets/icons/items/t0/salad.svg"
+    },
+    {
+      "id": "raw-chili",
+      "name": "Chili",
+      "tier": 0,
+      "tags": [
+        "food",
+        "raw",
+        "plant",
+        "spice"
+      ],
+      "icon": "Cl",
+      "baseValue": 8,
+      "weightKg": 0.2,
+      "isRaw": true,
+      "stackSize": 100,
+      "description": "Hot chili peppers",
+      "icon_path": "Assets/icons/items/t0/chili.svg"
     },
     {
       "id": "dried-fish",
       "name": "Dried Fish",
       "tier": 1,
-      "tags": ["food", "preserved"],
-      "icon": "dried-fish",
+      "tags": [
+        "food",
+        "preserved"
+      ],
+      "icon": "DF",
       "baseValue": 25,
       "weightKg": 1.5,
       "isRaw": false,
       "stackSize": 80,
-      "description": "Preserved fish for long storage"
+      "description": "Preserved fish for long storage",
+      "icon_path": "Assets/icons/items/t1/dried_fish.svg"
     },
     {
       "id": "bread",
       "name": "Bread",
       "tier": 1,
-      "tags": ["food", "baked"],
-      "icon": "bread",
+      "tags": [
+        "food",
+        "baked"
+      ],
+      "icon": "Bd",
       "baseValue": 15,
       "weightKg": 0.5,
       "isRaw": false,
       "stackSize": 100,
-      "description": "Fresh baked bread"
+      "description": "Fresh baked bread",
+      "icon_path": "Assets/icons/items/t1/bread.svg"
     },
     {
       "id": "salted-meat",
       "name": "Salted Meat",
       "tier": 1,
-      "tags": ["food", "preserved", "animal"],
-      "icon": "salted-meat",
+      "tags": [
+        "food",
+        "preserved",
+        "animal"
+      ],
+      "icon": "SM",
       "baseValue": 30,
-      "weightKg": 2.0,
+      "weightKg": 2,
       "isRaw": false,
       "stackSize": 70,
-      "description": "Cured and preserved meat"
+      "description": "Cured and preserved meat",
+      "icon_path": "Assets/icons/items/t1/salted_meat.svg"
     },
     {
       "id": "vegetable-stew",
       "name": "Vegetable Stew",
       "tier": 1,
-      "tags": ["food", "cooked"],
-      "icon": "stew",
+      "tags": [
+        "food",
+        "cooked"
+      ],
+      "icon": "VS",
       "baseValue": 20,
-      "weightKg": 1.0,
+      "weightKg": 1,
       "isRaw": false,
       "stackSize": 60,
-      "description": "Hot vegetable stew"
+      "description": "Hot vegetable stew",
+      "icon_path": "Assets/icons/items/t1/vegetable_stew.svg"
     },
     {
       "id": "fruit-jam",
       "name": "Fruit Jam",
       "tier": 1,
-      "tags": ["food", "preserved", "sweet"],
-      "icon": "jam",
+      "tags": [
+        "food",
+        "preserved",
+        "sweet"
+      ],
+      "icon": "FJ",
       "baseValue": 22,
       "weightKg": 0.8,
       "isRaw": false,
       "stackSize": 80,
-      "description": "Sweet fruit preserve"
+      "description": "Sweet fruit preserve",
+      "icon_path": "Assets/icons/items/t1/fruit_jam.svg"
     },
     {
       "id": "sugar-syrup",
       "name": "Sugar Syrup",
       "tier": 1,
-      "tags": ["food", "ingredient"],
-      "icon": "syrup",
+      "tags": [
+        "food",
+        "ingredient"
+      ],
+      "icon": "SS",
       "baseValue": 18,
       "weightKg": 0.8,
       "isRaw": false,
       "stackSize": 100,
-      "description": "Refined sugar solution"
+      "description": "Refined sugar solution",
+      "icon_path": "Assets/icons/items/t1/sugar_syrup.svg"
     },
     {
       "id": "butter",
       "name": "Butter",
       "tier": 1,
-      "tags": ["food", "dairy"],
-      "icon": "butter",
+      "tags": [
+        "food",
+        "dairy"
+      ],
+      "icon": "Bu",
       "baseValue": 28,
       "weightKg": 0.5,
       "isRaw": false,
       "stackSize": 60,
-      "description": "Fresh dairy butter"
+      "description": "Fresh dairy butter",
+      "icon_path": "Assets/icons/items/t1/butter.svg"
     },
     {
       "id": "flour",
       "name": "Flour",
       "tier": 1,
-      "tags": ["food", "ingredient"],
-      "icon": "flour",
+      "tags": [
+        "food",
+        "ingredient"
+      ],
+      "icon": "Fl",
       "baseValue": 12,
-      "weightKg": 1.0,
+      "weightKg": 1,
       "isRaw": false,
       "stackSize": 150,
-      "description": "Milled wheat flour"
+      "description": "Milled wheat flour",
+      "icon_path": "Assets/icons/items/t1/flour.svg"
     },
     {
       "id": "cocoa-powder",
       "name": "Cocoa Powder",
       "tier": 1,
-      "tags": ["food", "ingredient"],
-      "icon": "cocoa-powder",
+      "tags": [
+        "food",
+        "ingredient"
+      ],
+      "icon": "CP",
       "baseValue": 35,
       "weightKg": 0.6,
       "isRaw": false,
       "stackSize": 80,
-      "description": "Ground cocoa for chocolate"
+      "description": "Ground cocoa for chocolate",
+      "icon_path": "Assets/icons/items/t1/cocoa_powder.svg"
     },
     {
       "id": "vanilla-extract",
       "name": "Vanilla Extract",
       "tier": 1,
-      "tags": ["food", "ingredient", "rare"],
-      "icon": "vanilla-extract",
+      "tags": [
+        "food",
+        "ingredient",
+        "rare"
+      ],
+      "icon": "VE",
       "baseValue": 120,
       "weightKg": 0.3,
       "isRaw": false,
       "stackSize": 50,
-      "description": "Concentrated vanilla essence"
+      "description": "Concentrated vanilla essence",
+      "icon_path": "Assets/icons/items/t1/vanilla_extract.svg"
     },
     {
       "id": "steel-ingot",
       "name": "Steel Ingot",
       "tier": 1,
-      "tags": ["construction", "metal"],
-      "icon": "steel",
+      "tags": [
+        "construction",
+        "metal"
+      ],
+      "icon": "Se",
       "baseValue": 45,
-      "weightKg": 8.0,
+      "weightKg": 8,
       "isRaw": false,
       "stackSize": 80,
-      "description": "Refined steel ingots"
+      "description": "Refined steel ingots",
+      "icon_path": "Assets/icons/items/t1/steel_ingot.svg"
     },
     {
       "id": "copper-ingot",
       "name": "Copper Ingot",
       "tier": 1,
-      "tags": ["construction", "metal", "electronics"],
-      "icon": "copper-ingot",
+      "tags": [
+        "construction",
+        "metal",
+        "electronics"
+      ],
+      "icon": "Ci",
       "baseValue": 38,
-      "weightKg": 6.0,
+      "weightKg": 6,
       "isRaw": false,
       "stackSize": 80,
-      "description": "Pure copper ingots"
+      "description": "Pure copper ingots",
+      "icon_path": "Assets/icons/items/t1/copper_ingot.svg"
     },
     {
       "id": "planks",
       "name": "Planks",
       "tier": 1,
-      "tags": ["construction", "wood"],
-      "icon": "planks",
+      "tags": [
+        "construction",
+        "wood"
+      ],
+      "icon": "Pk",
       "baseValue": 22,
-      "weightKg": 2.0,
+      "weightKg": 2,
       "isRaw": false,
       "stackSize": 100,
-      "description": "Processed wooden planks"
+      "description": "Processed wooden planks",
+      "icon_path": "Assets/icons/items/t1/planks.svg"
     },
     {
       "id": "stone-bricks",
       "name": "Stone Bricks",
       "tier": 1,
-      "tags": ["construction", "masonry"],
-      "icon": "stone-bricks",
+      "tags": [
+        "construction",
+        "masonry"
+      ],
+      "icon": "SB",
       "baseValue": 18,
-      "weightKg": 8.0,
+      "weightKg": 8,
       "isRaw": false,
       "stackSize": 70,
-      "description": "Cut stone blocks"
+      "description": "Cut stone blocks",
+      "icon_path": "Assets/icons/items/t1/stone_bricks.svg"
     },
     {
       "id": "glass",
       "name": "Glass",
       "tier": 1,
-      "tags": ["construction", "transparent"],
-      "icon": "glass",
+      "tags": [
+        "construction",
+        "transparent"
+      ],
+      "icon": "Gl",
       "baseValue": 25,
-      "weightKg": 4.0,
+      "weightKg": 4,
       "isRaw": false,
       "stackSize": 60,
-      "description": "Clear glass sheets"
+      "description": "Clear glass sheets",
+      "icon_path": "Assets/icons/items/t1/glass.svg"
     },
     {
       "id": "bricks",
       "name": "Bricks",
       "tier": 1,
-      "tags": ["construction", "masonry"],
-      "icon": "bricks",
+      "tags": [
+        "construction",
+        "masonry"
+      ],
+      "icon": "Bk",
       "baseValue": 15,
-      "weightKg": 6.0,
+      "weightKg": 6,
       "isRaw": false,
       "stackSize": 90,
-      "description": "Fired clay bricks"
+      "description": "Fired clay bricks",
+      "icon_path": "Assets/icons/items/t1/bricks.svg"
     },
     {
       "id": "cement",
       "name": "Cement",
       "tier": 1,
-      "tags": ["construction", "binding"],
-      "icon": "cement",
+      "tags": [
+        "construction",
+        "binding"
+      ],
+      "icon": "Cm",
       "baseValue": 20,
-      "weightKg": 10.0,
+      "weightKg": 10,
       "isRaw": false,
       "stackSize": 80,
-      "description": "Building cement"
+      "description": "Building cement",
+      "icon_path": "Assets/icons/items/t1/cement.svg"
     },
     {
       "id": "aluminum-ingot",
       "name": "Aluminum Ingot",
       "tier": 1,
-      "tags": ["construction", "metal", "light"],
-      "icon": "aluminum-ingot",
+      "tags": [
+        "construction",
+        "metal",
+        "light"
+      ],
+      "icon": "Ai",
       "baseValue": 55,
-      "weightKg": 4.0,
+      "weightKg": 4,
       "isRaw": false,
       "stackSize": 70,
-      "description": "Lightweight aluminum ingots"
+      "description": "Lightweight aluminum ingots",
+      "icon_path": "Assets/icons/items/t1/aluminum_ingot.svg"
     },
     {
       "id": "titanium-ingot",
       "name": "Titanium Ingot",
       "tier": 1,
-      "tags": ["construction", "metal", "advanced"],
-      "icon": "titanium-ingot",
+      "tags": [
+        "construction",
+        "metal",
+        "advanced"
+      ],
+      "icon": "Ti",
       "baseValue": 150,
-      "weightKg": 3.0,
+      "weightKg": 3,
       "isRaw": false,
       "stackSize": 50,
-      "description": "High-grade titanium"
+      "description": "High-grade titanium",
+      "icon_path": "Assets/icons/items/t1/titanium_ingot.svg"
     },
     {
       "id": "marble-slabs",
       "name": "Marble Slabs",
       "tier": 1,
-      "tags": ["construction", "masonry", "luxury"],
-      "icon": "marble",
+      "tags": [
+        "construction",
+        "masonry",
+        "luxury"
+      ],
+      "icon": "Mb",
       "baseValue": 65,
-      "weightKg": 10.0,
+      "weightKg": 10,
       "isRaw": false,
       "stackSize": 40,
-      "description": "Polished marble slabs"
+      "description": "Polished marble slabs",
+      "icon_path": "Assets/icons/items/t1/marble_slabs.svg"
     },
     {
       "id": "diesel",
       "name": "Diesel",
       "tier": 1,
-      "tags": ["fuel", "liquid"],
-      "icon": "diesel",
+      "tags": [
+        "fuel",
+        "liquid"
+      ],
+      "icon": "Di",
       "baseValue": 60,
-      "weightKg": 4.0,
+      "weightKg": 4,
       "isRaw": false,
       "stackSize": 80,
-      "description": "Refined diesel fuel"
+      "description": "Refined diesel fuel",
+      "icon_path": "Assets/icons/items/t1/diesel.svg"
     },
     {
       "id": "charcoal",
       "name": "Charcoal",
       "tier": 1,
-      "tags": ["fuel", "solid"],
-      "icon": "charcoal",
+      "tags": [
+        "fuel",
+        "solid"
+      ],
+      "icon": "Ch",
       "baseValue": 28,
       "weightKg": 2.5,
       "isRaw": false,
       "stackSize": 100,
-      "description": "Processed charcoal"
+      "description": "Processed charcoal",
+      "icon_path": "Assets/icons/items/t1/charcoal.svg"
     },
     {
       "id": "compressed-gas",
       "name": "Compressed Gas",
       "tier": 1,
-      "tags": ["fuel", "gas"],
-      "icon": "compressed-gas",
+      "tags": [
+        "fuel",
+        "gas"
+      ],
+      "icon": "CG",
       "baseValue": 55,
-      "weightKg": 2.0,
+      "weightKg": 2,
       "isRaw": false,
       "stackSize": 60,
-      "description": "Liquefied compressed gas"
+      "description": "Liquefied compressed gas",
+      "icon_path": "Assets/icons/items/t1/compressed_gas.svg"
     },
     {
       "id": "biofuel",
       "name": "Biofuel",
       "tier": 1,
-      "tags": ["fuel", "renewable"],
-      "icon": "biofuel",
+      "tags": [
+        "fuel",
+        "renewable"
+      ],
+      "icon": "Bf",
       "baseValue": 48,
       "weightKg": 3.5,
       "isRaw": false,
       "stackSize": 70,
-      "description": "Organic biofuel"
+      "description": "Organic biofuel",
+      "icon_path": "Assets/icons/items/t1/biofuel.svg"
     },
     {
       "id": "uranium-pellets",
       "name": "Uranium Pellets",
       "tier": 1,
-      "tags": ["fuel", "nuclear", "advanced"],
-      "icon": "uranium-pellets",
+      "tags": [
+        "fuel",
+        "nuclear",
+        "advanced"
+      ],
+      "icon": "UP",
       "baseValue": 300,
-      "weightKg": 5.0,
+      "weightKg": 5,
       "isRaw": false,
       "stackSize": 30,
-      "description": "Enriched uranium pellets"
+      "description": "Enriched uranium pellets",
+      "icon_path": "Assets/icons/items/t1/uranium_pellets.svg"
     },
     {
       "id": "rubber-sheets",
       "name": "Rubber Sheets",
       "tier": 1,
-      "tags": ["construction", "industrial"],
-      "icon": "rubber-sheets",
+      "tags": [
+        "construction",
+        "industrial"
+      ],
+      "icon": "Rs",
       "baseValue": 32,
-      "weightKg": 2.0,
+      "weightKg": 2,
       "isRaw": false,
       "stackSize": 80,
-      "description": "Vulcanized rubber sheets"
+      "description": "Vulcanized rubber sheets",
+      "icon_path": "Assets/icons/items/t1/rubber_sheets.svg"
     },
     {
       "id": "fabric",
       "name": "Fabric",
       "tier": 1,
-      "tags": ["construction", "textile"],
-      "icon": "fabric",
+      "tags": [
+        "construction",
+        "textile"
+      ],
+      "icon": "Fb",
       "baseValue": 24,
       "weightKg": 1.5,
       "isRaw": false,
       "stackSize": 90,
-      "description": "Woven cotton fabric"
+      "description": "Woven cotton fabric",
+      "icon_path": "Assets/icons/items/t1/fabric.svg"
     },
     {
       "id": "silicon-wafers",
       "name": "Silicon Wafers",
       "tier": 1,
-      "tags": ["electronics", "advanced"],
-      "icon": "silicon-wafers",
+      "tags": [
+        "electronics",
+        "advanced"
+      ],
+      "icon": "Sw",
       "baseValue": 90,
       "weightKg": 1.5,
       "isRaw": false,
       "stackSize": 50,
-      "description": "Purified silicon wafers"
+      "description": "Purified silicon wafers",
+      "icon_path": "Assets/icons/items/t1/silicon_wafers.svg"
     },
     {
       "id": "sulfuric-acid",
       "name": "Sulfuric Acid",
       "tier": 1,
-      "tags": ["chemical", "industrial"],
-      "icon": "acid",
+      "tags": [
+        "chemical",
+        "industrial"
+      ],
+      "icon": "Ac",
       "baseValue": 40,
-      "weightKg": 4.0,
+      "weightKg": 4,
       "isRaw": false,
       "stackSize": 60,
-      "description": "Industrial grade acid"
+      "description": "Industrial grade acid",
+      "icon_path": "Assets/icons/items/t1/sulfuric_acid.svg"
     },
     {
       "id": "fertilizer",
       "name": "Fertilizer",
       "tier": 1,
-      "tags": ["chemical", "agriculture"],
-      "icon": "fertilizer",
+      "tags": [
+        "chemical",
+        "agriculture"
+      ],
+      "icon": "Fz",
       "baseValue": 28,
-      "weightKg": 5.0,
+      "weightKg": 5,
       "isRaw": false,
       "stackSize": 80,
-      "description": "Phosphate fertilizer"
+      "description": "Phosphate fertilizer",
+      "icon_path": "Assets/icons/items/t1/fertilizer.svg"
+    },
+    {
+      "id": "peppered-meat",
+      "name": "Peppered Meat",
+      "tier": 1,
+      "tags": [
+        "food",
+        "cooked",
+        "spiced"
+      ],
+      "icon": "PM",
+      "baseValue": 35,
+      "weightKg": 2.2,
+      "isRaw": false,
+      "stackSize": 70,
+      "description": "Meat seasoned with black pepper",
+      "icon_path": "Assets/icons/items/t1/peppered_meat.svg"
+    },
+    {
+      "id": "meat-omelette",
+      "name": "Meat Omelette",
+      "tier": 1,
+      "tags": [
+        "food",
+        "cooked"
+      ],
+      "icon": "MO",
+      "baseValue": 28,
+      "weightKg": 1.5,
+      "isRaw": false,
+      "stackSize": 60,
+      "description": "Hearty omelette with meat chunks",
+      "icon_path": "Assets/icons/items/t1/meat_omelette.svg"
+    },
+    {
+      "id": "salted-omelette",
+      "name": "Salted Omelette",
+      "tier": 1,
+      "tags": [
+        "food",
+        "cooked"
+      ],
+      "icon": "SO",
+      "baseValue": 18,
+      "weightKg": 1.0,
+      "isRaw": false,
+      "stackSize": 60,
+      "description": "Simple salted egg omelette",
+      "icon_path": "Assets/icons/items/t1/salted_omelette.svg"
+    },
+    {
+      "id": "pepper-omelette",
+      "name": "Pepper Omelette",
+      "tier": 1,
+      "tags": [
+        "food",
+        "cooked",
+        "spiced"
+      ],
+      "icon": "PO",
+      "baseValue": 22,
+      "weightKg": 0.8,
+      "isRaw": false,
+      "stackSize": 60,
+      "description": "Omelette with cracked pepper",
+      "icon_path": "Assets/icons/items/t1/pepper_omelette.svg"
+    },
+    {
+      "id": "fish-omelette",
+      "name": "Fish Omelette",
+      "tier": 1,
+      "tags": [
+        "food",
+        "cooked"
+      ],
+      "icon": "FO",
+      "baseValue": 25,
+      "weightKg": 1.2,
+      "isRaw": false,
+      "stackSize": 60,
+      "description": "Omelette with flaked fish",
+      "icon_path": "Assets/icons/items/t1/fish_omelette.svg"
+    },
+    {
+      "id": "meat-salad",
+      "name": "Meat Salad",
+      "tier": 1,
+      "tags": [
+        "food",
+        "cooked",
+        "fresh"
+      ],
+      "icon": "MS",
+      "baseValue": 22,
+      "weightKg": 1.8,
+      "isRaw": false,
+      "stackSize": 60,
+      "description": "Fresh salad with grilled meat",
+      "icon_path": "Assets/icons/items/t1/meat_salad.svg"
+    },
+    {
+      "id": "seafood-salad",
+      "name": "Seafood Salad",
+      "tier": 1,
+      "tags": [
+        "food",
+        "cooked",
+        "fresh"
+      ],
+      "icon": "Sf",
+      "baseValue": 20,
+      "weightKg": 1.5,
+      "isRaw": false,
+      "stackSize": 60,
+      "description": "Fresh salad with seafood",
+      "icon_path": "Assets/icons/items/t1/seafood_salad.svg"
+    },
+    {
+      "id": "vanilla-salad",
+      "name": "Vanilla Salad",
+      "tier": 1,
+      "tags": [
+        "food",
+        "cooked",
+        "luxury"
+      ],
+      "icon": "Vs",
+      "baseValue": 65,
+      "weightKg": 1.0,
+      "isRaw": false,
+      "stackSize": 40,
+      "description": "Luxury salad with vanilla dressing",
+      "icon_path": "Assets/icons/items/t1/vanilla_salad.svg"
+    },
+    {
+      "id": "chili-meat",
+      "name": "Chili Meat",
+      "tier": 1,
+      "tags": [
+        "food",
+        "cooked",
+        "spiced"
+      ],
+      "icon": "Cm",
+      "baseValue": 38,
+      "weightKg": 2.0,
+      "isRaw": false,
+      "stackSize": 60,
+      "description": "Spicy meat with hot chili",
+      "icon_path": "Assets/icons/items/t1/chili_meat.svg"
     },
     {
       "id": "quality-bread",
       "name": "Quality Bread",
       "tier": 2,
-      "tags": ["food", "baked", "quality"],
-      "icon": "quality-bread",
+      "tags": [
+        "food",
+        "baked",
+        "quality"
+      ],
+      "icon": "QB",
       "baseValue": 35,
       "weightKg": 0.6,
       "isRaw": false,
@@ -772,8 +1289,12 @@
       "id": "smoked-fish",
       "name": "Smoked Fish",
       "tier": 2,
-      "tags": ["food", "preserved", "quality"],
-      "icon": "smoked-fish",
+      "tags": [
+        "food",
+        "preserved",
+        "quality"
+      ],
+      "icon": "SF",
       "baseValue": 55,
       "weightKg": 1.8,
       "isRaw": false,
@@ -784,8 +1305,12 @@
       "id": "chocolate-bar",
       "name": "Chocolate Bar",
       "tier": 2,
-      "tags": ["food", "sweet", "luxury"],
-      "icon": "chocolate",
+      "tags": [
+        "food",
+        "sweet",
+        "luxury"
+      ],
+      "icon": "Cb",
       "baseValue": 85,
       "weightKg": 0.4,
       "isRaw": false,
@@ -796,8 +1321,12 @@
       "id": "fruit-cake",
       "name": "Fruit Cake",
       "tier": 2,
-      "tags": ["food", "baked", "sweet"],
-      "icon": "fruit-cake",
+      "tags": [
+        "food",
+        "baked",
+        "sweet"
+      ],
+      "icon": "FC",
       "baseValue": 75,
       "weightKg": 1.2,
       "isRaw": false,
@@ -808,10 +1337,14 @@
       "id": "cheese",
       "name": "Cheese",
       "tier": 2,
-      "tags": ["food", "dairy", "quality"],
-      "icon": "cheese",
+      "tags": [
+        "food",
+        "dairy",
+        "quality"
+      ],
+      "icon": "Cz",
       "baseValue": 65,
-      "weightKg": 1.0,
+      "weightKg": 1,
       "isRaw": false,
       "stackSize": 50,
       "description": "Aged cheese"
@@ -820,8 +1353,12 @@
       "id": "sausage",
       "name": "Sausage",
       "tier": 2,
-      "tags": ["food", "meat", "preserved"],
-      "icon": "sausage",
+      "tags": [
+        "food",
+        "meat",
+        "preserved"
+      ],
+      "icon": "Ss",
       "baseValue": 48,
       "weightKg": 1.5,
       "isRaw": false,
@@ -832,8 +1369,12 @@
       "id": "vegetable-soup",
       "name": "Vegetable Soup",
       "tier": 2,
-      "tags": ["food", "cooked", "quality"],
-      "icon": "soup",
+      "tags": [
+        "food",
+        "cooked",
+        "quality"
+      ],
+      "icon": "Vs",
       "baseValue": 42,
       "weightKg": 1.2,
       "isRaw": false,
@@ -844,8 +1385,12 @@
       "id": "pastry",
       "name": "Pastry",
       "tier": 2,
-      "tags": ["food", "baked", "sweet"],
-      "icon": "pastry",
+      "tags": [
+        "food",
+        "baked",
+        "sweet"
+      ],
+      "icon": "Ps",
       "baseValue": 38,
       "weightKg": 0.5,
       "isRaw": false,
@@ -856,8 +1401,12 @@
       "id": "dried-fruit",
       "name": "Dried Fruit",
       "tier": 2,
-      "tags": ["food", "preserved", "sweet"],
-      "icon": "dried-fruit",
+      "tags": [
+        "food",
+        "preserved",
+        "sweet"
+      ],
+      "icon": "Df",
       "baseValue": 45,
       "weightKg": 0.8,
       "isRaw": false,
@@ -868,8 +1417,13 @@
       "id": "honey-bread",
       "name": "Honey Bread",
       "tier": 2,
-      "tags": ["food", "baked", "sweet", "quality"],
-      "icon": "honey-bread",
+      "tags": [
+        "food",
+        "baked",
+        "sweet",
+        "quality"
+      ],
+      "icon": "HB",
       "baseValue": 58,
       "weightKg": 0.7,
       "isRaw": false,
@@ -880,10 +1434,14 @@
       "id": "reinforced-steel",
       "name": "Reinforced Steel",
       "tier": 2,
-      "tags": ["construction", "metal", "quality"],
-      "icon": "reinforced-steel",
+      "tags": [
+        "construction",
+        "metal",
+        "quality"
+      ],
+      "icon": "RS",
       "baseValue": 95,
-      "weightKg": 10.0,
+      "weightKg": 10,
       "isRaw": false,
       "stackSize": 60,
       "description": "High-strength steel"
@@ -892,10 +1450,14 @@
       "id": "wire-cable",
       "name": "Wire Cable",
       "tier": 2,
-      "tags": ["construction", "metal", "electronics"],
-      "icon": "cable",
+      "tags": [
+        "construction",
+        "metal",
+        "electronics"
+      ],
+      "icon": "WC",
       "baseValue": 68,
-      "weightKg": 3.0,
+      "weightKg": 3,
       "isRaw": false,
       "stackSize": 80,
       "description": "Copper wire cables"
@@ -904,10 +1466,13 @@
       "id": "wooden-beams",
       "name": "Wooden Beams",
       "tier": 2,
-      "tags": ["construction", "wood"],
-      "icon": "beams",
+      "tags": [
+        "construction",
+        "wood"
+      ],
+      "icon": "WB",
       "baseValue": 55,
-      "weightKg": 8.0,
+      "weightKg": 8,
       "isRaw": false,
       "stackSize": 50,
       "description": "Structural wooden beams"
@@ -916,10 +1481,13 @@
       "id": "concrete-blocks",
       "name": "Concrete Blocks",
       "tier": 2,
-      "tags": ["construction", "masonry"],
-      "icon": "concrete",
+      "tags": [
+        "construction",
+        "masonry"
+      ],
+      "icon": "CB",
       "baseValue": 45,
-      "weightKg": 15.0,
+      "weightKg": 15,
       "isRaw": false,
       "stackSize": 60,
       "description": "Heavy concrete blocks"
@@ -928,10 +1496,13 @@
       "id": "window-panes",
       "name": "Window Panes",
       "tier": 2,
-      "tags": ["construction", "transparent"],
-      "icon": "window",
+      "tags": [
+        "construction",
+        "transparent"
+      ],
+      "icon": "WP",
       "baseValue": 72,
-      "weightKg": 6.0,
+      "weightKg": 6,
       "isRaw": false,
       "stackSize": 40,
       "description": "Glass window frames"
@@ -940,10 +1511,13 @@
       "id": "insulation",
       "name": "Insulation",
       "tier": 2,
-      "tags": ["construction", "industrial"],
-      "icon": "insulation",
+      "tags": [
+        "construction",
+        "industrial"
+      ],
+      "icon": "In",
       "baseValue": 58,
-      "weightKg": 3.0,
+      "weightKg": 3,
       "isRaw": false,
       "stackSize": 70,
       "description": "Rubber insulation"
@@ -952,10 +1526,14 @@
       "id": "steel-pipes",
       "name": "Steel Pipes",
       "tier": 2,
-      "tags": ["construction", "metal", "plumbing"],
-      "icon": "pipes",
+      "tags": [
+        "construction",
+        "metal",
+        "plumbing"
+      ],
+      "icon": "SP",
       "baseValue": 82,
-      "weightKg": 9.0,
+      "weightKg": 9,
       "isRaw": false,
       "stackSize": 50,
       "description": "Steel piping"
@@ -964,10 +1542,14 @@
       "id": "aluminum-frame",
       "name": "Aluminum Frame",
       "tier": 2,
-      "tags": ["construction", "metal", "light"],
-      "icon": "frame",
+      "tags": [
+        "construction",
+        "metal",
+        "light"
+      ],
+      "icon": "AF",
       "baseValue": 88,
-      "weightKg": 5.0,
+      "weightKg": 5,
       "isRaw": false,
       "stackSize": 50,
       "description": "Aluminum frames"
@@ -976,10 +1558,13 @@
       "id": "circuit-board",
       "name": "Circuit Board",
       "tier": 2,
-      "tags": ["electronics", "advanced"],
-      "icon": "circuit",
+      "tags": [
+        "electronics",
+        "advanced"
+      ],
+      "icon": "Cr",
       "baseValue": 185,
-      "weightKg": 2.0,
+      "weightKg": 2,
       "isRaw": false,
       "stackSize": 40,
       "description": "Basic circuit boards"
@@ -988,10 +1573,15 @@
       "id": "titanium-plates",
       "name": "Titanium Plates",
       "tier": 2,
-      "tags": ["construction", "metal", "advanced", "armor"],
-      "icon": "titanium-plates",
+      "tags": [
+        "construction",
+        "metal",
+        "advanced",
+        "armor"
+      ],
+      "icon": "TP",
       "baseValue": 320,
-      "weightKg": 4.0,
+      "weightKg": 4,
       "isRaw": false,
       "stackSize": 30,
       "description": "Armor-grade titanium"
@@ -1000,10 +1590,14 @@
       "id": "jet-fuel",
       "name": "Jet Fuel",
       "tier": 2,
-      "tags": ["fuel", "liquid", "aviation"],
-      "icon": "jet-fuel",
+      "tags": [
+        "fuel",
+        "liquid",
+        "aviation"
+      ],
+      "icon": "JF",
       "baseValue": 135,
-      "weightKg": 5.0,
+      "weightKg": 5,
       "isRaw": false,
       "stackSize": 60,
       "description": "Aviation-grade fuel"
@@ -1012,8 +1606,11 @@
       "id": "heating-oil",
       "name": "Heating Oil",
       "tier": 2,
-      "tags": ["fuel", "liquid"],
-      "icon": "heating-oil",
+      "tags": [
+        "fuel",
+        "liquid"
+      ],
+      "icon": "HO",
       "baseValue": 88,
       "weightKg": 4.5,
       "isRaw": false,
@@ -1024,10 +1621,14 @@
       "id": "premium-biofuel",
       "name": "Premium Biofuel",
       "tier": 2,
-      "tags": ["fuel", "renewable", "quality"],
-      "icon": "premium-biofuel",
+      "tags": [
+        "fuel",
+        "renewable",
+        "quality"
+      ],
+      "icon": "PB",
       "baseValue": 115,
-      "weightKg": 4.0,
+      "weightKg": 4,
       "isRaw": false,
       "stackSize": 50,
       "description": "High-efficiency biofuel"
@@ -1036,10 +1637,14 @@
       "id": "rocket-propellant",
       "name": "Rocket Propellant",
       "tier": 2,
-      "tags": ["fuel", "liquid", "advanced"],
-      "icon": "rocket-fuel",
+      "tags": [
+        "fuel",
+        "liquid",
+        "advanced"
+      ],
+      "icon": "RP",
       "baseValue": 285,
-      "weightKg": 6.0,
+      "weightKg": 6,
       "isRaw": false,
       "stackSize": 30,
       "description": "Specialized rocket fuel"
@@ -1048,10 +1653,14 @@
       "id": "nuclear-fuel-rod",
       "name": "Nuclear Fuel Rod",
       "tier": 2,
-      "tags": ["fuel", "nuclear", "advanced"],
-      "icon": "nuclear-rod",
-      "baseValue": 850,
-      "weightKg": 8.0,
+      "tags": [
+        "fuel",
+        "nuclear",
+        "advanced"
+      ],
+      "icon": "NF",
+      "baseValue": 1200,
+      "weightKg": 8,
       "isRaw": false,
       "stackSize": 20,
       "description": "Enriched nuclear fuel rod"
@@ -1060,8 +1669,11 @@
       "id": "plastic-sheets",
       "name": "Plastic Sheets",
       "tier": 2,
-      "tags": ["construction", "chemical"],
-      "icon": "plastic",
+      "tags": [
+        "construction",
+        "chemical"
+      ],
+      "icon": "Pl",
       "baseValue": 62,
       "weightKg": 2.5,
       "isRaw": false,
@@ -1072,8 +1684,11 @@
       "id": "medical-bandages",
       "name": "Medical Bandages",
       "tier": 2,
-      "tags": ["medical", "consumable"],
-      "icon": "bandages",
+      "tags": [
+        "medical",
+        "consumable"
+      ],
+      "icon": "Md",
       "baseValue": 48,
       "weightKg": 0.5,
       "isRaw": false,
@@ -1084,10 +1699,13 @@
       "id": "cleaning-solution",
       "name": "Cleaning Solution",
       "tier": 2,
-      "tags": ["chemical", "industrial"],
-      "icon": "cleaner",
+      "tags": [
+        "chemical",
+        "industrial"
+      ],
+      "icon": "CS",
       "baseValue": 35,
-      "weightKg": 3.0,
+      "weightKg": 3,
       "isRaw": false,
       "stackSize": 80,
       "description": "Industrial cleaner"
@@ -1096,8 +1714,11 @@
       "id": "paint",
       "name": "Paint",
       "tier": 2,
-      "tags": ["chemical", "construction"],
-      "icon": "paint",
+      "tags": [
+        "chemical",
+        "construction"
+      ],
+      "icon": "Pt",
       "baseValue": 52,
       "weightKg": 3.5,
       "isRaw": false,
@@ -1108,10 +1729,13 @@
       "id": "adhesive",
       "name": "Adhesive",
       "tier": 2,
-      "tags": ["chemical", "industrial"],
-      "icon": "glue",
+      "tags": [
+        "chemical",
+        "industrial"
+      ],
+      "icon": "Ad",
       "baseValue": 68,
-      "weightKg": 2.0,
+      "weightKg": 2,
       "isRaw": false,
       "stackSize": 50,
       "description": "Strong industrial glue"
@@ -1120,46 +1744,57 @@
       "id": "worker",
       "name": "Worker",
       "tier": 0,
-      "tags": ["personnel"],
-      "icon": "person",
+      "tags": [
+        "personnel"
+      ],
+      "icon": "Wk",
       "baseValue": 0,
-      "weightKg": 80.0,
+      "weightKg": 80,
       "isRaw": false,
       "stackSize": 1,
-      "description": "A worker available for transport"
+      "description": "A worker available for transport",
+      "icon_path": "Assets/icons/personnel/worker_available.svg"
     },
     {
       "id": "engineer",
       "name": "Engineer",
       "tier": 1,
-      "tags": ["personnel"],
-      "icon": "person",
+      "tags": [
+        "personnel"
+      ],
+      "icon": "En",
       "baseValue": 0,
-      "weightKg": 80.0,
+      "weightKg": 80,
       "isRaw": false,
       "stackSize": 1,
-      "description": "An engineer available for transport"
+      "description": "An engineer available for transport",
+      "icon_path": "Assets/icons/personnel/engineer_available.svg"
     },
     {
       "id": "pilot",
       "name": "Pilot",
       "tier": 2,
-      "tags": ["personnel"],
-      "icon": "person",
+      "tags": [
+        "personnel"
+      ],
+      "icon": "Pi",
       "baseValue": 0,
-      "weightKg": 80.0,
+      "weightKg": 80,
       "isRaw": false,
       "stackSize": 1,
-      "description": "A pilot available for transport"
+      "description": "A pilot available for transport",
+      "icon_path": "Assets/icons/personnel/pilot_available.svg"
     },
     {
       "id": "copilot",
       "name": "Copilot",
       "tier": 2,
-      "tags": ["personnel"],
-      "icon": "person",
+      "tags": [
+        "personnel"
+      ],
+      "icon": "Cp",
       "baseValue": 0,
-      "weightKg": 80.0,
+      "weightKg": 80,
       "isRaw": false,
       "stackSize": 1,
       "description": "A copilot available for transport"
@@ -1168,10 +1803,12 @@
       "id": "passenger",
       "name": "Passenger",
       "tier": 0,
-      "tags": ["personnel"],
-      "icon": "person",
+      "tags": [
+        "personnel"
+      ],
+      "icon": "Px",
       "baseValue": 0,
-      "weightKg": 80.0,
+      "weightKg": 80,
       "isRaw": false,
       "stackSize": 1,
       "description": "A passenger for contract transport"

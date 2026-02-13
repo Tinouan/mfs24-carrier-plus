@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+
+<defs><linearGradient id="al1" x1="20%" y1="0%" x2="80%" y2="100%"><stop offset="0%" style="stop-color:#c0c8d0"/><stop offset="100%" style="stop-color:#7a8a96"/></linearGradient></defs>
+<ellipse cx="34" cy="57" rx="17" ry="4" fill="#000" opacity=".25"/>
+<polygon points="30,6 50,14 56,30 50,46 36,54 16,52 6,38 10,20 20,10" fill="url(#al1)" stroke="#2c2c2c" stroke-width="3"/>
+<polygon points="30,6 40,12 34,20 24,14" fill="#d0d8e0" stroke="#555" stroke-width="1"/>
+<polygon points="40,12 50,14 46,26 34,20" fill="#8a9aa8" stroke="#555" stroke-width="1"/>
+<polygon points="6,38 16,52 22,42 12,34" fill="#606c78" stroke="#444" stroke-width="1"/>
+<path d="M20 28 L26 24 L30 30 L24 36 Z" fill="#e0e8f0" stroke="#8a9aa8" stroke-width="1.5" opacity=".8"/>
+<path d="M36 32 L42 28 L46 36 L40 40 Z" fill="#d8e0ea" stroke="#8a9aa8" stroke-width="1.5" opacity=".7"/>
+<ellipse cx="24" cy="28" rx="3" ry="2" fill="#e8f0f8" opacity=".5"/>
+<line x1="26" y1="24" x2="28" y2="24" stroke="#fff" stroke-width="1.5" opacity=".5"/>
+<line x1="27" y1="23" x2="27" y2="25" stroke="#fff" stroke-width="1.5" opacity=".5"/>
+
+</svg>

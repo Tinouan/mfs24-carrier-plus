@@ -23,7 +23,9 @@ import { NetworkState } from "../state/NetworkState";
 import { DatabaseManager } from "../managers/DatabaseManager";
 import type { Airport, AircraftCatalog, Aircraft } from "../managers/DatabaseManager";
 import { isSoloMode, isOnlineMode, isModeInitialized } from "../state/GameModeState";
+import { LocalFactoryService } from "./LocalFactoryService";
 import type { MarketListing } from "../types";
+import type { Factory } from "../managers/DatabaseManager";
 
 // Re-export types for convenience
 export type {
@@ -922,6 +924,92 @@ class ServiceAdapterClass {
       cancelContract: (contractId: string) => localContractService.cancelContract(contractId),
       refreshContracts: () => localContractService.refreshContracts(),
       generateAIContracts: (playerAirport: string) => localContractService.generateAIContracts(playerAirport),
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // UTILITIES
+  // ─────────────────────────────────────────────────────────
+
+  // ─────────────────────────────────────────────────────────
+  // FACTORY OPERATIONS (Phase 9)
+  // ─────────────────────────────────────────────────────────
+
+  get factories() {
+    return {
+      createFactory: async (airportIdent: string, name: string): Promise<Factory> => {
+        if (isOnlineMode()) {
+          throw new Error("Factories not yet available in Online mode");
+        }
+        return LocalFactoryService.createFactory(airportIdent, name);
+      },
+
+      getMyFactories: async (): Promise<Factory[]> => {
+        if (isOnlineMode()) {
+          throw new Error("Factories not yet available in Online mode");
+        }
+        return LocalFactoryService.getMyFactories();
+      },
+
+      getFactoriesAtAirport: async (airportIdent: string): Promise<Factory[]> => {
+        if (isOnlineMode()) {
+          return [];
+        }
+        return LocalFactoryService.getFactoriesAtAirport(airportIdent);
+      },
+
+      getRemainingSlots: (airportIdent: string, airportType: string): number => {
+        return LocalFactoryService.getRemainingSlots(airportIdent, airportType);
+      },
+
+      upgradeFactory: async (factoryId: string): Promise<Factory> => {
+        if (isOnlineMode()) {
+          throw new Error("Factories not yet available in Online mode");
+        }
+        return LocalFactoryService.upgradeFactory(factoryId);
+      },
+
+      deleteFactory: async (factoryId: string): Promise<void> => {
+        if (isOnlineMode()) {
+          throw new Error("Factories not yet available in Online mode");
+        }
+        return LocalFactoryService.deleteFactory(factoryId);
+      },
+
+      assignWorker: async (workerId: string, factoryId: string): Promise<void> => {
+        if (isOnlineMode()) {
+          throw new Error("Factories not yet available in Online mode");
+        }
+        return LocalFactoryService.assignWorkerToFactory(workerId, factoryId);
+      },
+
+      unassignWorker: async (workerId: string): Promise<void> => {
+        if (isOnlineMode()) {
+          throw new Error("Factories not yet available in Online mode");
+        }
+        return LocalFactoryService.unassignWorkerFromFactory(workerId);
+      },
+
+      depositFood: async (factoryId: string, itemId: string, quantity: number): Promise<void> => {
+        if (isOnlineMode()) {
+          throw new Error("Factories not yet available in Online mode");
+        }
+        return LocalFactoryService.depositFood(factoryId, itemId, quantity);
+      },
+
+      startProduction: async (factoryId: string, recipeId: string, quantity: number) => {
+        if (isOnlineMode()) {
+          throw new Error("Factories not yet available in Online mode");
+        }
+        return LocalFactoryService.startProduction(factoryId, recipeId, quantity);
+      },
+
+      cancelProduction: async (factoryId: string): Promise<void> => {
+        if (isOnlineMode()) {
+          throw new Error("Factories not yet available in Online mode");
+        }
+        return LocalFactoryService.cancelProduction(factoryId);
+      },
     };
   }
 

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+
+<defs><linearGradient id="ir1" x1="20%" y1="0%" x2="80%" y2="100%"><stop offset="0%" style="stop-color:#b8845a"/><stop offset="50%" style="stop-color:#8B5E3C"/><stop offset="100%" style="stop-color:#5c3a1e"/></linearGradient><linearGradient id="ir2" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#ff4444"/><stop offset="100%" style="stop-color:#aa1111"/></linearGradient></defs>
+<ellipse cx="34" cy="57" rx="18" ry="4" fill="#000" opacity=".25"/>
+<polygon points="32,6 52,16 58,32 52,48 38,56 18,54 6,42 8,22 18,10" fill="url(#ir1)" stroke="#2c1a0a" stroke-width="3"/>
+<polygon points="32,6 42,12 36,20 24,16" fill="#c99b6d" stroke="#5c3a1e" stroke-width="1.5"/>
+<polygon points="42,12 52,16 48,28 36,20" fill="#8B4513" stroke="#5c3a1e" stroke-width="1"/>
+<polygon points="6,42 18,54 24,44 12,36" fill="#4a2a10" stroke="#2c1a0a" stroke-width="1"/>
+<path d="M16 30 L22 26 L28 32 L24 40 L16 38 Z" fill="url(#ir2)" stroke="#880808" stroke-width="1.5"/>
+<path d="M36 34 L44 30 L48 38 L42 44 L36 40 Z" fill="url(#ir2)" stroke="#880808" stroke-width="1.5"/>
+<path d="M28 16 L34 14 L36 20 L30 22 Z" fill="#cc3333" stroke="#880808" stroke-width="1" opacity=".8"/>
+<polygon points="20,28 22,24 24,28 22,30" fill="#ff8866" opacity=".8"/>
+<line x1="20" y1="26" x2="24" y2="26" stroke="#fff" stroke-width="1.5" opacity=".6"/>
+<line x1="22" y1="24" x2="22" y2="28" stroke="#fff" stroke-width="1.5" opacity=".6"/>
+
+</svg>

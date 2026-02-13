@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64" height="64" viewBox="0 0 64 64">
+<defs><linearGradient id="tii_t" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#c8d8e8"/><stop offset="50%" style="stop-color:#8aa8c8"/><stop offset="100%" style="stop-color:#6888a8"/></linearGradient><linearGradient id="tii_f" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" style="stop-color:#90b0d0"/><stop offset="100%" style="stop-color:#506878"/></linearGradient></defs>
+<ellipse cx="34" cy="56" rx="20" ry="4" fill="#000" opacity=".25"/>
+<polygon points="8,42 22,26 52,26 52,46" fill="url(#tii_f)" stroke="#3a5060" stroke-width="3"/>
+<polygon points="22,26 32,14 56,14 52,26" fill="url(#tii_t)" stroke="#3a5060" stroke-width="2.5"/>
+<polygon points="52,26 56,14 56,38 52,46" fill="#506878" stroke="#3a5060" stroke-width="2.5"/>
+<polygon points="26,28 36,18 46,18 42,28" fill="#c0d8f0" opacity=".35"/>
+<line x1="24" y1="26" x2="50" y2="26" stroke="#c0d8f0" stroke-width="1.5" opacity=".5"/>
+<text x="36" y="40" text-anchor="middle" font-size="8" fill="#4a6878" font-weight="bold" opacity=".4">Ti</text>
+<line x1="28" y1="18" x2="32" y2="18" stroke="#e0f0ff" stroke-width="1.5" opacity=".6"/>
+<line x1="30" y1="16" x2="30" y2="20" stroke="#e0f0ff" stroke-width="1.5" opacity=".6"/>
+</svg>

@@ -59,7 +59,7 @@ import {
   type UnifiedTimelineEntry,
   type UnifiedHistoryTranslations,
 } from "./helpers";
-import { ContractController, CompanyController, MapController, MarketController, HangarController, MissionController, SocialController } from "./controllers";
+import { ContractController, CompanyController, MapController, MarketController, HangarController, MissionController, SocialController, FactoryController } from "./controllers";
 
 // Popup HTML generators and UI components
 import {
@@ -189,6 +189,9 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
   private companyMessagesRef = FSComponent.createRef<HTMLDivElement>();
   private companyMessageInputRef = FSComponent.createRef<HTMLInputElement>();
   private transferAmountInputRef = FSComponent.createRef<HTMLInputElement>();
+  // Phase 9.7: Factory refs
+  private factoryListRef = FSComponent.createRef<HTMLDivElement>();
+  private factoryDetailRef = FSComponent.createRef<HTMLDivElement>();
 
   // Market DOM refs
   private marketListingsRef = FSComponent.createRef<HTMLDivElement>();
@@ -294,6 +297,15 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
       setupInputEventBlocker: (el: HTMLInputElement | null) => { if (el) this.setupInputEventBlocker(el); },
       renderGroupedInventory: (el: HTMLElement | null, items: any[], filters: any) => this.marketController.renderGroupedInventory(el, items, filters),
     }
+  );
+
+  // Phase 9.7: Factory controller
+  private factoryController = new FactoryController(
+    {
+      factoryList: this.factoryListRef,
+      factoryDetail: this.factoryDetailRef,
+    },
+    (section: string, key: string) => this.t(section as any, key)
   );
 
   private mapController = new MapController(
@@ -674,6 +686,9 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
             this.setupInputEventBlocker(transferInput);
           }
         }, 150);
+      }
+      if (subTab === "usines" && (isGameReady())) {
+        this.factoryController.refresh();
       }
     }));
 
@@ -2196,6 +2211,9 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
             companyMessageInputRef: this.companyMessageInputRef,
             companyMessageSending: companyState.companyMessageSending,
             onSendMessage: () => { void this.companyController.handleSendCompanyMessage(); },
+            // Usines tab
+            factoryListRef: this.factoryListRef,
+            factoryDetailRef: this.factoryDetailRef,
             t: (cat: string, key: string) => this.t(cat as keyof TranslationKeys, key),
           })}
 

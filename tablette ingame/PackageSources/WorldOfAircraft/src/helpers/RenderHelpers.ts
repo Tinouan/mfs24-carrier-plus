@@ -5,6 +5,38 @@
 
 import { getRoleBadgeColor, getRoleLabel } from "./CompanyPermissions";
 import { formatMoney } from "./PlayerHelpers";
+import { ITEM_ICON_MAP } from "../data/itemIconMap";
+
+// ═══════════════════════════════════════════════════════════
+// ITEM ICON RENDERING
+// ═══════════════════════════════════════════════════════════
+
+const TIER_BORDER_COLORS: Record<number, string> = {
+  0: "#d1d5db",  // White/Gray — Raw
+  1: "#22c55e",  // Green — Common
+  2: "#3b82f6",  // Blue — Advanced
+  3: "#a855f7",  // Purple — Rare
+  4: "#f59e0b",  // Orange — Epic
+  5: "#ef4444",  // Red — Legendary
+};
+
+/**
+ * Render an item icon (inline SVG with tier border, or letter fallback)
+ * ITEM_ICON_MAP values are raw SVG strings (loaded via svg-text-loader plugin).
+ * We strip the XML header, resize, and inject inline — no data URLs, no <img> tags.
+ */
+export function renderItemIcon(iconPath: string | undefined, icon: string, tier: number, size: number = 32): string {
+  const borderColor = TIER_BORDER_COLORS[tier] || "#d1d5db";
+  const rawSvg = iconPath ? ITEM_ICON_MAP[iconPath] : undefined;
+  if (rawSvg) {
+    const innerSize = size - 4;
+    let svg = rawSvg.replace(/<\?xml[^?]*\?>\s*/, "");
+    svg = svg.replace(/width="\d+"/, `width="${innerSize}"`);
+    svg = svg.replace(/height="\d+"/, `height="${innerSize}"`);
+    return `<span style="display:inline-flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;border:2px solid ${borderColor};border-radius:6px;overflow:hidden;background:#1a1a2e;flex-shrink:0;">${svg}</span>`;
+  }
+  return `<span style="display:inline-flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;border:2px solid ${borderColor};border-radius:6px;font-size:${Math.round(size * 0.35)}px;font-weight:bold;color:${borderColor};background:#1a1a2e;flex-shrink:0;">${icon}</span>`;
+}
 
 // ═══════════════════════════════════════════════════════════
 // TYPES
@@ -38,6 +70,8 @@ export interface MarketListingItem {
   item_code: string;
   item_name: string;
   item_tier: number;
+  item_icon?: string | null;
+  item_icon_path?: string;
   sale_price: number;
   sale_qty: number;
 }
@@ -144,13 +178,16 @@ export function renderMarketListingsHtml(
            style="background: #252532; border-radius: 8px; padding: 12px; margin-bottom: 8px; cursor: pointer; transition: background 0.2s;"
            onmouseover="this.style.background='#2d2d3d'" onmouseout="this.style.background='#252532'">
         <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-          <div style="flex: 1;">
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-              <span style="font-size: 9px; padding: 2px 6px; border-radius: 4px; background: ${tierColor}20; color: ${tierColor}; font-weight: 600;">T${item.item_tier}</span>
-              <span style="font-size: 13px; font-weight: 600; color: white;">${item.item_name}</span>
-            </div>
-            <div style="font-size: 10px; color: #6b7280;">
-              @ <span style="color: #60a5fa;">${item.airport_ident}</span> • ${item.company_name}
+          <div style="flex: 1; display: flex; align-items: center; gap: 10px;">
+            ${renderItemIcon(item.item_icon_path, item.item_icon || item.item_code.substring(0, 2).toUpperCase(), item.item_tier, 36)}
+            <div>
+              <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                <span style="font-size: 9px; padding: 2px 6px; border-radius: 4px; background: ${tierColor}20; color: ${tierColor}; font-weight: 600;">T${item.item_tier}</span>
+                <span style="font-size: 13px; font-weight: 600; color: white;">${item.item_name}</span>
+              </div>
+              <div style="font-size: 10px; color: #6b7280;">
+                @ <span style="color: #60a5fa;">${item.airport_ident}</span> • ${item.company_name}
+              </div>
             </div>
           </div>
           <div style="text-align: right;">

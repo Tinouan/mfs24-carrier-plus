@@ -4,6 +4,8 @@
  * Event listeners must be attached by the caller after setting innerHTML.
  */
 
+import { renderItemIcon } from "./RenderHelpers";
+
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════
@@ -20,6 +22,9 @@ export interface AirportInventoryItem {
   source?: string;                     // V5.1: Origin ("contract", "market", etc.)
   contract_id?: string;                // V5.1: Linked contract ID
   contract_route?: string;             // V5.1: Contract route "LFPG -> EGLL"
+  item_icon?: string;                  // V9: 2-3 letter icon fallback
+  item_icon_path?: string;             // V9: SVG icon path
+  item_tier?: number;                  // V9: Item tier for icon border color
 }
 
 export interface AircraftCargoItem {
@@ -31,6 +36,9 @@ export interface AircraftCargoItem {
   source?: string;                     // V5.1
   contract_id?: string;                // V5.1
   contract_route?: string;             // V5.1
+  item_icon?: string;                  // V9
+  item_icon_path?: string;             // V9
+  item_tier?: number;                  // V9
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -61,9 +69,12 @@ export function renderAirportInventoryHtml(
       : "";
     return `
     <div class="cargo-item" data-id="${item.item_id}" data-loc="${item.location_id}" data-name="${item.item_name}" data-qty="${item.quantity}" data-weight="${item.weight_kg}" style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: #1a1a24; border-radius: 6px; margin-bottom: 6px;">
-      <div style="flex: 1;">
-        <div style="font-size: 12px; color: white; font-weight: 500;">${item.item_name}${contractBadge}</div>
-        <div style="font-size: 10px; color: #6b7280;">${item.weight_kg}kg • ${item.location_name}</div>${contractRoute}
+      <div style="flex: 1; display: flex; align-items: center; gap: 8px;">
+        ${renderItemIcon(item.item_icon_path, item.item_icon || item.item_id.substring(0, 2).toUpperCase(), item.item_tier || 0, 28)}
+        <div>
+          <div style="font-size: 12px; color: white; font-weight: 500;">${item.item_name}${contractBadge}</div>
+          <div style="font-size: 10px; color: #6b7280;">${item.weight_kg}kg • ${item.location_name}</div>${contractRoute}
+        </div>
       </div>
       <div style="display: flex; align-items: center; gap: 6px;">
         <span style="font-size: 13px; color: #22c55e; font-weight: 600;">x${item.quantity}</span>
@@ -106,9 +117,12 @@ export function renderAircraftCargoHtml(
         </button>
         <span style="font-size: 13px; color: #60a5fa; font-weight: 600;">x${item.qty}</span>
       </div>
-      <div style="flex: 1; text-align: right;">
-        <div style="font-size: 12px; color: white; font-weight: 500;">${item.item_name}${contractBadge}</div>
-        <div style="font-size: 10px; color: #6b7280;">${item.total_weight_kg}kg total</div>
+      <div style="flex: 1; display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
+        <div style="text-align: right;">
+          <div style="font-size: 12px; color: white; font-weight: 500;">${item.item_name}${contractBadge}</div>
+          <div style="font-size: 10px; color: #6b7280;">${item.total_weight_kg}kg total</div>
+        </div>
+        ${renderItemIcon(item.item_icon_path, item.item_icon || item.item_id.substring(0, 2).toUpperCase(), item.item_tier || 0, 28)}
       </div>
     </div>`;
   }).join("");

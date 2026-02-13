@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64" height="64" viewBox="0 0 64 64">
+<defs>
+<radialGradient id="p_skin" cx="50%" cy="40%" r="50%"><stop offset="0%" style="stop-color:#f5d0a9"/><stop offset="100%" style="stop-color:#d4a574"/></radialGradient>
+<linearGradient id="p_uniform" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" style="stop-color:#1e3a5f"/><stop offset="100%" style="stop-color:#0d1b2a"/></linearGradient>
+<linearGradient id="p_cap" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" style="stop-color:#1e3a5f"/><stop offset="100%" style="stop-color:#0d1b2a"/></linearGradient>
+</defs>
+<!-- Body (dark navy uniform) -->
+<path d="M20 38 Q20 34 26 32 L38 32 Q44 34 44 38 L46 56 L18 56 Z" fill="url(#p_uniform)" stroke="#0a1628" stroke-width="2.5"/>
+<!-- Epaulettes -->
+<rect x="18" y="33" width="8" height="3" rx="1.5" fill="#f59e0b" stroke="#b45309" stroke-width="1"/>
+<rect x="38" y="33" width="8" height="3" rx="1.5" fill="#f59e0b" stroke="#b45309" stroke-width="1"/>
+<!-- Gold stripes on shoulders -->
+<line x1="19" y1="34" x2="25" y2="34" stroke="#fbbf24" stroke-width="1"/>
+<line x1="19" y1="35.5" x2="25" y2="35.5" stroke="#fbbf24" stroke-width="1"/>
+<line x1="39" y1="34" x2="45" y2="34" stroke="#fbbf24" stroke-width="1"/>
+<line x1="39" y1="35.5" x2="45" y2="35.5" stroke="#fbbf24" stroke-width="1"/>
+<!-- Buttons -->
+<circle cx="32" cy="38" r="1.5" fill="#f59e0b" stroke="#b45309" stroke-width=".8"/>
+<circle cx="32" cy="44" r="1.5" fill="#f59e0b" stroke="#b45309" stroke-width=".8"/>
+<circle cx="32" cy="50" r="1.5" fill="#f59e0b" stroke="#b45309" stroke-width=".8"/>
+<!-- Wings badge -->
+<path d="M24 42 L32 40 L40 42 L36 43 L32 42 L28 43 Z" fill="#f59e0b" stroke="#b45309" stroke-width="1"/>
+<!-- Arms -->
+<rect x="12" y="36" width="10" height="14" rx="5" fill="url(#p_uniform)" stroke="#0a1628" stroke-width="2"/>
+<rect x="42" y="36" width="10" height="14" rx="5" fill="url(#p_uniform)" stroke="#0a1628" stroke-width="2"/>
+<!-- Neck & tie -->
+<rect x="28" y="28" width="8" height="6" rx="2" fill="url(#p_skin)" stroke="#b8834a" stroke-width="1.5"/>
+<polygon points="30,32 32,40 34,32" fill="#1a1a2e" stroke="#111" stroke-width="1"/>
+<!-- Head -->
+<circle cx="32" cy="20" r="12" fill="url(#p_skin)" stroke="#b8834a" stroke-width="2.5"/>
+<!-- Eyes -->
+<circle cx="27" cy="20" r="2" fill="#1a1a2e"/>
+<circle cx="37" cy="20" r="2" fill="#1a1a2e"/>
+<circle cx="27.5" cy="19.5" r=".7" fill="#fff"/>
+<circle cx="37.5" cy="19.5" r=".7" fill="#fff"/>
+<!-- Confident smile -->
+<path d="M28 25 Q32 28 36 25" stroke="#a0704a" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+<!-- Pilot cap -->
+<path d="M18 16 Q18 6 32 6 Q46 6 46 16 Z" fill="url(#p_cap)" stroke="#0a1628" stroke-width="2.5"/>
+<rect x="16" y="14" width="32" height="5" rx="2.5" fill="#1e3a5f" stroke="#0a1628" stroke-width="2"/>
+<!-- Cap visor -->
+<path d="M20 19 Q32 22 44 19" fill="#0d1b2a" stroke="#0a1628" stroke-width="1.5"/>
+<!-- Cap badge (wings) -->
+<circle cx="32" cy="10" r="3" fill="#f59e0b" stroke="#b45309" stroke-width="1.5"/>
+<path d="M24 11 L32 9 L40 11" stroke="#fbbf24" stroke-width="1.5" fill="none"/>
+<!-- Cap shine -->
+<ellipse cx="28" cy="10" rx="4" ry="2" fill="#2a4a6f" opacity=".4"/>
+</svg>

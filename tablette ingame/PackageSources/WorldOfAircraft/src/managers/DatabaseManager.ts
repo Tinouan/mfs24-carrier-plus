@@ -217,6 +217,7 @@ export interface Item {
   tier: number;                  // 1-5 rarity/complexity
   tags: string[];                // Categories: "raw", "processed", "cargo", etc.
   icon: string;
+  icon_path?: string;              // Path to SVG icon (T0 items)
   baseValue: number;
   weightKg: number;
   isRaw: boolean;
@@ -273,39 +274,52 @@ export interface InventoryItem {
 // FACTORIES & WORKERS
 // ─────────────────────────────────────────────────────────
 
+export type FactoryStatusType = "idle" | "producing" | "maintenance" | "offline";
+
 export interface Factory {
   id: string;
   company_id: string;
-  airport_icao: string;
+  airport_ident: string;         // ICAO code (Phase 9)
   name: string;
-  recipe_id?: string;
+  tier: number;                  // 0=NPC, 1-10=player
+  factory_type: string;
+  status: FactoryStatusType;
+  current_recipe_id: string | null;
+  last_recipe_id?: string | null;
+  last_result_item_id?: string | null;
   is_active: boolean;
-  production_progress: number;   // 0-100%
-  production_started_at?: string;
-  slots_used: number;
+  max_workers: number;
+  max_engineers: number;
+  max_ingredients: number;
+  food_stock: number;
+  food_capacity: number;
+  food_tier_min: number;               // Lowest food tier in stock (determines bonus)
+  food_consumption_per_hour: number;
   created_at: string;
-  updated_at: string;
 }
+
+export type WorkerStatusType = "available" | "working" | "injured" | "dead";
 
 export interface WorkerInstance {
   id: string;
-  company_id: string;
-  item_id: string;               // Worker item (badge)
-  factory_id?: string;           // Assigned factory (null if unassigned)
-  name: string;
+  owner_company_id: string | null;
+  owner_player_id: string | null;
+  owner_type: "company" | "personal";
+  item_id: string;
+  airport_ident: string;
+  country_code: string;
+  speed: number;
+  resistance: number;
   xp: number;
-  level: number;
-  efficiency_bonus: number;      // 0-1 multiplier
-  specialty?: string;            // Recipe type bonus
-  is_active: boolean;
-  hired_at: string;
+  tier: number;
+  hourly_salary: number;
+  status: WorkerStatusType;
+  factory_id: string | null;
+  for_sale: boolean;
+  sale_price: number | null;
+  injured_at: string | null;
+  injury_duration_days: number;
   created_at: string;
-}
-
-export interface WorkerXpThreshold {
-  level: number;
-  xp_required: number;
-  efficiency_bonus: number;
 }
 
 // ─────────────────────────────────────────────────────────
@@ -335,6 +349,7 @@ export interface MarketOrder {
   item_name?: string;            // Resolved item display name
   owner_type?: "player" | "company";
   is_active?: boolean;           // Derived from status === "open"
+  metadata?: string;             // Phase 9: extra data (e.g. country_code for worker orders)
 }
 
 export interface MarketTransaction {
@@ -692,7 +707,10 @@ export type TransactionType =
   | "transfer_from_company"
   | "contract_reward"
   | "pilot_transfer"
-  | "aircraft_transfer";
+  | "aircraft_transfer"
+  | "factory_create"
+  | "factory_upgrade"
+  | "worker_salary";
 
 export interface TransactionLog {
   id: string;              // UUID
@@ -748,6 +766,7 @@ type StoreName =
   | "recipes"
   | "factories"
   | "workers"
+  | "production_batches"
   | "market_orders"
   | "market_transactions"
   | "missions"
@@ -784,6 +803,7 @@ const KEY_PATHS: Record<StoreName, string> = {
   recipes: "id",
   factories: "id",
   workers: "id",
+  production_batches: "id",
   market_orders: "id",
   market_transactions: "id",
   missions: "id",
@@ -827,6 +847,7 @@ const PERSISTENT_STORES: StoreName[] = [
   "market_orders",
   "factories",
   "workers",
+  "production_batches",
   "company_messages",
   "contract_offers",        // V5: Contract offers
   "active_contracts",       // V5: Active contracts
@@ -1386,18 +1407,18 @@ class DatabaseManagerClass {
     return stats;
   }
 
-  // Factories
+  // Factories (Phase 9)
   async getFactoriesByCompany(companyId: string): Promise<Factory[]> {
     return this.query<Factory>("factories", "company_id", companyId);
   }
 
   async getFactoriesAtAirport(icao: string): Promise<Factory[]> {
-    return this.query<Factory>("factories", "airport_icao", icao);
+    return this.query<Factory>("factories", "airport_ident", icao);
   }
 
-  // Workers
+  // Workers (Phase 9)
   async getWorkersByCompany(companyId: string): Promise<WorkerInstance[]> {
-    return this.query<WorkerInstance>("workers", "company_id", companyId);
+    return this.query<WorkerInstance>("workers", "owner_company_id", companyId);
   }
 
   async getWorkersByFactory(factoryId: string): Promise<WorkerInstance[]> {
@@ -1406,7 +1427,7 @@ class DatabaseManagerClass {
 
   async getUnassignedWorkers(companyId: string): Promise<WorkerInstance[]> {
     const workers = await this.getWorkersByCompany(companyId);
-    return workers.filter(w => !w.factory_id && w.is_active);
+    return workers.filter(w => !w.factory_id && w.status === "available");
   }
 
   // Mission sub-entities

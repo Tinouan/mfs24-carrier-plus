@@ -12,6 +12,10 @@ import { WorldRouter, TransferRouter } from "../services";
 import { mapState, simVarState, authState, transferState, marketState } from "../state";
 import { showNotification } from "../state/PopupState";
 import { isGameReady } from "../state/GameModeState";
+import { factoryState } from "../state/FactoryState";
+import { RecipeService } from "../services/RecipeService";
+import { ItemService } from "../services/ItemService";
+import { ITEM_ICON_MAP } from "../data/itemIconMap";
 import { renderAirportsListHtml } from "../helpers";
 
 export class MapController {
@@ -885,10 +889,46 @@ export class MapController {
   private fetchFactoriesForMap(): void {
     if (!mapManager.isInitialized()) return;
 
-    // P2P: Factories are not available in P2P mode (network-only feature)
-    console.log("[WOA] P2P mode - factories not available");
-    mapManager.loadFactories([]);
+    // Load factories from local state + resolve airport coordinates
+    const factories = factoryState.factories.get();
+    const airports = DatabaseManager.getAirportsCache();
+
+    const mapFactories = factories
+      .map(f => {
+        const airport = airports.find(a => a.ident === f.airport_ident);
+
+        // Resolve product icon SVG
+        let productIconSvg: string | undefined;
+        let isProducing = false;
+
+        if (f.status === "producing" && f.current_recipe_id) {
+          isProducing = true;
+          const recipe = RecipeService.getRecipeById(f.current_recipe_id);
+          if (recipe) {
+            const item = ItemService.getItemById(recipe.resultItemId);
+            if (item?.icon_path) productIconSvg = ITEM_ICON_MAP[item.icon_path];
+          }
+        } else if (f.last_result_item_id) {
+          const item = ItemService.getItemById(f.last_result_item_id);
+          if (item?.icon_path) productIconSvg = ITEM_ICON_MAP[item.icon_path];
+        }
+
+        return {
+          id: f.id,
+          name: f.name,
+          airport_ident: f.airport_ident,
+          latitude: airport?.latitude || 0,
+          longitude: airport?.longitude || 0,
+          tier: f.tier,
+          productIconSvg,
+          isProducing,
+        };
+      })
+      .filter(f => f.latitude !== 0 || f.longitude !== 0);
+
+    mapManager.loadFactories(mapFactories);
     mapState.factoriesOnMapStatus.set("success");
+    console.log(`[WOA] Loaded ${mapFactories.length} factories on map`);
   }
 
   public toggleHelipadsOnMap(): void {

@@ -84,7 +84,9 @@
       "Bash(ren \"mfs-carrierplus-efb.xml\" \"world-of-aircraft-efb.xml\")",
       "Bash(move:*)",
       "Bash(npm install:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(node extract-icons.js:*)",
+      "Bash(node update-items.js:*)"
     ]
   }
 }

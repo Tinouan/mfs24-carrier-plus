@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64" height="64" viewBox="0 0 64 64">
+<defs><radialGradient id="up_g" cx="50%" cy="50%" r="50%"><stop offset="0%" style="stop-color:#69f0ae"/><stop offset="100%" style="stop-color:#1b5e20"/></radialGradient></defs>
+<ellipse cx="32" cy="57" rx="16" ry="3" fill="#000" opacity=".2"/>
+<rect x="14" y="10" width="36" height="42" rx="4" fill="#37474f" stroke="#263238" stroke-width="3"/>
+<rect x="14" y="10" width="36" height="8" rx="4" fill="#455a64" stroke="#263238" stroke-width="2"/>
+<circle cx="22" cy="28" r="5" fill="url(#up_g)" stroke="#0a4010" stroke-width="2"/>
+<circle cx="36" cy="28" r="5" fill="url(#up_g)" stroke="#0a4010" stroke-width="2"/>
+<circle cx="22" cy="42" r="5" fill="url(#up_g)" stroke="#0a4010" stroke-width="2"/>
+<circle cx="36" cy="42" r="5" fill="url(#up_g)" stroke="#0a4010" stroke-width="2"/>
+<circle cx="22" cy="28" r="2.5" fill="#a5d6a7" opacity=".4"/>
+<circle cx="36" cy="28" r="2.5" fill="#a5d6a7" opacity=".4"/>
+<circle cx="22" cy="42" r="2.5" fill="#a5d6a7" opacity=".4"/>
+<circle cx="36" cy="42" r="2.5" fill="#a5d6a7" opacity=".4"/>
+<circle cx="22" cy="28" r="8" fill="#69f0ae" opacity=".1"/>
+<circle cx="36" cy="42" r="8" fill="#69f0ae" opacity=".1"/>
+<polygon points="28,12 32,8 36,12 32,16" fill="#f44336" stroke="#c62828" stroke-width="1"/>
+</svg>

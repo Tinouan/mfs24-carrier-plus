@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64" height="64" viewBox="0 0 64 64">
+<defs><linearGradient id="ali_t" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#e8edf2"/><stop offset="100%" style="stop-color:#b0bec5"/></linearGradient><linearGradient id="ali_f" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" style="stop-color:#cfd8dc"/><stop offset="100%" style="stop-color:#90a4ae"/></linearGradient></defs>
+<ellipse cx="34" cy="56" rx="20" ry="4" fill="#000" opacity=".25"/>
+<polygon points="8,42 22,26 52,26 52,46" fill="url(#ali_f)" stroke="#546e7a" stroke-width="3"/>
+<polygon points="22,26 32,14 56,14 52,26" fill="url(#ali_t)" stroke="#546e7a" stroke-width="2.5"/>
+<polygon points="52,26 56,14 56,38 52,46" fill="#90a4ae" stroke="#546e7a" stroke-width="2.5"/>
+<polygon points="26,28 36,18 46,18 42,28" fill="#e0e8ed" opacity=".4"/>
+<line x1="24" y1="26" x2="50" y2="26" stroke="#e0e8ed" stroke-width="1.5" opacity=".5"/>
+<text x="36" y="40" text-anchor="middle" font-size="8" fill="#78909c" font-weight="bold" opacity=".4">Al</text>
+</svg>

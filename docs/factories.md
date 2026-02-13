@@ -249,14 +249,14 @@ Chaque aéroport a un nombre limité de slots pour les usines :
 
 | Type Aéroport | Max Slots |
 |---------------|-----------|
-| large_airport | 10 |
-| medium_airport | 5 |
-| small_airport | 2 |
+| large_airport | 12|
+| medium_airport | 6 |
+| small_airport | 3 |
 | seaplane_base | 1 |
 | heliport | 1 |
 | closed | 0 |
 
-Les slots sont partagés entre tous les joueurs (Online) ou illimités pour le joueur (Solo — pas de compétition).
+Les slots sont limités pour les joueurs les usines t0 (pnj) ne comptent pas .
 
 ---
 

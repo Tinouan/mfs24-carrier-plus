@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64" height="64" viewBox="0 0 64 64">
+<defs><linearGradient id="sti_t" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#ecf0f1"/><stop offset="50%" style="stop-color:#d5d8dc"/><stop offset="100%" style="stop-color:#aeb6bf"/></linearGradient><linearGradient id="sti_f" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" style="stop-color:#bdc3c7"/><stop offset="100%" style="stop-color:#808b96"/></linearGradient></defs>
+<ellipse cx="34" cy="56" rx="20" ry="4" fill="#000" opacity=".25"/>
+<polygon points="8,42 22,26 52,26 52,46" fill="url(#sti_f)" stroke="#4a4a4a" stroke-width="3"/>
+<polygon points="22,26 32,14 56,14 52,26" fill="url(#sti_t)" stroke="#4a4a4a" stroke-width="2.5"/>
+<polygon points="52,26 56,14 56,38 52,46" fill="#95a5a6" stroke="#4a4a4a" stroke-width="2.5"/>
+<polygon points="26,28 36,18 46,18 42,28" fill="#e5e8eb" opacity=".35"/>
+<rect x="10" y="42" width="40" height="6" rx="3" fill="#e74c3c" opacity=".15"/>
+<text x="36" y="40" text-anchor="middle" font-size="8" fill="#666" font-weight="bold" opacity=".4">Fe</text>
+</svg>

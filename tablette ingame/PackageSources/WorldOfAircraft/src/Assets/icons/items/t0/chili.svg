@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64" height="64" viewBox="0 0 64 64">
+<defs>
+<linearGradient id="ch_g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#f44336"/><stop offset="100%" style="stop-color:#b71c1c"/></linearGradient>
+<linearGradient id="ch_g2" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#e53935"/><stop offset="100%" style="stop-color:#c62828"/></linearGradient>
+</defs>
+<ellipse cx="32" cy="58" rx="14" ry="2.5" fill="#000" opacity=".2"/>
+<!-- Chili 1 (big, front) -->
+<path d="M16 50 Q10 36 18 22 Q22 14 28 14 Q30 14 30 18 Q30 24 24 34 Q20 44 20 50 Z" fill="url(#ch_g)" stroke="#7f0000" stroke-width="2.5"/>
+<path d="M28 14 Q30 8 28 4" stroke="#2e7d32" stroke-width="3" fill="none" stroke-linecap="round"/>
+<path d="M26 6 Q28 2 30 6" stroke="#388e3c" stroke-width="2" fill="#4caf50"/>
+<!-- Highlight chili 1 -->
+<path d="M20 20 Q22 16 24 20" fill="#ef5350" opacity=".5"/>
+<ellipse cx="22" cy="26" rx="2" ry="6" fill="#ef5350" opacity=".3" transform="rotate(-10 22 26)"/>
+<!-- Chili 2 (behind, slightly right) -->
+<path d="M34 48 Q30 34 36 20 Q40 12 44 14 Q46 14 46 18 Q44 28 40 38 Q38 46 38 50 Z" fill="url(#ch_g2)" stroke="#7f0000" stroke-width="2.5"/>
+<path d="M44 14 Q46 8 44 4" stroke="#2e7d32" stroke-width="3" fill="none" stroke-linecap="round"/>
+<path d="M42 6 Q44 2 46 6" stroke="#388e3c" stroke-width="2" fill="#4caf50"/>
+<!-- Highlight chili 2 -->
+<ellipse cx="40" cy="24" rx="2" ry="5" fill="#ef5350" opacity=".3" transform="rotate(5 40 24)"/>
+</svg>

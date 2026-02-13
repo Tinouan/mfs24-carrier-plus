@@ -75,6 +75,9 @@ export interface CompanyViewProps {
   companyMessageInputRef: NodeReference<HTMLInputElement>;
   companyMessageSending: Subject<boolean>;
   onSendMessage: () => void;
+  // Usines tab
+  factoryListRef: NodeReference<HTMLDivElement>;
+  factoryDetailRef: NodeReference<HTMLDivElement>;
   t: (category: string, key: string) => string;
 }
 
@@ -126,6 +129,8 @@ export function renderCompanyTab(props: CompanyViewProps): VNode {
     companyMessageInputRef,
     companyMessageSending,
     onSendMessage,
+    factoryListRef,
+    factoryDetailRef,
     t,
   } = props;
 
@@ -172,6 +177,13 @@ export function renderCompanyTab(props: CompanyViewProps): VNode {
               ? "padding: 6px 12px; background: #3b82f6; border: 1px solid #3b82f6; border-radius: 6px; font-size: 11px; color: white; font-weight: 600;"
               : "padding: 6px 12px; background: rgba(59, 130, 246, 0.2); border: 1px solid #3b82f6; border-radius: 6px; font-size: 11px; color: white;")}>
               {currentLanguage.map(l => translations[l].company.messages)}
+            </div>
+          </Button>
+          <Button callback={(): void => companySubTab.set("usines")}>
+            <div style={companySubTab.map(t => t === "usines"
+              ? "padding: 6px 12px; background: #3b82f6; border: 1px solid #3b82f6; border-radius: 6px; font-size: 11px; color: white; font-weight: 600;"
+              : "padding: 6px 12px; background: rgba(59, 130, 246, 0.2); border: 1px solid #3b82f6; border-radius: 6px; font-size: 11px; color: white;")}>
+              {currentLanguage.map(l => (translations[l].company as any).factories || "Usines")}
             </div>
           </Button>
         </div>
@@ -652,6 +664,20 @@ export function renderCompanyTab(props: CompanyViewProps): VNode {
           {/* History content via ref */}
           <div ref={companyHistoryRef} style={companyHistoryLoading.map(l => l ? "display: none;" : "display: block;")}>
             <div style="color: #6b7280; font-size: 11px; text-align: center; padding: 24px;">{currentLanguage.map(l => translations[l].common.loading)}</div>
+          </div>
+        </div>
+
+        {/* Usines Sub-Tab */}
+        <div style={companySubTab.map(t => t === "usines" ? "padding: 16px; color: white;" : "display: none;")}>
+          <div style="display: flex; gap: 12px; height: 100%;">
+            {/* Factory list (left panel — 1/3) */}
+            <div ref={factoryListRef} style="flex: 1; min-width: 0; overflow-y: auto;">
+              <div style="color: #6b7280; font-size: 11px; text-align: center; padding: 24px;">{currentLanguage.map(l => translations[l].common.loading)}</div>
+            </div>
+            {/* Factory detail (right panel — 2/3) */}
+            <div ref={factoryDetailRef} style="flex: 2; min-width: 0; overflow-y: auto;">
+              <div style="color: #6b7280; font-size: 11px; text-align: center; padding: 24px;">{currentLanguage.map(l => (translations[l].company as any).selectFactory || "Select a factory")}</div>
+            </div>
           </div>
         </div>
 

@@ -21,3 +21,9 @@ declare function GetStoredData(key: string): string;
 declare function SetStoredData(key: string, value: string): void;
 
 declare const BASE_URL: string;
+
+// Asset imports (esbuild dataurl loader)
+declare module "*.svg" {
+  const content: string;
+  export default content;
+}

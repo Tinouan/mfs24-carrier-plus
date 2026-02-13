@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+
+<defs><linearGradient id="oi1" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" style="stop-color:#1a1a2e"/><stop offset="30%" style="stop-color:#2c3e50"/><stop offset="70%" style="stop-color:#1c2833"/><stop offset="100%" style="stop-color:#0d1117"/></linearGradient><linearGradient id="oi2" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" style="stop-color:#7f8c8d"/><stop offset="40%" style="stop-color:#bdc3c7"/><stop offset="60%" style="stop-color:#bdc3c7"/><stop offset="100%" style="stop-color:#7f8c8d"/></linearGradient></defs>
+<ellipse cx="34" cy="59" rx="16" ry="3.5" fill="#000" opacity=".3"/>
+<path d="M14 14 Q12 32 14 50 L50 50 Q52 32 50 14 Z" fill="url(#oi1)" stroke="#0a0a0a" stroke-width="3"/>
+<path d="M18 14 Q16 32 18 50" stroke="#4a6278" stroke-width="3" fill="none" opacity=".5"/>
+<rect x="12" y="18" width="40" height="5" rx="2.5" fill="url(#oi2)" stroke="#555" stroke-width="1.5"/>
+<rect x="12" y="41" width="40" height="5" rx="2.5" fill="url(#oi2)" stroke="#555" stroke-width="1.5"/>
+<circle cx="16" cy="20.5" r="1.5" fill="#95a5a6" stroke="#666" stroke-width=".5"/>
+<circle cx="48" cy="20.5" r="1.5" fill="#95a5a6" stroke="#666" stroke-width=".5"/>
+<ellipse cx="32" cy="14" rx="18" ry="6" fill="#34495e" stroke="#0a0a0a" stroke-width="2.5"/>
+<ellipse cx="32" cy="13" rx="14" ry="4" fill="#3d566e"/>
+<circle cx="26" cy="13" r="4" fill="#7f8c8d" stroke="#555" stroke-width="2"/>
+<circle cx="26" cy="13" r="2" fill="#95a5a6"/>
+<rect x="22" y="26" width="20" height="12" rx="2" fill="#f39c12" stroke="#c07b0a" stroke-width="1.5"/>
+<text x="32" y="35" text-anchor="middle" font-size="7" fill="#1a1a1a" font-weight="bold">OIL</text>
+<polygon points="32,28 36,31 32,34 28,31" fill="#e74c3c" stroke="#a02020" stroke-width=".8"/>
+
+</svg>

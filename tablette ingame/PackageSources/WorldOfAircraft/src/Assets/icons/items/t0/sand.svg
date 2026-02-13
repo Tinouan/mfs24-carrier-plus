@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+
+<defs><radialGradient id="sn1" cx="45%" cy="35%" r="55%"><stop offset="0%" style="stop-color:#f5e6b8"/><stop offset="100%" style="stop-color:#c8a868"/></radialGradient></defs>
+<ellipse cx="32" cy="54" rx="26" ry="6" fill="#a08840" stroke="#8a7030" stroke-width="2"/>
+<path d="M6 54 Q14 30 28 18 Q42 28 56 54 Z" fill="url(#sn1)" stroke="#8a7030" stroke-width="3"/>
+<path d="M34 54 Q40 40 50 32 Q56 42 58 54 Z" fill="#e0cc90" stroke="#8a7030" stroke-width="2.5"/>
+<path d="M12 50 Q18 36 28 26 Q34 32 38 40" stroke="#dcc880" stroke-width="2" fill="none" opacity=".4"/>
+<ellipse cx="24" cy="24" rx="5" ry="3" fill="#f0daa0" opacity=".5"/>
+<circle cx="20" cy="38" r="1" fill="#d0b868" opacity=".6"/>
+<circle cx="36" cy="36" r="1.2" fill="#d0b868" opacity=".5"/>
+<circle cx="44" cy="42" r="1" fill="#d0b868" opacity=".4"/>
+<circle cx="28" cy="44" r=".8" fill="#c0a858" opacity=".5"/>
+<circle cx="48" cy="36" r=".8" fill="#d8c080" opacity=".4"/>
+
+</svg>

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64" height="64" viewBox="0 0 64 64">
+<defs>
+<radialGradient id="so_g" cx="50%" cy="45%" r="50%"><stop offset="0%" style="stop-color:#fff9c4"/><stop offset="100%" style="stop-color:#fdd835"/></radialGradient>
+</defs>
+<ellipse cx="32" cy="56" rx="20" ry="3" fill="#000" opacity=".2"/>
+<ellipse cx="32" cy="42" rx="24" ry="10" fill="#e0e0e0" stroke="#9e9e9e" stroke-width="2"/>
+<ellipse cx="32" cy="36" rx="18" ry="10" fill="url(#so_g)" stroke="#f9a825" stroke-width="2.5"/>
+<path d="M16 36 Q24 28 32 32 Q40 36 48 30" fill="#fdd835" stroke="#f9a825" stroke-width="2"/>
+<!-- Salt crystals on top -->
+<circle cx="22" cy="32" r="1" fill="#fff" opacity=".8"/>
+<circle cx="28" cy="30" r="1.2" fill="#fff" opacity=".7"/>
+<circle cx="36" cy="34" r="1" fill="#fff" opacity=".8"/>
+<circle cx="40" cy="32" r="0.8" fill="#fff" opacity=".6"/>
+<circle cx="32" cy="36" r="1" fill="#fff" opacity=".7"/>
+<circle cx="26" cy="36" r="0.8" fill="#fff" opacity=".6"/>
+<ellipse cx="26" cy="30" rx="5" ry="3" fill="#fff9c4" opacity=".4"/>
+<path d="M28 22 Q30 16 28 12" stroke="#fff" stroke-width="1.5" fill="none" opacity=".3"/>
+<path d="M36 20 Q38 14 36 10" stroke="#fff" stroke-width="1.5" fill="none" opacity=".25"/>
+</svg>

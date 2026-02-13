@@ -5,3 +5,4 @@ export { MapController } from "./MapController";
 export { MarketController } from "./MarketController";
 export { MissionController } from "./MissionController";
 export { SocialController } from "./SocialController";
+export { FactoryController } from "./FactoryController";

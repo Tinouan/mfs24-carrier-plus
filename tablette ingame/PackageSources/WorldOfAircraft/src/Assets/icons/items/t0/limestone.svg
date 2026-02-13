@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+
+<defs><linearGradient id="ls1" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#e8dcc8"/><stop offset="100%" style="stop-color:#b0a088"/></linearGradient></defs>
+<ellipse cx="34" cy="57" rx="17" ry="4" fill="#000" opacity=".2"/>
+<polygon points="30,8 48,14 54,30 48,46 34,54 16,50 8,36 12,20 20,10" fill="url(#ls1)" stroke="#8a7860" stroke-width="3"/>
+<polygon points="30,8 40,13 34,20 24,15" fill="#f0e4d0" stroke="#a09078" stroke-width="1"/>
+<polygon points="40,13 48,14 44,26 34,20" fill="#c8b8a0" stroke="#a09078" stroke-width="1"/>
+<polygon points="8,36 16,50 22,40 12,32" fill="#988870" stroke="#7a6a52" stroke-width="1"/>
+<path d="M20 26 Q28 24 36 28 Q42 32 40 38" stroke="#c8b8a0" stroke-width="1.5" fill="none" opacity=".5"/>
+<circle cx="24" cy="34" r="3" fill="#d8ccb4" opacity=".4"/>
+<circle cx="38" cy="22" r="2" fill="#d8ccb4" opacity=".3"/>
+<ellipse cx="30" cy="14" rx="4" ry="2" fill="#f4e8d4" opacity=".4"/>
+
+</svg>

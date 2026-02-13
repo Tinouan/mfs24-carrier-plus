@@ -2,6 +2,7 @@ import { EventBus, NodeReference } from "@microsoft/msfs-sdk";
 import { FleetRouter, MissionRouter, WorldRouter, MarketRouter, ContractRouter } from "../services";
 import { popupManager, trackingManager, missionCreationManager } from "../managers";
 import { DatabaseManager } from "../managers/DatabaseManager";
+import { ItemService } from "../services/ItemService";
 import { InitService } from "../services/InitService";
 import {
   missionState, missionCreationState, trackingState, checkpointState, cargoState,
@@ -79,6 +80,9 @@ export class MissionController {
     source?: string;
     contract_id?: string;
     contract_route?: string;
+    item_icon?: string;
+    item_icon_path?: string;
+    item_tier?: number;
   }> = [];
   private aircraftCargo: Array<{
     item_id: string;
@@ -89,6 +93,9 @@ export class MissionController {
     source?: string;
     contract_id?: string;
     contract_route?: string;
+    item_icon?: string;
+    item_icon_path?: string;
+    item_tier?: number;
   }> = [];
 
   // Flight tracking state
@@ -1143,6 +1150,7 @@ export class MissionController {
             if (existing) {
               existing.quantity += item.qty;
             } else {
+              const itemDef = ItemService.getItemById(item.item_id);
               this.airportInventory.push({
                 item_id: item.item_id,
                 item_name: item.item_name,
@@ -1153,6 +1161,9 @@ export class MissionController {
                 source: item.source,
                 contract_id: item.contract_id,
                 contract_route: item.contract_id ? contractRouteMap.get(item.contract_id) : undefined,
+                item_icon: itemDef?.icon,
+                item_icon_path: itemDef?.icon_path,
+                item_tier: itemDef?.tier,
               });
             }
           }
@@ -1176,15 +1187,21 @@ export class MissionController {
       const data = await FleetRouter.getAircraftCargoRaw(aircraftId);
       console.log("[WOA] Aircraft cargo:", data);
 
-      this.aircraftCargo = (data.items || []).map(item => ({
-        item_id: item.item_id,
-        item_name: item.item_name,
-        qty: item.qty,
-        weight_kg: parseFloat(String(item.weight_kg)) || 0,
-        total_weight_kg: parseFloat(String(item.total_weight_kg)) || 0,
-        source: item.source,
-        contract_id: item.contract_id,
-      }));
+      this.aircraftCargo = (data.items || []).map(item => {
+        const itemDef = ItemService.getItemById(item.item_id);
+        return {
+          item_id: item.item_id,
+          item_name: item.item_name,
+          qty: item.qty,
+          weight_kg: parseFloat(String(item.weight_kg)) || 0,
+          total_weight_kg: parseFloat(String(item.total_weight_kg)) || 0,
+          source: item.source,
+          contract_id: item.contract_id,
+          item_icon: itemDef?.icon,
+          item_icon_path: itemDef?.icon_path,
+          item_tier: itemDef?.tier,
+        };
+      });
 
       cargoState.aircraftCargoWeight.set(data.current_cargo_kg || 0);
       cargoState.aircraftCargoCapacity.set(data.cargo_capacity_kg || 0);

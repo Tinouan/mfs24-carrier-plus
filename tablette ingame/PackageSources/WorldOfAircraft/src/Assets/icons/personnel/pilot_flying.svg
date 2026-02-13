@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64" height="64" viewBox="0 0 64 64">
+<defs>
+<radialGradient id="pf_skin" cx="50%" cy="40%" r="50%"><stop offset="0%" style="stop-color:#f5d0a9"/><stop offset="100%" style="stop-color:#d4a574"/></radialGradient>
+<linearGradient id="pf_uniform" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" style="stop-color:#1e3a5f"/><stop offset="100%" style="stop-color:#0d1b2a"/></linearGradient>
+</defs>
+<path d="M20 38 Q20 34 26 32 L38 32 Q44 34 44 38 L46 56 L18 56 Z" fill="url(#pf_uniform)" stroke="#0a1628" stroke-width="2.5"/>
+<rect x="18" y="33" width="8" height="3" rx="1.5" fill="#f59e0b" stroke="#b45309" stroke-width="1"/>
+<rect x="38" y="33" width="8" height="3" rx="1.5" fill="#f59e0b" stroke="#b45309" stroke-width="1"/>
+<circle cx="32" cy="38" r="1.5" fill="#f59e0b"/>
+<circle cx="32" cy="44" r="1.5" fill="#f59e0b"/>
+<path d="M24 42 L32 40 L40 42 L36 43 L32 42 L28 43 Z" fill="#f59e0b" stroke="#b45309" stroke-width="1"/>
+<!-- Arms on yoke -->
+<rect x="8" y="38" width="12" height="10" rx="5" fill="url(#pf_uniform)" stroke="#0a1628" stroke-width="2" transform="rotate(15 14 43)"/>
+<rect x="44" y="38" width="12" height="10" rx="5" fill="url(#pf_uniform)" stroke="#0a1628" stroke-width="2" transform="rotate(-15 50 43)"/>
+<!-- Yoke/control -->
+<path d="M8 50 Q16 46 24 50" stroke="#666" stroke-width="3" fill="none" stroke-linecap="round"/>
+<path d="M40 50 Q48 46 56 50" stroke="#666" stroke-width="3" fill="none" stroke-linecap="round"/>
+<rect x="28" y="28" width="8" height="6" rx="2" fill="url(#pf_skin)" stroke="#b8834a" stroke-width="1.5"/>
+<polygon points="30,32 32,40 34,32" fill="#1a1a2e" stroke="#111" stroke-width="1"/>
+<circle cx="32" cy="20" r="12" fill="url(#pf_skin)" stroke="#b8834a" stroke-width="2.5"/>
+<!-- Aviator sunglasses -->
+<path d="M20 18 Q26 16 30 18 Q30 24 26 24 Q22 24 20 18 Z" fill="#1a1a2e" stroke="#333" stroke-width="2" opacity=".85"/>
+<path d="M34 18 Q38 16 44 18 Q44 24 38 24 Q34 24 34 18 Z" fill="#1a1a2e" stroke="#333" stroke-width="2" opacity=".85"/>
+<line x1="30" y1="19" x2="34" y2="19" stroke="#333" stroke-width="2"/>
+<!-- Reflection on glasses -->
+<ellipse cx="25" cy="20" rx="2" ry="1.5" fill="#4a6a8a" opacity=".4"/>
+<ellipse cx="39" cy="20" rx="2" ry="1.5" fill="#4a6a8a" opacity=".4"/>
+<!-- Mouth (focused) -->
+<line x1="29" y1="26" x2="35" y2="26" stroke="#a0704a" stroke-width="1.5" stroke-linecap="round"/>
+<!-- Cap -->
+<path d="M18 16 Q18 6 32 6 Q46 6 46 16 Z" fill="#1e3a5f" stroke="#0a1628" stroke-width="2.5"/>
+<rect x="16" y="14" width="32" height="5" rx="2.5" fill="#1e3a5f" stroke="#0a1628" stroke-width="2"/>
+<path d="M20 19 Q32 22 44 19" fill="#0d1b2a" stroke="#0a1628" stroke-width="1.5"/>
+<circle cx="32" cy="10" r="3" fill="#f59e0b" stroke="#b45309" stroke-width="1.5"/>
+<!-- Green status -->
+<circle cx="54" cy="6" r="5" fill="#22c55e" stroke="#166534" stroke-width="2"/>
+<!-- Speed lines -->
+<line x1="2" y1="24" x2="10" y2="24" stroke="#60a5fa" stroke-width="1.5" opacity=".4"/>
+<line x1="0" y1="30" x2="8" y2="30" stroke="#60a5fa" stroke-width="1.5" opacity=".3"/>
+<line x1="2" y1="36" x2="10" y2="36" stroke="#60a5fa" stroke-width="1.5" opacity=".35"/>
+</svg>
