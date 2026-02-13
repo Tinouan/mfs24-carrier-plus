@@ -501,7 +501,8 @@ export function renderHangarTab(props: HangarViewProps): VNode {
               <Button callback={(): void => {
                 const aircraft = hangarSelectedAircraft.get();
                 if (aircraft) {
-                  onPerformRepair(aircraft.id, ["all"], "company");
+                  const wallet = aircraft.owner_type === "company" ? "company" : "player";
+                  onPerformRepair(aircraft.id, ["all"], wallet);
                 }
               }}>
                 <div style="flex: 1; background: #f59e0b; color: #1a1a24; border-radius: 8px; padding: 12px; font-size: 13px; font-weight: 700; text-align: center;">

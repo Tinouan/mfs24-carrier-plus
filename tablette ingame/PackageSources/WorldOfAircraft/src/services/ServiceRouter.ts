@@ -313,12 +313,8 @@ export const PlayerRouter = {
     return Services.player.getPlayer();
   },
 
-  async updateMoney(delta: number): Promise<any> {
-    return (Services.player as any).updateMoney?.(delta);
-  },
-
-  async updateXP(delta: number): Promise<any> {
-    return (Services.player as any).updateXP?.(delta);
+  async deductMoney(amount: number, reason: string): Promise<any> {
+    return Services.player.deductMoney(amount, reason);
   },
 };
 

@@ -164,7 +164,7 @@ export function renderCompanyTab(props: CompanyViewProps): VNode {
             <div style={companySubTab.map(t => t === "historique"
               ? "padding: 6px 12px; background: #3b82f6; border: 1px solid #3b82f6; border-radius: 6px; font-size: 11px; color: white; font-weight: 600;"
               : "padding: 6px 12px; background: rgba(59, 130, 246, 0.2); border: 1px solid #3b82f6; border-radius: 6px; font-size: 11px; color: white;")}>
-              {currentLanguage.map(l => translations[l].company.missionHistory)}
+              {currentLanguage.map(l => (translations[l].company as any).transactionHistory || translations[l].company.missionHistory)}
             </div>
           </Button>
           <Button callback={(): void => companySubTab.set("messagerie")}>

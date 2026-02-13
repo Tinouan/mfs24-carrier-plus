@@ -31,7 +31,7 @@ import {
   SIMVAR_UPDATE_INTERVAL_MS,
 } from "./constants";
 // V3.0: Service Routers - route to IndexedDB (Solo) or SEED (Online)
-import { FleetRouter, PlayerRouter, ContractRouter } from "./services";
+import { FleetRouter, ContractRouter } from "./services";
 
 // V2.0: Managers for business logic
 import { trackingManager, missionCreationManager, freeFlightManager, PersistenceManager, popupManager } from "./managers";
@@ -1139,7 +1139,7 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
       onLandingDetected: (airport: string, totalLandings: number) => {
         console.log(`[FreeFlight] Landing at ${airport}, total: ${totalLandings}`);
       },
-      onStatsUpdated: (flightTime: number, distance: number, xp: number) => {
+      onStatsUpdated: (_flightTime: number, _distance: number, _xp: number) => {
         // Stats are already in freeFlightState, no need to update here
       },
       onSessionComplete: (recapData: FreeFlightRecapData) => {
@@ -1148,8 +1148,7 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
         // Save to flight history
         void this.saveFreeFlightToHistory(recapData);
 
-        // Award XP to player
-        void this.awardFreeFlightXp(recapData.xp_earned);
+        // XP is already awarded by FreeFlightManager.endLocalSession()
 
         // Store recap data and show popup
         freeFlightState.ffRecapData.set(recapData);
@@ -1309,45 +1308,6 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
     }
   }
 
-  // V1.5: Save unit preferences to NativePersistence
-  private saveUnitPreferences(): void {
-    const units = {
-      distance: settingsState.unitDistance.get(),
-      weight: settingsState.unitWeight.get(),
-      altitude: settingsState.unitAltitude.get(),
-      fuel: settingsState.unitFuel.get(),
-      speed: settingsState.unitSpeed.get(),
-      temperature: settingsState.unitTemperature.get(),
-    };
-    NativePersistence.set("woa_units", JSON.stringify(units));
-    console.log("[WOA] Unit preferences saved:", units);
-  }
-
-  // V1.5: Toggle a unit preference and save
-  private toggleUnit(unitType: "distance" | "weight" | "altitude" | "fuel" | "speed" | "temperature"): void {
-    switch (unitType) {
-      case "distance":
-        settingsState.unitDistance.set(settingsState.unitDistance.get() === "nm" ? "km" : "nm");
-        break;
-      case "weight":
-        settingsState.unitWeight.set(settingsState.unitWeight.get() === "kg" ? "lbs" : "kg");
-        break;
-      case "altitude":
-        settingsState.unitAltitude.set(settingsState.unitAltitude.get() === "ft" ? "m" : "ft");
-        break;
-      case "fuel":
-        settingsState.unitFuel.set(settingsState.unitFuel.get() === "gal" ? "L" : "gal");
-        break;
-      case "speed":
-        settingsState.unitSpeed.set(settingsState.unitSpeed.get() === "kts" ? "kmh" : "kts");
-        break;
-      case "temperature":
-        settingsState.unitTemperature.set(settingsState.unitTemperature.get() === "C" ? "F" : "C");
-        break;
-    }
-    this.saveUnitPreferences();
-  }
-
   // V1.5: Get translation for current language
   private t(category: keyof TranslationKeys, key: string): string {
     const lang = settingsState.currentLanguage.get();
@@ -1484,7 +1444,7 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
     if (!input) return;
 
     // Generate a unique ID for this input
-    const uuid = `woa-input-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const uuid = `woa-input-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 
     // When input is focused, tell MSFS to capture keyboard for the EFB
     input.addEventListener("focus", () => {
@@ -1634,9 +1594,8 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
     mapState.selectedAirport.set(null);
   }
 
-  private openManageFactory(factory: { id: string; name: string }): void {
-    console.log("[WOA] TODO: Open manage factory", factory.id, factory.name);
-    // TODO: Implement factory management panel
+  private openManageFactory(_factory: { id: string; name: string }): void {
+    // TODO Phase 9: Implement factory management panel
     mapState.selectedAirport.set(null);
   }
 
@@ -1859,24 +1818,6 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
       console.log("[WOA] Flight history entry saved:", entry.id);
     } catch (error) {
       console.error("[WOA] Error saving flight history:", error);
-    }
-  }
-
-  /**
-   * Award XP to player from free flight
-   */
-  private async awardFreeFlightXp(xp: number): Promise<void> {
-    if (xp <= 0) return;
-
-    try {
-      // Add XP via PlayerRouter (works in both online and P2P mode)
-      await PlayerRouter.updateXP(xp);
-      console.log(`[WOA] Awarded ${xp} XP from free flight`);
-
-      // Refresh user data to update displayed XP
-      void PlayerRouter.getPlayer();
-    } catch (error) {
-      console.error("[WOA] Error awarding free flight XP:", error);
     }
   }
 

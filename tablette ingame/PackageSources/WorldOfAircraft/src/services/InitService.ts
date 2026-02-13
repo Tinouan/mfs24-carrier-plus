@@ -208,12 +208,9 @@ class InitServiceClass {
       const rawSetupOld = typeof GetStoredData === "function" ? GetStoredData("WOA_SoloSetupComplete") : "N/A";
       const rawSaveData = typeof GetStoredData === "function" ? GetStoredData("WOA_Solo_SaveData") : "N/A";
       const rawPlayerId = typeof GetStoredData === "function" ? GetStoredData("WOA_Solo_PlayerId") : "N/A";
-      console.log("[DEBUG] WOA_Solo_SetupComplete =", rawSetupNew);
-      console.log("[DEBUG] WOA_SoloSetupComplete (old) =", rawSetupOld);
-      console.log("[DEBUG] WOA_Solo_SaveData exists =", rawSaveData && rawSaveData !== "" ? "YES (" + rawSaveData.length + " chars)" : "NO");
-      console.log("[DEBUG] WOA_Solo_PlayerId =", rawPlayerId);
+      console.log("[InitService] Solo persistence check: setup=", rawSetupNew, "old=", rawSetupOld, "save=", rawSaveData ? "YES" : "NO", "pid=", rawPlayerId);
     } catch (e) {
-      console.log("[DEBUG] GetStoredData not available:", e);
+      console.warn("[InitService] GetStoredData not available");
     }
 
     NetworkState.setOffline(); // Solo mode is always "offline" from SEED perspective

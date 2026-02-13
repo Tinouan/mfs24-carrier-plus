@@ -1,229 +1,239 @@
-# Items & Recipes System - Documentation Technique
+# Items & Recipes System — Documentation Technique
+
+> **Version**: V4.3 (Architecture Deux Carrières)
+> **Dernière mise à jour** : 13 février 2026
 
 ## Vue d'ensemble
 
-Le mod MFS24 Carrier Plus utilise un système d'items avec:
-- **94 items** au total répartis sur 3 tiers (T0, T1, T2)
+Le système d'items et recettes forme la base de l'économie de World of Aircraft :
+- **93 items** répartis sur 3 tiers (T0, T1, T2) — extensible vers T3-T5 à terme
 - **60 recettes** de production (30 T1, 30 T2)
-- Système de transformation des matières premières vers des produits finis
+- Chaîne de transformation : matières premières T0 → produits transformés T1 → produits avancés T2
+
+### Architecture
+
+| Mode | Stockage items | Stockage recettes |
+|------|---------------|-------------------|
+| **Solo** | `SoloSaveService` → GetStoredData (MSFS natif) | Données statiques dans `data/seed.json` |
+| **Online** | SEED (Cloudflare R2) via SyncService | Données statiques dans `data/seed.json` |
+
+Les items et recettes sont des **données statiques** chargées au démarrage depuis `data/seed.json`. Seuls les inventaires (quantités possédées) sont dynamiques et sauvegardés selon le mode.
 
 ---
 
-## Tables SQLite (Architecture P2P)
+## Modèles de données
 
-### `items`
+### Item
 
-| Colonne | Type | Description |
-|---------|------|-------------|
-| `id` | TEXT (UUID) | Clé primaire |
-| `name` | TEXT | Nom unique de l'item |
-| `tier` | INTEGER | 0=raw, 1-5=processed |
-| `tags` | TEXT | Tags JSON array |
-| `icon` | TEXT | Emoji/icône |
-| `base_value` | REAL | Valeur de base en crédits |
-| `weight_kg` | REAL | Poids en kg |
-| `is_raw` | INTEGER | Matière première (0/1) |
-| `stack_size` | INTEGER | Taille de stack (défaut: 100) |
-| `description` | TEXT | Description |
-| `created_at` | TEXT | Date de création ISO |
+```typescript
+interface Item {
+  id: string;           // UUID unique
+  name: string;         // Nom unique (ex: "Iron Ore")
+  tier: number;         // 0=raw, 1-2=processed (futur: 3-5)
+  tags: string[];       // Tags pour filtrage (ex: ["construction", "mineral", "raw"])
+  icon: string;         // Icône texte (pas d'emoji — Coherent GT affiche des carrés)
+  base_value: number;   // Valeur de base en crédits (CR)
+  weight_kg: number;    // Poids en kg
+  is_raw: boolean;      // true = matière première T0
+  stack_size: number;   // Taille de stack (défaut: 100)
+  description: string;  // Description courte
+}
+```
 
-### `recipes`
+### Recipe
 
-| Colonne | Type | Description |
-|---------|------|-------------|
-| `id` | TEXT (UUID) | Clé primaire |
-| `name` | TEXT | Nom unique de la recette |
-| `tier` | INTEGER | 1-5 (tier de la recette) |
-| `result_item_id` | TEXT | FK → items (produit final) |
-| `result_quantity` | INTEGER | Quantité produite par batch |
-| `production_time_hours` | REAL | Temps de production de base |
-| `base_workers_required` | INTEGER | Workers minimum (défaut: 10) |
-| `description` | TEXT | Description |
-| `unlock_requirements` | TEXT | JSON conditions de déblocage |
-| `created_at` | TEXT | Date de création ISO |
+```typescript
+interface Recipe {
+  id: string;                    // UUID unique
+  name: string;                  // Nom de la recette (= nom du produit)
+  tier: number;                  // 1-5 (tier requis de la factory)
+  result_item_id: string;        // FK → Item produit
+  result_quantity: number;       // Quantité produite par batch
+  production_time_hours: number; // Temps de production de base (heures)
+  base_workers_required: number; // Workers minimum (défaut: 10)
+  ingredients: RecipeIngredient[];
+  description: string;
+}
 
-### `recipe_ingredients`
-
-| Colonne | Type | Description |
-|---------|------|-------------|
-| `id` | TEXT (UUID) | Clé primaire |
-| `recipe_id` | TEXT | FK → recipes |
-| `item_id` | TEXT | FK → items (ingrédient) |
-| `quantity` | INTEGER | Quantité requise par batch |
-| `position` | INTEGER | Ordre d'affichage (0-3) |
+interface RecipeIngredient {
+  item_id: string;   // FK → Item (ingrédient)
+  quantity: number;   // Quantité requise par batch
+  position: number;   // Ordre d'affichage (0-3)
+}
+```
 
 ---
 
-## Items T0 - Matières Premières (34 items)
+## Items T0 — Matières Premières (33 items)
 
-Les items T0 sont produits automatiquement par les usines NPC.
+Produits automatiquement par les usines NPC (T0). Vendus sur le marché IA en Solo, marché joueurs en Online.
 
-### Ressources Minérales
-
-| Nom | Valeur | Poids | Tags |
-|-----|--------|-------|------|
-| Aluminum Ore | 18€ | 4.5kg | construction, mineral, raw |
-| Clay | 4€ | 2.5kg | construction, mineral, raw |
-| Coal | 10€ | 3.0kg | fuel, raw, mineral |
-| Copper Ore | 12€ | 4.0kg | construction, mineral, raw, electronics |
-| Granite | 10€ | 12.0kg | construction, mineral, raw |
-| Graphite | 20€ | 2.0kg | construction, mineral, raw |
-| Iron Ore | 15€ | 5.0kg | construction, mineral, raw |
-| Limestone | 6€ | 8.0kg | construction, mineral, raw |
-| Phosphate | 10€ | 3.0kg | chemical, mineral, raw |
-| Rare Earth Metals | 80€ | 3.0kg | electronics, mineral, raw, advanced |
-| Raw Salt | 5€ | 1.0kg | food, mineral, raw |
-| Raw Silicon | 30€ | 2.0kg | electronics, mineral, raw |
-| Raw Stone | 5€ | 10.0kg | construction, mineral, raw |
-| Sand | 3€ | 2.0kg | construction, mineral, raw |
-| Sulfur | 15€ | 2.5kg | chemical, mineral, raw |
-| Titanium Ore | 45€ | 3.5kg | construction, mineral, raw |
-| Uranium Ore | 100€ | 8.0kg | fuel, raw, mineral, advanced |
-
-### Ressources Alimentaires
+### Ressources Minérales (17 items)
 
 | Nom | Valeur | Poids | Tags |
 |-----|--------|-------|------|
-| Raw Cocoa | 15€ | 1.0kg | food, raw, plant |
-| Raw Fish | 10€ | 2.0kg | food, raw, animal |
-| Raw Fruits | 6€ | 1.2kg | food, raw, plant |
-| Raw Meat | 12€ | 2.5kg | food, raw, animal |
-| Raw Milk | 4€ | 2.0kg | food, raw, animal |
-| Raw Sugar | 7€ | 1.0kg | food, raw, plant |
-| Raw Vanilla | 50€ | 0.5kg | food, raw, plant |
-| Raw Vegetables | 5€ | 1.0kg | food, raw, plant |
-| Raw Wheat | 8€ | 1.5kg | food, raw, plant, grain |
-| Water | 1€ | 1.0kg | food, raw |
+| Aluminum Ore | 18 CR | 4.5 kg | construction, mineral, raw |
+| Clay | 4 CR | 2.5 kg | construction, mineral, raw |
+| Coal | 10 CR | 3.0 kg | fuel, raw, mineral |
+| Copper Ore | 12 CR | 4.0 kg | construction, mineral, raw, electronics |
+| Granite | 10 CR | 12.0 kg | construction, mineral, raw |
+| Graphite | 20 CR | 2.0 kg | construction, mineral, raw |
+| Iron Ore | 15 CR | 5.0 kg | construction, mineral, raw |
+| Limestone | 6 CR | 8.0 kg | construction, mineral, raw |
+| Phosphate | 10 CR | 3.0 kg | chemical, mineral, raw |
+| Rare Earth Metals | 80 CR | 3.0 kg | electronics, mineral, raw, advanced |
+| Raw Salt | 5 CR | 1.0 kg | food, mineral, raw |
+| Raw Silicon | 30 CR | 2.0 kg | electronics, mineral, raw |
+| Raw Stone | 5 CR | 10.0 kg | construction, mineral, raw |
+| Sand | 3 CR | 2.0 kg | construction, mineral, raw |
+| Sulfur | 15 CR | 2.5 kg | chemical, mineral, raw |
+| Titanium Ore | 45 CR | 3.5 kg | construction, mineral, raw |
+| Uranium Ore | 100 CR | 8.0 kg | fuel, raw, mineral, advanced |
 
-### Ressources Énergétiques
+### Ressources Alimentaires (10 items)
 
 | Nom | Valeur | Poids | Tags |
 |-----|--------|-------|------|
-| Biomass | 5€ | 2.0kg | fuel, raw, organic |
-| Crude Oil | 25€ | 5.0kg | fuel, raw |
-| Natural Gas | 20€ | 1.0kg | fuel, raw |
+| Raw Cocoa | 15 CR | 1.0 kg | food, raw, plant |
+| Raw Fish | 10 CR | 2.0 kg | food, raw, animal |
+| Raw Fruits | 6 CR | 1.2 kg | food, raw, plant |
+| Raw Meat | 12 CR | 2.5 kg | food, raw, animal |
+| Raw Milk | 4 CR | 2.0 kg | food, raw, animal |
+| Raw Sugar | 7 CR | 1.0 kg | food, raw, plant |
+| Raw Vanilla | 50 CR | 0.5 kg | food, raw, plant |
+| Raw Vegetables | 5 CR | 1.0 kg | food, raw, plant |
+| Raw Wheat | 8 CR | 1.5 kg | food, raw, plant, grain |
+| Water | 1 CR | 1.0 kg | food, raw, liquid |
 
-### Ressources Organiques
+### Ressources Énergétiques (3 items)
 
 | Nom | Valeur | Poids | Tags |
 |-----|--------|-------|------|
-| Cotton | 8€ | 1.0kg | raw, organic |
-| Raw Rubber | 12€ | 1.5kg | construction, raw, organic |
-| Raw Wood | 8€ | 3.0kg | construction, raw, organic |
-| Raw Water | 0.50€ | 1.0kg | raw, liquid, water |
+| Biomass | 5 CR | 2.0 kg | fuel, raw, organic |
+| Crude Oil | 25 CR | 5.0 kg | fuel, raw |
+| Natural Gas | 20 CR | 1.0 kg | fuel, raw |
+
+### Ressources Organiques (3 items)
+
+| Nom | Valeur | Poids | Tags |
+|-----|--------|-------|------|
+| Cotton | 8 CR | 1.0 kg | raw, organic |
+| Raw Rubber | 12 CR | 1.5 kg | construction, raw, organic |
+| Raw Wood | 8 CR | 3.0 kg | construction, raw, organic |
 
 ---
 
-## Items T1 - Produits Transformés (30 items)
+## Items T1 — Produits Transformés (30 items)
 
-Produits de première transformation nécessitant des matières premières T0.
+Première transformation nécessitant des matières premières T0.
 
-### Métaux & Construction
-
-| Nom | Valeur | Poids | Tags |
-|-----|--------|-------|------|
-| Aluminum Ingot | 55€ | 4.0kg | construction, metal, light |
-| Bricks | 15€ | 6.0kg | construction, masonry |
-| Cement | 20€ | 10.0kg | construction, binding |
-| Copper Ingot | 38€ | 6.0kg | construction, metal, electronics |
-| Glass | 25€ | 4.0kg | construction, transparent |
-| Marble Slabs | 65€ | 10.0kg | construction, masonry, luxury |
-| Planks | 22€ | 2.0kg | construction, wood |
-| Rubber Sheets | 32€ | 2.0kg | construction, industrial |
-| Silicon Wafers | 90€ | 1.5kg | electronics, advanced |
-| Steel Ingot | 45€ | 8.0kg | construction, metal |
-| Stone Bricks | 18€ | 8.0kg | construction, masonry |
-| Titanium Ingot | 150€ | 3.0kg | construction, metal, advanced |
-
-### Alimentaire
+### Métaux & Construction (12 items)
 
 | Nom | Valeur | Poids | Tags |
 |-----|--------|-------|------|
-| Bread | 15€ | 0.5kg | food, baked |
-| Butter | 28€ | 0.5kg | food, dairy |
-| Cocoa Powder | 35€ | 0.6kg | food, ingredient |
-| Dried Fish | 25€ | 1.5kg | food, preserved |
-| Flour | 12€ | 1.0kg | food, ingredient |
-| Fruit Jam | 22€ | 0.8kg | food, preserved, sweet |
-| Salted Meat | 30€ | 2.0kg | food, preserved, animal |
-| Sugar Syrup | 18€ | 0.8kg | food, ingredient |
-| Vanilla Extract | 120€ | 0.3kg | food, ingredient, rare |
-| Vegetable Stew | 20€ | 1.0kg | food, cooked |
+| Aluminum Ingot | 55 CR | 4.0 kg | construction, metal, light |
+| Bricks | 15 CR | 6.0 kg | construction, masonry |
+| Cement | 20 CR | 10.0 kg | construction, binding |
+| Copper Ingot | 38 CR | 6.0 kg | construction, metal, electronics |
+| Glass | 25 CR | 4.0 kg | construction, transparent |
+| Marble Slabs | 65 CR | 10.0 kg | construction, masonry, luxury |
+| Planks | 22 CR | 2.0 kg | construction, wood |
+| Rubber Sheets | 32 CR | 2.0 kg | construction, industrial |
+| Silicon Wafers | 90 CR | 1.5 kg | electronics, advanced |
+| Steel Ingot | 45 CR | 8.0 kg | construction, metal |
+| Stone Bricks | 18 CR | 8.0 kg | construction, masonry |
+| Titanium Ingot | 150 CR | 3.0 kg | construction, metal, advanced |
 
-### Carburants & Chimie
+### Alimentaire (10 items)
 
 | Nom | Valeur | Poids | Tags |
 |-----|--------|-------|------|
-| Biofuel | 48€ | 3.5kg | fuel, renewable |
-| Charcoal | 28€ | 2.5kg | fuel, solid |
-| Compressed Gas | 55€ | 2.0kg | fuel, gas |
-| Diesel | 60€ | 4.0kg | fuel, liquid |
-| Fabric | 24€ | 1.5kg | construction, textile |
-| Fertilizer | 28€ | 5.0kg | chemical, agriculture |
-| Sulfuric Acid | 40€ | 4.0kg | chemical, industrial |
-| Uranium Pellets | 300€ | 5.0kg | fuel, nuclear, advanced |
+| Bread | 15 CR | 0.5 kg | food, baked |
+| Butter | 28 CR | 0.5 kg | food, dairy |
+| Cocoa Powder | 35 CR | 0.6 kg | food, ingredient |
+| Dried Fish | 25 CR | 1.5 kg | food, preserved |
+| Flour | 12 CR | 1.0 kg | food, ingredient |
+| Fruit Jam | 22 CR | 0.8 kg | food, preserved, sweet |
+| Salted Meat | 30 CR | 2.0 kg | food, preserved, animal |
+| Sugar Syrup | 18 CR | 0.8 kg | food, ingredient |
+| Vanilla Extract | 120 CR | 0.3 kg | food, ingredient, rare |
+| Vegetable Stew | 20 CR | 1.0 kg | food, cooked |
+
+### Carburants & Chimie (8 items)
+
+| Nom | Valeur | Poids | Tags |
+|-----|--------|-------|------|
+| Biofuel | 48 CR | 3.5 kg | fuel, renewable |
+| Charcoal | 28 CR | 2.5 kg | fuel, solid |
+| Compressed Gas | 55 CR | 2.0 kg | fuel, gas |
+| Diesel | 60 CR | 4.0 kg | fuel, liquid |
+| Fabric | 24 CR | 1.5 kg | construction, textile |
+| Fertilizer | 28 CR | 5.0 kg | chemical, agriculture |
+| Sulfuric Acid | 40 CR | 4.0 kg | chemical, industrial |
+| Uranium Pellets | 300 CR | 5.0 kg | fuel, nuclear, advanced |
 
 ---
 
-## Items T2 - Produits Avancés (30 items)
+## Items T2 — Produits Avancés (30 items)
 
 Produits nécessitant des items T1 ou combinaison T0+T1.
 
-### Métaux & Construction
+### Métaux & Construction (8 items)
 
 | Nom | Valeur | Poids | Tags |
 |-----|--------|-------|------|
-| Aluminum Frame | 88€ | 5.0kg | construction, metal, light |
-| Concrete Blocks | 45€ | 15.0kg | construction, masonry |
-| Reinforced Steel | 95€ | 10.0kg | construction, metal, quality |
-| Steel Pipes | 82€ | 9.0kg | construction, metal, plumbing |
-| Titanium Plates | 320€ | 4.0kg | construction, metal, advanced, armor |
-| Window Panes | 72€ | 6.0kg | construction, transparent |
-| Wire Cable | 68€ | 3.0kg | construction, metal, electronics |
-| Wooden Beams | 55€ | 8.0kg | construction, wood |
+| Aluminum Frame | 88 CR | 5.0 kg | construction, metal, light |
+| Concrete Blocks | 45 CR | 15.0 kg | construction, masonry |
+| Reinforced Steel | 95 CR | 10.0 kg | construction, metal, quality |
+| Steel Pipes | 82 CR | 9.0 kg | construction, metal, plumbing |
+| Titanium Plates | 320 CR | 4.0 kg | construction, metal, advanced, armor |
+| Window Panes | 72 CR | 6.0 kg | construction, transparent |
+| Wire Cable | 68 CR | 3.0 kg | construction, metal, electronics |
+| Wooden Beams | 55 CR | 8.0 kg | construction, wood |
 
-### Alimentaire
-
-| Nom | Valeur | Poids | Tags |
-|-----|--------|-------|------|
-| Cheese | 65€ | 1.0kg | food, dairy, quality |
-| Chocolate Bar | 85€ | 0.4kg | food, sweet, luxury |
-| Dried Fruit | 45€ | 0.8kg | food, preserved, sweet |
-| Fruit Cake | 75€ | 1.2kg | food, baked, sweet |
-| Honey Bread | 58€ | 0.7kg | food, baked, sweet, quality |
-| Pastry | 38€ | 0.5kg | food, baked, sweet |
-| Quality Bread | 35€ | 0.6kg | food, baked, quality |
-| Sausage | 48€ | 1.5kg | food, meat, preserved |
-| Smoked Fish | 55€ | 1.8kg | food, preserved, quality |
-| Vegetable Soup | 42€ | 1.2kg | food, cooked, quality |
-
-### Carburants & Chimie
+### Alimentaire (10 items)
 
 | Nom | Valeur | Poids | Tags |
 |-----|--------|-------|------|
-| Adhesive | 68€ | 2.0kg | chemical, industrial |
-| Cleaning Solution | 35€ | 3.0kg | chemical, industrial |
-| Heating Oil | 88€ | 4.5kg | fuel, liquid |
-| Insulation | 58€ | 3.0kg | construction, industrial |
-| Jet Fuel | 135€ | 5.0kg | fuel, liquid, aviation |
-| Nuclear Fuel Rod | 850€ | 8.0kg | fuel, nuclear, advanced |
-| Paint | 52€ | 3.5kg | chemical, construction |
-| Plastic Sheets | 62€ | 2.5kg | construction, chemical |
-| Premium Biofuel | 115€ | 4.0kg | fuel, renewable, quality |
-| Rocket Propellant | 285€ | 6.0kg | fuel, liquid, advanced |
+| Cheese | 65 CR | 1.0 kg | food, dairy, quality |
+| Chocolate Bar | 85 CR | 0.4 kg | food, sweet, luxury |
+| Dried Fruit | 45 CR | 0.8 kg | food, preserved, sweet |
+| Fruit Cake | 75 CR | 1.2 kg | food, baked, sweet |
+| Honey Bread | 58 CR | 0.7 kg | food, baked, sweet, quality |
+| Pastry | 38 CR | 0.5 kg | food, baked, sweet |
+| Quality Bread | 35 CR | 0.6 kg | food, baked, quality |
+| Sausage | 48 CR | 1.5 kg | food, meat, preserved |
+| Smoked Fish | 55 CR | 1.8 kg | food, preserved, quality |
+| Vegetable Soup | 42 CR | 1.2 kg | food, cooked, quality |
 
-### Électronique & Médical
+### Carburants & Chimie (10 items)
 
 | Nom | Valeur | Poids | Tags |
 |-----|--------|-------|------|
-| Circuit Board | 185€ | 2.0kg | electronics, advanced |
-| Medical Bandages | 48€ | 0.5kg | medical, consumable |
+| Adhesive | 68 CR | 2.0 kg | chemical, industrial |
+| Cleaning Solution | 35 CR | 3.0 kg | chemical, industrial |
+| Heating Oil | 88 CR | 4.5 kg | fuel, liquid |
+| Insulation | 58 CR | 3.0 kg | construction, industrial |
+| Jet Fuel | 135 CR | 5.0 kg | fuel, liquid, aviation |
+| Nuclear Fuel Rod | 1200 CR | 8.0 kg | fuel, nuclear, advanced |
+| Paint | 52 CR | 3.5 kg | chemical, construction |
+| Plastic Sheets | 62 CR | 2.5 kg | construction, chemical |
+| Premium Biofuel | 115 CR | 4.0 kg | fuel, renewable, quality |
+| Rocket Propellant | 285 CR | 6.0 kg | fuel, liquid, advanced |
+
+### Électronique & Médical (2 items)
+
+| Nom | Valeur | Poids | Tags |
+|-----|--------|-------|------|
+| Circuit Board | 185 CR | 2.0 kg | electronics, advanced |
+| Medical Bandages | 48 CR | 0.5 kg | medical, consumable |
 
 ---
 
 ## Recettes T1 (30 recettes)
 
-Toutes les recettes T1 nécessitent 10 workers minimum.
+Toutes les recettes T1 nécessitent 10 workers minimum et une factory T1+.
+Chaque recette T1 utilise 2-4 ingrédients T0.
 
 ### Recettes Métaux
 
@@ -280,6 +290,7 @@ Toutes les recettes T1 nécessitent 10 workers minimum.
 ## Recettes T2 (30 recettes)
 
 Recettes avancées utilisant des produits T1 ou combinaisons T0+T1.
+Nécessitent une factory T2+.
 
 ### Recettes Métaux & Construction
 
@@ -338,9 +349,40 @@ Recettes avancées utilisant des produits T1 ou combinaisons T0+T1.
 
 ---
 
-## Système de Tags
+## Calcul de Rentabilité
 
-Les items sont catégorisés par tags pour faciliter la recherche et le filtrage.
+### Formule de base
+
+```
+Profit = (Valeur Produit × Quantité) - Somme(Valeur Ingrédient × Quantité)
+Profit/h = Profit / Temps de Production
+```
+
+Note : ces calculs ne prennent pas en compte les salaires workers ni les bonus tiers.
+
+### Exemples T1
+
+| Recette | Coût Inputs | Valeur Output | Profit | Temps | Profit/h |
+|---------|-------------|---------------|--------|-------|----------|
+| Flour | 3×8 + 1 = 25 CR | 25×12 = 300 CR | 275 CR | 1h | 275 CR/h |
+| Bread | 2×8 + 1 = 17 CR | 20×15 = 300 CR | 283 CR | 1.5h | 189 CR/h |
+| Steel Ingot | 2×15 + 10 = 40 CR | 5×45 = 225 CR | 185 CR | 4h | 46 CR/h |
+| Uranium Pellets | 2×100 + 1 = 201 CR | 1×300 = 300 CR | 99 CR | 12h | 8 CR/h |
+
+### Exemples T2
+
+| Recette | Coût Inputs | Valeur Output | Profit | Temps | Profit/h |
+|---------|-------------|---------------|--------|-------|----------|
+| Quality Bread | 3×12 + 28 + 1 = 65 CR | 15×35 = 525 CR | 460 CR | 2.5h | 184 CR/h |
+| Chocolate Bar | 2×35 + 18 + 28 = 116 CR | 6×85 = 510 CR | 394 CR | 3h | 131 CR/h |
+| Circuit Board | 2×90 + 38 = 218 CR | 3×185 = 555 CR | 337 CR | 8h | 42 CR/h |
+| Nuclear Fuel Rod | 3×300 + 2×45 = 990 CR | 1×1200 = 1200 CR | 210 CR | 24h | 9 CR/h |
+
+Nuclear Fuel Rod : rentabilité faible mais valeur unitaire très élevée — item stratégique pour les missions cargo haut de gamme et contracts spéciaux.
+
+---
+
+## Système de Tags
 
 ### Tags Principaux
 
@@ -379,86 +421,111 @@ Les items sont catégorisés par tags pour faciliter la recherche et le filtrage
 
 ---
 
-## Calcul de Rentabilité
-
-### Formule de base
-
-```
-Profit = (Valeur Produit × Quantité) - Somme(Valeur Ingrédient × Quantité)
-Profit/h = Profit / Temps de Production
-```
-
-### Exemples de rentabilité T1
-
-| Recette | Coût Inputs | Valeur Output | Profit | Temps | Profit/h |
-|---------|-------------|---------------|--------|-------|----------|
-| Flour | 3×8€ + 1€ = 25€ | 25×12€ = 300€ | 275€ | 1h | 275€/h |
-| Bread | 2×8€ + 1€ = 17€ | 20×15€ = 300€ | 283€ | 1.5h | 189€/h |
-| Steel Ingot | 2×15€ + 10€ = 40€ | 5×45€ = 225€ | 185€ | 4h | 46€/h |
-| Uranium Pellets | 2×100€ + 1€ = 201€ | 1×300€ = 300€ | 99€ | 12h | 8€/h |
-
-### Exemples de rentabilité T2
-
-| Recette | Coût Inputs | Valeur Output | Profit | Temps | Profit/h |
-|---------|-------------|---------------|--------|-------|----------|
-| Quality Bread | 3×12€ + 28€ + 1€ = 65€ | 15×35€ = 525€ | 460€ | 2.5h | 184€/h |
-| Chocolate Bar | 2×35€ + 18€ + 28€ = 116€ | 6×85€ = 510€ | 394€ | 3h | 131€/h |
-| Circuit Board | 2×90€ + 38€ = 218€ | 3×185€ = 555€ | 337€ | 8h | 42€/h |
-| Nuclear Fuel Rod | 3×300€ + 2×45€ = 990€ | 1×850€ = 850€ | -140€ | 24h | -6€/h |
-
-**Note:** Ces calculs ne prennent pas en compte les salaires des workers ni les bonus engineers.
-
----
-
-## Services TypeScript (Architecture P2P)
+## Services (Architecture Deux Carrières)
 
 ### ItemService
 
 ```typescript
 // services/ItemService.ts
+// Charge les données statiques depuis data/seed.json
 
 class ItemServiceClass {
-  // Liste tous les items
-  async getAllItems(): Promise<Item[]>;
+  private items: Item[] = [];
 
-  // Détails d'un item par ID
-  async getItemById(id: string): Promise<Item | null>;
+  init(): void {
+    // Charger depuis seed.json au démarrage
+    this.items = seedData.items;
+  }
 
-  // Recherche par nom
-  async searchItems(query: string): Promise<Item[]>;
+  getAllItems(): Item[] {
+    return this.items;
+  }
 
-  // Statistiques items
-  async getItemStats(): Promise<ItemStats>;
+  getItemById(id: string): Item | null {
+    return this.items.find(i => i.id === id) || null;
+  }
+
+  getItemsByTier(tier: number): Item[] {
+    return this.items.filter(i => i.tier === tier);
+  }
+
+  getItemsByTag(tag: string): Item[] {
+    return this.items.filter(i => i.tags.includes(tag));
+  }
+
+  searchItems(query: string): Item[] {
+    const q = query.toLowerCase();
+    return this.items.filter(i =>
+      i.name.toLowerCase().includes(q) ||
+      i.tags.some(t => t.includes(q))
+    );
+  }
 }
+
+export const ItemService = new ItemServiceClass();
 ```
 
 ### RecipeService
 
 ```typescript
 // services/RecipeService.ts
+// Charge les données statiques depuis data/seed.json
 
 class RecipeServiceClass {
-  // Liste toutes les recettes
-  async getAllRecipes(): Promise<Recipe[]>;
+  private recipes: Recipe[] = [];
 
-  // Détails d'une recette par ID
-  async getRecipeById(id: string): Promise<Recipe | null>;
+  init(): void {
+    this.recipes = seedData.recipes;
+  }
 
-  // Ingrédients d'une recette
-  async getRecipeIngredients(recipeId: string): Promise<RecipeIngredient[]>;
+  getAllRecipes(): Recipe[] {
+    return this.recipes;
+  }
 
-  // Recettes par tier
-  async getRecipesByTier(tier: number): Promise<Recipe[]>;
+  getRecipeById(id: string): Recipe | null {
+    return this.recipes.find(r => r.id === id) || null;
+  }
+
+  getRecipesByTier(tier: number): Recipe[] {
+    return this.recipes.filter(r => r.tier === tier);
+  }
+
+  getRecipesForFactory(factoryTier: number): Recipe[] {
+    // Une factory peut exécuter les recettes de son tier et en dessous
+    return this.recipes.filter(r => r.tier <= factoryTier);
+  }
+
+  getRecipeIngredients(recipeId: string): RecipeIngredient[] {
+    const recipe = this.getRecipeById(recipeId);
+    return recipe?.ingredients || [];
+  }
 }
+
+export const RecipeService = new RecipeServiceClass();
+```
+
+---
+
+## Seed Data (data/seed.json)
+
+Les 93 items et 60 recettes sont packagés dans `data/seed.json` et chargés au démarrage de l'EFB. Ce fichier est identique en Solo et Online — c'est de la donnée statique de référence.
+
+```
+data/seed.json
+├── items: Item[]          // 93 items (33 T0, 30 T1, 30 T2)
+├── recipes: Recipe[]      // 60 recettes (30 T1, 30 T2)
+├── country_worker_stats   // Stats par pays (42 pays)
+└── version: string        // Pour migration future
+```
 
 ---
 
 ## Prochaines évolutions (T3-T5)
 
-Les tiers 3 à 5 sont prévus pour les futures versions:
+Les tiers 3 à 5 sont prévus pour les futures versions :
 
-- **T3**: Produits industriels complexes (véhicules, machines)
-- **T4**: Haute technologie (composants avion, électronique avancée)
-- **T5**: Produits de luxe et spatiaux
+- **T3** : Produits industriels complexes (véhicules, machines)
+- **T4** : Haute technologie (composants avion, électronique avancée)
+- **T5** : Produits de luxe et spatiaux
 
-Les recettes T3+ nécessiteront des factories de tier correspondant et des workers plus expérimentés.
+Les recettes T3+ nécessiteront des factories de tier correspondant (T3-T10) et des workers plus expérimentés.

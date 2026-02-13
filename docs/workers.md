@@ -1,136 +1,316 @@
-# Workers System - Documentation Technique
+# Workers System — Documentation Technique
 
-> **Version**: V0.9 (Architecture P2P)
+> **Version**: V4.3 (Architecture Deux Carrières)
+> **Dernière mise à jour** : 13 février 2026
 
 ## Vue d'ensemble
 
-Le système Workers gère les travailleurs comme des **items individuels** avec stats uniques:
-- Chaque worker est une instance unique avec ses propres stats
-- Workers sont des items achetables (Worker-FR, Worker-CN, etc.)
-- Stats générées aléatoirement selon la nationalité (±20%)
-- Intégration avec l'inventaire company
-- Visible dans la vue Inventaire globale
+Les workers sont des **instances uniques** avec des stats individuelles — pas de simples items empilables. Chaque worker a sa propre nationalité, vitesse, résistance et progression XP.
 
-**Architecture P2P**: Les données sont stockées localement en SQLite et synchronisées avec les autres joueurs via le NetworkManager.
+- Achetables sur le marché (large_airport uniquement)
+- Propriété de la **company** ou du **joueur** (owner_type)
+- 42 nationalités avec stats de base différentes
+- Progression XP : Novice → Maître (5 tiers)
+- Système de blessures et mort
 
----
+### Architecture
 
-## Tables SQLite
-
-### `worker_instances`
-
-Table principale pour les workers item-based.
-
-| Colonne | Type | Description |
-|---------|------|-------------|
-| `id` | TEXT (UUID) | Clé primaire |
-| `owner_company_id` | TEXT | FK → companies (propriétaire) |
-| `owner_player_id` | TEXT | FK → player (propriétaire alternatif) |
-| `item_id` | TEXT | FK → items (Worker-XX item) |
-| `airport_ident` | TEXT | Aéroport de localisation |
-| `country_code` | TEXT | Code pays (FR, DE, US...) |
-| `speed` | INTEGER (1-100) | Vitesse de travail |
-| `resistance` | INTEGER (1-100) | Résistance aux blessures |
-| `xp` | INTEGER | Points d'expérience |
-| `tier` | INTEGER (1-5) | Niveau (auto-calculé via XP) |
-| `hourly_salary` | REAL | Salaire horaire |
-| `status` | TEXT | available, working, injured, dead |
-| `factory_id` | TEXT | FK → factories (si assigné) |
-| `for_sale` | INTEGER | En vente (0/1) |
-| `sale_price` | REAL | Prix de vente |
-| `injured_at` | TEXT | Date de blessure (ISO8601) |
-| `created_at` | TEXT | Date création |
-
-**Contraintes:**
-- `speed BETWEEN 1 AND 100`
-- `resistance BETWEEN 1 AND 100`
-- `xp >= 0`
-- `tier BETWEEN 1 AND 5`
-- `hourly_salary > 0`
-- `status IN ('available', 'working', 'injured', 'dead')`
-
-### `country_worker_stats`
-
-Stats de base par nationalité pour la génération.
-
-| Colonne | Type | Description |
-|---------|------|-------------|
-| `country_code` | TEXT | PK - Code pays ISO |
-| `country_name` | TEXT | Nom du pays |
-| `base_speed` | INTEGER | Vitesse de base (30-70) |
-| `base_resistance` | INTEGER | Résistance de base (30-70) |
-| `base_hourly_salary` | REAL | Salaire horaire de base |
-
-**Exemples de stats par pays:**
-
-| Pays | Speed | Resistance | Salaire/h |
-|------|-------|------------|-----------|
-| France (FR) | 55 | 50 | 15$ |
-| Germany (DE) | 60 | 50 | 16$ |
-| USA (US) | 55 | 52 | 18$ |
-| Japan (JP) | 65 | 45 | 22$ |
-| China (CN) | 52 | 55 | 6$ |
-| India (IN) | 50 | 48 | 4$ |
+| Mode | Stockage workers | Achat | Salaires |
+|------|-----------------|-------|----------|
+| **Solo** | `SoloSaveService` → GetStoredData | Marché IA (prix fixes) | Scheduler local (timer JS) |
+| **Online** | SEED (Cloudflare R2) | Marché joueurs | SEED calcule |
 
 ---
 
-## Cycle de Vie d'un Worker
+## Modèle de données
+
+### WorkerInstance
+
+```typescript
+interface WorkerInstance {
+  id: string;                    // UUID unique
+  owner_company_id: string | null;  // FK → Company (si propriété company)
+  owner_player_id: string | null;   // FK → Player (si propriété perso)
+  owner_type: "company" | "personal";
+  item_id: string;               // FK → Item (Worker-XX dans seed.json)
+  airport_ident: string;         // Aéroport de localisation
+  country_code: string;          // Code pays ISO (FR, DE, US...)
+
+  // Stats individuelles (générées aléatoirement ±20%)
+  speed: number;                 // 1-100 — vitesse de travail
+  resistance: number;            // 1-100 — résistance aux blessures
+  xp: number;                    // Points d'expérience
+  tier: number;                  // 1-5 (auto-calculé via XP)
+  hourly_salary: number;         // Salaire horaire en CR
+
+  // État
+  status: "available" | "working" | "injured" | "dead";
+  factory_id: string | null;     // FK → Factory (si assigné)
+
+  // Vente
+  for_sale: boolean;
+  sale_price: number | null;
+
+  // Dates
+  injured_at: string | null;     // ISO8601
+  created_at: string;            // ISO8601
+}
+```
+
+---
+
+## Cycle de Vie
 
 ```
-[Achat/Création]
-     |
-     | WorkerService.createWorker()
-     v
-[Inventaire Company] (status: available, factory_id: NULL)
-     |
-     | WorkerService.assignToFactory()
-     v
-[Assigné Factory] (status: working, factory_id: set)
-     |
-     +--- Production -> +XP, risque blessure
-     |
-     | WorkerService.unassignFromFactory()
-     v
-[Retour Inventaire] (status: available, factory_id: NULL)
-     |
-     +--- Visible dans vue Inventaire
-     +--- Peut être vendu sur HV
+[Achat sur le marché]
+     │
+     │ WorkerService.createWorker()
+     │ Stats générées selon nationalité (±20%)
+     ▼
+[Inventaire Company/Perso] (status: available, factory_id: null)
+     │
+     ├─── Vendre sur HV ──► [Marché]
+     │
+     │ WorkerService.assignToFactory()
+     ▼
+[Assigné à une Factory] (status: working, factory_id: set)
+     │
+     ├─── Production → +XP, risque blessure
+     │
+     │ WorkerService.unassignFromFactory()
+     ▼
+[Retour Inventaire] (status: available, factory_id: null)
+     │
+     ├─── Blessure → (status: injured) → guérison ou mort
+     └─── Mort → (status: dead) → pénalité -10,000 CR
 ```
 
 ---
 
 ## Génération des Workers
 
-### Formule de génération
+### Stats de base par pays
+
+Chaque nationalité a des stats de base différentes. À l'achat, les stats finales sont générées avec une variation aléatoire de ±20% (±10% pour le salaire).
 
 ```typescript
-// Stats de base du pays
-const baseSpeed = countryStats.base_speed;
-const baseResistance = countryStats.base_resistance;
-const baseSalary = countryStats.base_hourly_salary;
+function generateWorker(countryCode: string, airportIdent: string): WorkerInstance {
+  const stats = CountryWorkerStats[countryCode];
 
-// Variation ±20%
-const speed = Math.round(baseSpeed * (0.8 + Math.random() * 0.4));
-const resistance = Math.round(baseResistance * (0.8 + Math.random() * 0.4));
-const salary = baseSalary * (0.9 + Math.random() * 0.2);
+  // Variation ±20% sur speed et resistance
+  const speed = clamp(
+    Math.round(stats.base_speed * (0.8 + Math.random() * 0.4)),
+    1, 100
+  );
+  const resistance = clamp(
+    Math.round(stats.base_resistance * (0.8 + Math.random() * 0.4)),
+    1, 100
+  );
 
-// Contraintes: 1-100 pour stats
-const finalSpeed = Math.max(1, Math.min(100, speed));
-const finalResistance = Math.max(1, Math.min(100, resistance));
+  // Variation ±10% sur le salaire
+  const salary = stats.base_hourly_salary * (0.9 + Math.random() * 0.2);
+
+  return {
+    id: generateUUID(),
+    country_code: countryCode,
+    airport_ident: airportIdent,
+    speed,
+    resistance,
+    hourly_salary: Math.round(salary * 100) / 100,
+    xp: 0,
+    tier: 1,
+    status: "available",
+    factory_id: null,
+    // ... autres champs
+  };
+}
 ```
 
-### Exemple - Worker Français
+### Exemples de stats par pays
 
-Stats France: speed=55, resistance=50, salary=15$
+| Pays | Code | Speed | Resistance | Salaire/h | Profil |
+|------|------|-------|------------|-----------|--------|
+| France | FR | 55 | 50 | 15 CR | Équilibré |
+| Germany | DE | 60 | 50 | 16 CR | Rapide |
+| USA | US | 55 | 52 | 18 CR | Cher mais solide |
+| Japan | JP | 65 | 45 | 22 CR | Très rapide, fragile |
+| China | CN | 52 | 55 | 6 CR | Pas cher, résistant |
+| India | IN | 50 | 48 | 4 CR | Très économique |
 
-Worker généré:
-- Speed: 44-66 (55 ± 20%)
-- Resistance: 40-60 (50 ± 20%)
-- Salaire: 13.50$-16.50$ (15$ ± 10%)
+**Exemple concret — Worker Français :**
+- Stats base FR : speed=55, resistance=50, salary=15
+- Worker généré : speed 44-66, resistance 40-60, salaire 13.50-16.50 CR/h
+
+### Disponibilité à l'achat
+
+Les workers sont achetables **uniquement aux large_airport**. Le marché IA (Solo) propose des workers des pays de la région géographique de l'aéroport. En Online, les joueurs vendent leurs propres workers.
 
 ---
 
-## Services TypeScript
+## 42 Pays disponibles
+
+| Région | Pays (codes ISO) |
+|--------|------------------|
+| Europe | FR, DE, GB, ES, IT, PL, NL, BE, SE, NO, FI, DK, AT, CH, PT, IE, GR, CZ, HU, RO |
+| Americas | US, CA, MX, BR, AR, CO, CL |
+| Asie | CN, JP, KR, IN, ID, TH, VN, PH, MY, SG |
+| Moyen-Orient | AE, SA, TR |
+| Afrique | ZA, EG |
+| Océanie | AU, NZ |
+
+Les stats complètes de chaque pays sont stockées dans `data/seed.json` sous `country_worker_stats`.
+
+---
+
+## Progression XP
+
+### Tiers et XP requis
+
+| Tier | Nom | XP requis | Bonus Speed | Bonus Production |
+|------|-----|-----------|-------------|-----------------|
+| 1 | Novice | 0 | — | — |
+| 2 | Apprenti | 1,000 | +5% | +5% quantité |
+| 3 | Compagnon | 5,000 | +10% | +10% quantité |
+| 4 | Expert | 15,000 | +15% | +15% quantité |
+| 5 | Maître | 50,000 | +20% | +25% quantité (cap) |
+
+### Gain XP
+
+À chaque batch complété par la factory où le worker est assigné :
+```
+xp_gain = recipe.tier × 10
+```
+Tous les workers assignés gagnent cet XP (même les blessés en convalescence ne gagnent rien car ils ne travaillent pas).
+
+### Auto-calcul du tier
+
+```typescript
+function calculateWorkerTier(xp: number): number {
+  if (xp >= 50000) return 5;
+  if (xp >= 15000) return 4;
+  if (xp >= 5000) return 3;
+  if (xp >= 1000) return 2;
+  return 1;
+}
+```
+
+---
+
+## Système de Blessures
+
+### Risque de blessure
+
+- **Risque base** : 0.5% par heure de travail
+- **Sans food** : Risque x2 (1% par heure)
+- **Résistance** : Réduit le risque — `risque_final = risque_base × (1 - resistance/200)`
+- Vérifié par le scheduler local (Solo) ou SEED (Online) toutes les heures
+
+**Exemple :**
+- Worker avec resistance=60, avec food : `0.5% × (1 - 60/200) = 0.5% × 0.7 = 0.35%`
+- Worker avec resistance=60, sans food : `1.0% × 0.7 = 0.70%`
+
+### Durée de blessure
+
+- Durée aléatoire : 1-10 jours de jeu
+- Pendant la blessure : `status = "injured"`, ne peut pas travailler
+- Le worker est automatiquement retiré de la factory
+
+### Mort
+
+- Si blessure > 10 jours sans soins → mort
+- Worker `status = "dead"` — supprimé de l'inventaire
+- **Pénalité** : -10,000 CR déduit du wallet company
+
+### Soins (futur)
+
+- Achat de Medical Bandages (item T2) pour réduire le temps de guérison
+- Chaque Medical Bandages réduit de 2 jours le temps de guérison
+
+---
+
+## Consommation Food
+
+- **Taux** : 1 food / worker assigné / heure
+- La food est consommée depuis le `food_stock` de la factory
+- Le joueur doit approvisionner la factory en items "food"
+
+### Effets sans nourriture
+
+| Aspect | Avec food | Sans food |
+|--------|-----------|-----------|
+| Efficacité | 100% | 30% |
+| Risque blessure | 0.5%/h | 1.0%/h (x2) |
+| Salaire | Payé | Payé quand même |
+| Production | Normale | Possible mais lente |
+
+---
+
+## Paiement des Salaires
+
+### Calcul
+
+Toutes les heures (simulées), pour chaque factory :
+```
+coût_horaire = somme(worker.hourly_salary) pour chaque worker avec status="working"
+```
+
+### Mode Solo
+
+Le scheduler local déduit de `company.balance` toutes les heures.
+
+### Mode Online
+
+Le SEED calcule et déduit automatiquement.
+
+### Insuffisance de fonds
+
+Si `company.balance < coût_horaire` :
+- Workers non payés cette heure
+- Notification à l'utilisateur (couleur orange #f59e0b)
+- Risque de départ (futur) : workers non payés pendant 24h+ peuvent quitter
+
+---
+
+## Assignation aux Factories
+
+### Validations
+
+```typescript
+async function assignToFactory(workerId: string, factoryId: string): Promise<void> {
+  const worker = await WorkerService.getWorker(workerId);
+  const factory = await FactoryService.getFactory(factoryId);
+
+  // 1. Worker doit appartenir à la company
+  if (worker.owner_company_id !== currentCompanyId) {
+    throw new Error("Worker does not belong to your company");
+  }
+
+  // 2. Worker doit être disponible
+  if (worker.status !== "available") {
+    throw new Error("Worker is not available");
+  }
+
+  // 3. Worker doit être au même aéroport
+  if (worker.airport_ident !== factory.airport_ident) {
+    throw new Error("Worker must be at the same airport as factory");
+  }
+
+  // 4. Factory ne doit pas être pleine
+  const currentWorkers = await WorkerService.getFactoryWorkers(factoryId);
+  if (currentWorkers.length >= factory.max_workers) {
+    throw new Error("Factory is full");
+  }
+
+  // 5. Assigner
+  worker.factory_id = factoryId;
+  worker.status = "working";
+  await ServiceAdapter.save();
+}
+```
+
+---
+
+## Services (Architecture Deux Carrières)
 
 ### WorkerService
 
@@ -139,16 +319,16 @@ Worker généré:
 
 class WorkerServiceClass {
   // Créer un worker (achat)
-  async createWorker(countryCode: string, airportIdent: string): Promise<Worker>;
+  async createWorker(countryCode: string, airportIdent: string): Promise<WorkerInstance>;
 
   // Lister tous les workers de la company
-  async getAllWorkers(): Promise<Worker[]>;
+  async getAllWorkers(): Promise<WorkerInstance[]>;
 
   // Workers disponibles à un aéroport
-  async getWorkersAtAirport(airportIdent: string): Promise<Worker[]>;
+  async getWorkersAtAirport(airportIdent: string): Promise<WorkerInstance[]>;
 
   // Détails d'un worker
-  async getWorker(id: string): Promise<Worker>;
+  async getWorker(id: string): Promise<WorkerInstance>;
 
   // Assigner à une factory
   async assignToFactory(workerId: string, factoryId: string): Promise<void>;
@@ -157,182 +337,84 @@ class WorkerServiceClass {
   async unassignFromFactory(workerId: string): Promise<void>;
 
   // Workers d'une factory
-  async getFactoryWorkers(factoryId: string): Promise<Worker[]>;
+  async getFactoryWorkers(factoryId: string): Promise<WorkerInstance[]>;
+
+  // Soigner un worker blessé (futur)
+  async healWorker(workerId: string, bandageItemId: string): Promise<void>;
 }
 ```
 
-### Validations assignation
+### ServiceAdapter — Worker Methods
 
 ```typescript
-// WorkerService.assignToFactory()
-async assignToFactory(workerId: string, factoryId: string): Promise<void> {
-  const worker = await this.getWorker(workerId);
-  const factory = await FactoryService.getFactory(factoryId);
+// Dans ServiceAdapter.ts
 
-  // Worker doit appartenir à la company
-  if (worker.owner_company_id !== currentCompanyId) {
-    throw new Error("Worker does not belong to your company");
+async buyWorker(countryCode: string, airportIdent: string): Promise<WorkerInstance> {
+  if (GameModeState.isSolo()) {
+    return LocalWorkerService.buy(countryCode, airportIdent);
+  } else {
+    return SyncService.buyWorker(countryCode, airportIdent);
   }
+}
 
-  // Worker doit être disponible
-  if (worker.status !== "available") {
-    throw new Error("Worker is not available");
+async assignWorkerToFactory(workerId: string, factoryId: string): Promise<void> {
+  if (GameModeState.isSolo()) {
+    return LocalWorkerService.assignToFactory(workerId, factoryId);
+  } else {
+    return SyncService.assignWorkerToFactory(workerId, factoryId);
   }
-
-  // Worker doit être au même aéroport
-  if (worker.airport_ident !== factory.airport_ident) {
-    throw new Error("Worker must be at the same airport as factory");
-  }
-
-  // Factory ne doit pas être pleine
-  const currentWorkers = await this.getFactoryWorkers(factoryId);
-  if (currentWorkers.length >= factory.max_workers) {
-    throw new Error("Factory is full");
-  }
-
-  // Assigner
-  worker.factory_id = factoryId;
-  worker.status = "working";
-  await DatabaseManager.saveWorker(worker);
 }
 ```
 
 ---
 
-## Intégration Frontend
+## Intégration Frontend (EFB)
 
 ### Vue Inventaire
 
-Les workers apparaissent dans la vue Inventaire globale avec:
-- Drapeau du pays (emoji)
-- Status icon: ✅ available, 🔧 working, 🤕 injured
-- Stats affichées: ⚡speed 🛡️resistance
-- Filtres: "Workers" et "En Travail"
+Les workers apparaissent dans la vue Inventaire globale (Market > Inventaire) :
+- Drapeau du pays : texte code ISO (pas d'emoji — Coherent GT affiche des carrés)
+- Status : couleur de fond (vert=#22c55e available, orange=#f59e0b working, rouge=#ef4444 injured)
+- Stats affichées : SPD [valeur] / RES [valeur]
+- Filtres : "Workers" et "En Travail"
 
-### Factory Management Modal
+### Factory Management
 
-Le modal de gestion factory affiche:
-- Workers actuellement assignés
-- Bouton pour ouvrir le modal d'assignation
-- Liste des workers disponibles à l'aéroport
+Dans le futur tab Factory ou modal dédié :
+- Liste des workers assignés avec stats
+- Bouton "Assigner" → liste des workers disponibles au même aéroport
+- Bouton "Retirer" pour désassigner un worker
+- Indicateur food stock avec couleur (vert > 50%, orange 10-50%, rouge < 10%)
 
 ---
 
-## Progression XP
+## Sauvegarde
 
-### Tiers et XP requis
+### Mode Solo
 
-| Tier | XP requis | Bonus Speed |
-|------|-----------|-------------|
-| Novice (1) | 0 | - |
-| Apprenti (2) | 1,000 | +5% |
-| Compagnon (3) | 5,000 | +10% |
-| Expert (4) | 15,000 | +15% |
-| Maître (5) | 50,000 | +20% |
+Les workers sont inclus dans `SoloSaveData` :
 
-### Gain XP
-
-À chaque batch complété par la factory:
-```
-xp_gain = recipe.tier × 10
+```typescript
+interface SoloSaveData {
+  // ... autres champs existants ...
+  workers: WorkerInstance[];
+}
 ```
 
-Tous les workers assignés gagnent cet XP.
+### Mode Online
+
+Les workers sont stockés sur le SEED. Toutes les modifications (achat, assignation, blessure) passent par les endpoints SEED avec validation.
 
 ---
 
-## Système de Blessures
-
-### Risque de blessure
-
-- **Risque base**: 0.5% par heure de travail
-- **Sans food**: Risque x2 (1% par heure)
-- **Calcul**: Vérifié par le scheduler local toutes les heures
-
-### Durée de blessure
-
-- Blessure aléatoire: 1-10 jours
-- Pendant la blessure: status = "injured", ne peut pas travailler
-
-### Mort
-
-- Si blessure > 10 jours sans soins → mort
-- Worker status = "dead"
-- **Pénalité**: -10,000 CR déduit du wallet company
-
-### Soins (futur)
-
-- Possibilité d'acheter des soins médicaux
-- Réduit le temps de guérison
-
----
-
-## Consommation Food
-
-- **Taux**: 1 food / worker / heure
-- **Sans food**:
-  - Efficacité réduite à 30%
-  - Risque blessure doublé
-  - Salaire toujours payé
-
----
-
-## Paiement Salaires
-
-### Scheduler local
-
-Toutes les heures (simulées), le scheduler:
-1. Compte les workers `status = 'working'`
-2. Calcule le total: `sum(hourly_salary)`
-3. Déduit de `company.balance`
-
-### Insuffisance de fonds
-
-Si `company.balance < total_salaries`:
-- Workers non payés cette heure
-- Risque de départ (futur)
-- Notification à l'utilisateur
-
----
-
-## Scheduler Jobs (Local)
+## Scheduler Jobs (Mode Solo uniquement)
 
 | Job | Intervalle | Description |
 |-----|------------|-------------|
-| `salary_payments` | 1 heure | Paie les salaires workers |
-| `injury_processing` | 1 heure | Traite blessures (guérison/mort) |
-| `food_and_injuries` | 1 heure | Consomme food + check blessures |
+| `salary_payments` | 1 heure | Paie les salaires de tous les workers "working" |
+| `injury_check` | 1 heure | Vérifie les blessures (probabilité par worker) |
+| `injury_healing` | 1 heure | Avance la guérison des workers blessés |
+| `death_check` | 1 heure | Vérifie si un worker blessé > 10 jours → mort |
+| `food_consumption` | 1 heure | Déduit food_stock des factories |
 
-Ces jobs s'exécutent localement dans l'EFB via des timers JavaScript.
-
----
-
-## Sync P2P
-
-### Données synchronisées
-
-| Donnée | Direction | Fréquence |
-|--------|-----------|-----------|
-| Liste workers | Bidirectionnel | 5 sec |
-| Assignation factory | Bidirectionnel | 5 sec |
-| Status workers | Bidirectionnel | 5 sec |
-
-### Données locales uniquement
-
-- Préférences d'affichage UI
-- Filtres sélectionnés
-
----
-
-## 42 Pays disponibles
-
-Les workers peuvent provenir de 42 pays différents, chacun avec ses propres stats de base:
-
-| Région | Pays |
-|--------|------|
-| Europe | FR, DE, GB, ES, IT, PL, NL, BE, SE, NO, FI, DK, AT, CH, PT, IE, GR, CZ, HU, RO |
-| Americas | US, CA, MX, BR, AR, CO, CL |
-| Asia | CN, JP, KR, IN, ID, TH, VN, PH, MY, SG |
-| Middle East | AE, SA, TR |
-| Africa | ZA, EG |
-| Oceania | AU, NZ |
+En mode Online, le SEED gère tout — pas de scheduler local.
