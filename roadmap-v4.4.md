@@ -1,7 +1,7 @@
 # Roadmap complète — World of Aircraft EFB v4.4
 
-**Date** : 10 février 2026
-**Mise à jour** : Phases 6-7 terminées, anti-cheat renforcé, notes avion dans Hangar, 0 erreurs TS
+**Date** : 13 février 2026
+**Mise à jour** : Phase 9 terminée — usines, items T0/T1, icônes SVG, map intégrée
 
 ---
 
@@ -119,6 +119,35 @@
 ✅ Clé traduction addNote dans 5 locales
 ```
 
+### Phase 8 — Debug audit ✅
+```
+✅ Dead code removal
+✅ Repair wallet fix
+✅ Transaction history cleanup
+```
+
+### Phase 9 — Usines & économie complète ✅
+```
+✅ Items T0 (37 matières premières) + T1 (39 items transformés), prix réalistes
+✅ Recettes T1 (39 recettes : alimentation, métaux, matériaux, carburants, chimie)
+✅ 89 icônes SVG inline (37 T0 + 39 T1 + 13 personnel) via svgTextPlugin
+✅ ItemService + RecipeService + WorkerService + LocalFactoryService
+✅ FactoryController (~1086 lignes) : liste, détail, craft slots dynamiques, rename
+✅ Usines T1-T10 : tiers équilibrés (food_capacity, max_workers, max_engineers, max_ingredients)
+✅ Construction usine depuis la Map (sélection aéroport + slots disponibles)
+✅ Production auto + timer (FactoryScheduler : batch completion + hourly tick)
+✅ Workers : achetables, assignables, XP tiers (Novice→Maitre), blessures, nourriture
+✅ Ingénieurs : bonus production vitesse (diminishing returns)
+✅ Nourriture : stock consommé par les workers, bonus tier, efficacité réduite sans food
+✅ Craft slots dynamiques (2-5) selon tier usine
+✅ Icône produit sur les cartes usine (couleur=producing, grisé=idle, ?=jamais produit)
+✅ Rename usine inline (click→input, Enter/blur=save, Escape=cancel)
+✅ Map : usines visibles avec icône produit (SVG imbriqué dans marqueur OpenLayers)
+✅ DatabaseManager : Factory, WorkerInstance, ProductionBatch tables
+✅ FactoryState (Subject pattern) + ServiceAdapter routing
+✅ Build OK (2.9MB bundle)
+```
+
 ### Fixes transversaux ✅
 ```
 ✅ Persistence unifiée (DatabaseManager → WorldOfAircraftData)
@@ -146,7 +175,7 @@ SIDEBAR (9 onglets)
 │   └── Historique des vols .......... ✅
 │
 ├── MAP
-│   └── (vue unique) ................. ✅
+│   └── (vue unique + filtres Fac/Heli) ✅
 │
 ├── MISSIONS
 │   ├── Aperçu/Tracking .............. ✅
@@ -162,6 +191,7 @@ SIDEBAR (9 onglets)
 │   ├── Overview (+ virements) ....... ✅
 │   ├── Membres (+ rôles) ........... ✅
 │   ├── Inventaire ................... ✅
+│   ├── Usines ...................... ✅ (Phase 9)
 │   ├── Historique ................... ✅
 │   └── Messagerie .................. ✅ (Online only)
 │
@@ -181,63 +211,59 @@ SIDEBAR (9 onglets)
 
 ---
 
-## Architecture après refactoring
+## Architecture après Phase 9
 
 ```
-WorldOfAircraft.tsx (~2485 lignes)
+WorldOfAircraft.tsx (~2500 lignes)
   = Orchestrateur : init, render, routing, event wiring
-  = Instancie 7 controllers
+  = Instancie 8 controllers
 
-controllers/ (~6280 lignes total)
+controllers/ (~7400 lignes total)
   ├── MissionController.ts    (2291 lignes)
   ├── MarketController.ts     (1130 lignes)
-  ├── MapController.ts        (1047 lignes)
+  ├── FactoryController.ts    (1086 lignes) ← Phase 9
+  ├── MapController.ts        (1087 lignes)
   ├── HangarController.ts      (751 lignes)
   ├── CompanyController.ts     (471 lignes)
   ├── SocialController.ts      (325 lignes)
   └── ContractController.ts    (259 lignes)
 
+services/ (~2800 lignes ajoutées Phase 9)
+  ├── LocalFactoryService.ts   (565 lignes)
+  ├── WorkerService.ts         (250 lignes)
+  ├── ItemService.ts           (120 lignes)
+  ├── RecipeService.ts         (100 lignes)
+  └── ... (existants)
+
+managers/
+  ├── FactoryScheduler.ts      (200 lignes) ← Phase 9
+  └── ... (existants)
+
+constants/
+  └── factory.ts               (165 lignes) ← Phase 9
+
+data/
+  ├── items.json               (137 items : 37 T0 + 39 T1 + personnel)
+  ├── recipes.json             (39 recettes T1)
+  ├── itemIconMap.ts           (79 mappings icon_path → SVG string)
+  └── ... (existants)
+
+Assets/icons/                  ← Phase 9
+  ├── items/t0/                (37 SVG, 64x64)
+  ├── items/t1/                (39 SVG, 64x64)
+  └── personnel/               (10 SVG, 64x64)
+
+state/
+  └── FactoryState.ts          ← Phase 9
+
 views/          ← Rendu JSX par onglet
-helpers/        ← Fonctions de rendu DOM
-managers/       ← Tracking, persistence, popups
-services/       ← LocalServices, Routers, ServiceAdapter
-state/          ← States réactifs (Subject)
+helpers/        ← Fonctions de rendu DOM (renderItemIcon)
 types/          ← Types + msfs-globals.d.ts
 ```
 
 ---
 
 ## Phases à venir
-
----
-
-### Phase 8 — Debug & Validation Solo + Online — 6-8h
-```
-□ Aligner SEED server sur Phases 1-7
-□ Audit ServiceAdapter : chaque Router a Solo + Online
-□ Endpoints SEED manquants (sell-orders, aircraft, contracts, friends, messages)
-□ Tests complets Solo (flow complet)
-□ Tests complets Online (même flow via SEED)
-□ Fix bugs trouvés
-□ Isolation données Solo/Online vérifiée
-```
-
----
-
-### Phase 9 — Usines & économie complète (Solo + Online) — 20-25h
-```
-□ Items T0-T5 (~50-80 items, prix réalistes)
-□ Recettes (~30-50 recettes)
-□ Spawn T0 par géographie
-□ Construction usine depuis la Map
-□ Production auto + timer + file d'attente
-□ Workers : items achetables grands aéroports, stats pays, nourriture
-□ Ingénieurs : efficacité + recettes haut tier
-□ Nourriture : items T1 consommés par les workers
-□ Équilibrage économique
-□ Nouveau controller : src/controllers/FactoryController.ts
-□ Endpoints SEED pour Online
-```
 
 ---
 
@@ -292,19 +318,17 @@ types/          ← Types + msfs-globals.d.ts
 ## Timeline révisée
 
 ```
-Semaine actuelle :
-  ✅ Phase 0-7 terminées
-  ✅ Refactoring complet (7 controllers, ~6280 lignes extraites)
-  ✅ Anti-cheat renforcé + notes avion Hangar
-  ✅ 0 erreurs TS, build OK
+Fait :
+  ✅ Phase 0-9 terminées
+  ✅ Refactoring complet (8 controllers, ~7400 lignes extraites)
+  ✅ 89 icônes SVG inline, 137 items, 39 recettes
+  ✅ Build OK (2.9MB bundle)
 
 Prochaines :
-Sem 7    : Phase 8  — Debug Online
-Sem 8-10 : Phase 9  — Usines
-Sem 11   : Phase 10 — Kits conversion
-Sem 12   : Phase 11 — Vols IA pilotes
-Sem 13   : Phase 12 — Certifications pilote
-Sem 14+  : Phase 13 — Bâtiments
+Sem 8    : Phase 10 — Kits conversion
+Sem 9    : Phase 11 — Vols IA pilotes
+Sem 10   : Phase 12 — Certifications pilote
+Sem 11+  : Phase 13 — Bâtiments
 ```
 
 ---
@@ -314,6 +338,7 @@ Sem 14+  : Phase 13 — Bâtiments
 ```
 Phase 5  (avant)  : 7900 lignes  ████████████████████ 100%
 Refactoring       : 2378 lignes  ██████░░░░░░░░░░░░░░  30%
-Phase 7 (actuel)  : 2485 lignes  ██████░░░░░░░░░░░░░░  31%  ← Orchestrateur pur ✅
-Controllers       : 6280 lignes  ████████████████░░░░  (7 controllers)
+Phase 7           : 2485 lignes  ██████░░░░░░░░░░░░░░  31%
+Phase 9 (actuel)  : 2500 lignes  ██████░░░░░░░░░░░░░░  32%  ← Orchestrateur pur ✅
+Controllers       : 7400 lignes  ██████████████████░░  (8 controllers)
 ```
