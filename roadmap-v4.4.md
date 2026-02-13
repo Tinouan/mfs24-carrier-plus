@@ -1,7 +1,7 @@
 # Roadmap complète — World of Aircraft EFB v4.4
 
 **Date** : 10 février 2026
-**Mise à jour** : Refactoring complet terminé (toutes phases), 122 erreurs TS corrigées, prêt pour Phase 6
+**Mise à jour** : Phases 6-7 terminées, anti-cheat renforcé, notes avion dans Hangar, 0 erreurs TS
 
 ---
 
@@ -81,6 +81,44 @@
 ✅ Locales de/es/ru complétées (alignées sur fr.json)
 ```
 
+### Phase 6 — Social (Online only) ✅
+```
+✅ SocialController (~325 lignes) extrait
+✅ SocialState.ts + LocalSocialService.ts créés
+✅ SocialRenderHelpers.ts créé
+✅ Profile > Social (liste d'amis, recherche, ajout/suppression)
+✅ Solo : overlay "Disponible en mode Online"
+```
+
+### Phase 7 — Transferts pilote & avion ✅
+```
+✅ TransferState.ts + LocalTransferService.ts créés
+✅ TransferRouter dans ServiceRouter.ts
+✅ Map : bouton "Se déplacer ici" (transfert pilote, coût/NM)
+✅ Map : bouton "Transférer un avion" (sélection avion + popup)
+✅ Hangar : bouton transfert avion avec saisie ICAO destination
+✅ Estimation coût en temps réel (haversine)
+✅ Confirmation popup avec détails (distance, coût, solde)
+```
+
+### Anti-cheat mission ✅
+```
+✅ Fix SimVar GPS CLOSEST AIRPORT ID (nettoyage caractères parasites \r")
+✅ Fallback coordonnées quand SimVar échoue (WorldRouter.getClosestAirport)
+✅ Suppression check ATC ID (garder 3 checks : position joueur DB, SimVar, avion DB)
+✅ Cacher étapes 2/3 et bouton "Créer" quand step1 invalide
+✅ Renommage label "position (jeu)" → "position (World of Aircraft)" (5 locales)
+```
+
+### Hangar — Notes avion ✅
+```
+✅ Champ description éditable (max 50 chars) sur chaque avion
+✅ Texte gris italique "Ajouter une note..." cliquable
+✅ Input inline avec setupInputEventBlocker (Enter/blur = save)
+✅ Sauvegardé en DB (aircraft.description)
+✅ Clé traduction addNote dans 5 locales
+```
+
 ### Fixes transversaux ✅
 ```
 ✅ Persistence unifiée (DatabaseManager → WorldOfAircraftData)
@@ -146,17 +184,18 @@ SIDEBAR (9 onglets)
 ## Architecture après refactoring
 
 ```
-WorldOfAircraft.tsx (~2378 lignes)
+WorldOfAircraft.tsx (~2485 lignes)
   = Orchestrateur : init, render, routing, event wiring
-  = Instancie 6 controllers
+  = Instancie 7 controllers
 
-controllers/
-  ├── ContractController.ts
-  ├── CompanyController.ts
-  ├── MapController.ts
-  ├── MarketController.ts
-  ├── HangarController.ts
-  └── MissionController.ts
+controllers/ (~6280 lignes total)
+  ├── MissionController.ts    (2291 lignes)
+  ├── MarketController.ts     (1130 lignes)
+  ├── MapController.ts        (1047 lignes)
+  ├── HangarController.ts      (751 lignes)
+  ├── CompanyController.ts     (471 lignes)
+  ├── SocialController.ts      (325 lignes)
+  └── ContractController.ts    (259 lignes)
 
 views/          ← Rendu JSX par onglet
 helpers/        ← Fonctions de rendu DOM
@@ -169,53 +208,6 @@ types/          ← Types + msfs-globals.d.ts
 ---
 
 ## Phases à venir
-
----
-
-### Phase 6 — Social + Messagerie (Online only) — 6-8h
-
-```
-□ Profile > Social (nouveau sous-onglet)
-    - Liste d'amis (nom, niveau, position, statut en ligne)
-    - Recherche joueur par nom
-    - Ajouter/supprimer ami
-    - Actions : Message / Envoyer CR / Proposer contrat / Voir profil
-    - Solo : overlay "Disponible en mode Online"
-□ Profile > Messagerie (nouveau sous-onglet)
-    - Conversations joueur <-> joueur
-    - Notifications système (contrat accepté, livraison, etc.)
-    - Solo : overlay "Disponible en mode Online"
-□ Virement joueur → joueur via Social > "Envoyer CR"
-□ Proposer contrat à un ami
-□ Modèles DB : Friend, DirectMessage, Notification
-□ Endpoints SEED (futur) : /friends, /messages, /notifications
-□ Nouveau controller : src/controllers/SocialController.ts
-```
-
----
-
-### Phase 7 — Transfert pilote & avion sur la Map (Solo + Online) — 6-8h
-```
-□ Transfert avion (ferry flight)
-    - Depuis Hangar : bouton "Transférer" sur un avion
-    - Sélection aéroport destination sur la Map
-    - Timer basé sur distance / vitesse croisière
-    - Badge "EN TRANSFERT", avion indisponible
-    - Coût carburant déduit automatiquement
-    - Animation sur la Map : icône avion se déplace
-□ Transfert pilote (vol commercial fictif)
-    - "Se déplacer" vers un aéroport distant
-    - Coût : billet proportionnel à la distance
-    - Timer : ~1 min par 100 nm (accéléré)
-□ Visualisation Map :
-    - Avions en transfert visibles (icône animée)
-    - Avions parkés visibles à leur aéroport
-    - Position du joueur (marqueur pilote)
-□ Règles :
-    - Pas de mission pendant un transfert
-    - Annulable (retour origine, pas de remboursement fuel)
-    - Solo + Online : même logique
-```
 
 ---
 
@@ -301,12 +293,12 @@ types/          ← Types + msfs-globals.d.ts
 
 ```
 Semaine actuelle :
-  ✅ Phase 0-5 terminées
-  ✅ Refactoring complet terminé (6 controllers extraits)
-  ✅ 122 erreurs TS → 0
+  ✅ Phase 0-7 terminées
+  ✅ Refactoring complet (7 controllers, ~6280 lignes extraites)
+  ✅ Anti-cheat renforcé + notes avion Hangar
+  ✅ 0 erreurs TS, build OK
 
-Sem 5    : Phase 6  — Social + Messagerie
-Sem 6    : Phase 7  — Transferts Map
+Prochaines :
 Sem 7    : Phase 8  — Debug Online
 Sem 8-10 : Phase 9  — Usines
 Sem 11   : Phase 10 — Kits conversion
@@ -321,6 +313,7 @@ Sem 14+  : Phase 13 — Bâtiments
 
 ```
 Phase 5  (avant)  : 7900 lignes  ████████████████████ 100%
-Refactoring       : 2378 lignes  ██████░░░░░░░░░░░░░░  30%  ← FAIT
-Cible             : ~2400 lignes ██████░░░░░░░░░░░░░░  Orchestrateur pur ✅
+Refactoring       : 2378 lignes  ██████░░░░░░░░░░░░░░  30%
+Phase 7 (actuel)  : 2485 lignes  ██████░░░░░░░░░░░░░░  31%  ← Orchestrateur pur ✅
+Controllers       : 6280 lignes  ████████████████░░░░  (7 controllers)
 ```

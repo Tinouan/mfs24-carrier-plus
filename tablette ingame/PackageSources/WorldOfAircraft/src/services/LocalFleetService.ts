@@ -360,6 +360,7 @@ class LocalFleetServiceClass {
     return {
       id: details.id,
       registration: details.registration,
+      description: details.description,
       aircraft_type: details.aircraft_type,
       icao_type: details.icao_type,
       current_airport_ident: details.current_airport_ident,

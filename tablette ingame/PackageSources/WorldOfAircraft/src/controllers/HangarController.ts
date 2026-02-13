@@ -113,6 +113,7 @@ export class HangarController {
       const data: AircraftDetails = {
         id: apiData.id,
         registration: apiData.registration,
+        description: apiData.description || null,
         aircraft_type: apiData.aircraft_type,
         aircraft_model: apiData.icao_type || apiData.aircraft_type,
         icao_type: apiData.icao_type || null,

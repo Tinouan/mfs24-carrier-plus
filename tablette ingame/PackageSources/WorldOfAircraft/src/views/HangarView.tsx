@@ -231,7 +231,7 @@ export function renderHangarTab(props: HangarViewProps): VNode {
                 {/* Aircraft Note/Description */}
                 <div style="margin-bottom: 8px;">
                   {/* Display mode */}
-                  <div style={hangarNoteEditing.map(e => e ? "display: none;" : "display: block;")}>
+                  <div style={hangarNoteEditing.map(e => e ? "display: none;" : "display: flex; width: 100%;")}>
                     <Button callback={(): void => {
                       onStartEditNote();
                       setTimeout(() => {
@@ -247,8 +247,8 @@ export function renderHangarTab(props: HangarViewProps): VNode {
                     }}>
                       <div style={hangarSelectedAircraft.map(a =>
                         a?.description
-                          ? "font-size: 11px; color: #9ca3af; cursor: pointer; padding: 4px 0;"
-                          : "font-size: 11px; color: #6b7280; font-style: italic; cursor: pointer; padding: 4px 0;"
+                          ? "font-size: 11px; color: #9ca3af; cursor: pointer; padding: 6px 8px; margin: -4px -8px; background: #111827;"
+                          : "font-size: 11px; color: #6b7280; font-style: italic; cursor: pointer; padding: 6px 8px; margin: -4px -8px; background: #111827;"
                       )}>
                         {MappedSubject.create(([a, lang]) =>
                           a?.description || translations[lang].hangar.addNote,
@@ -258,21 +258,17 @@ export function renderHangarTab(props: HangarViewProps): VNode {
                     </Button>
                   </div>
                   {/* Edit mode */}
-                  <div style={hangarNoteEditing.map(e => e ? "display: block;" : "display: none;")}>
+                  <div style={hangarNoteEditing.map(e => e ? "display: flex; gap: 6px; align-items: center;" : "display: none;")}>
                     <input
                       ref={noteInputRef}
                       type="text"
                       maxLength={50}
-                      style="width: 100%; background: #1f2937; border: 1px solid #3b82f6; border-radius: 4px; padding: 4px 8px; color: white; font-size: 11px; outline: none; box-sizing: border-box;"
-                      onBlur={(e: FocusEvent): void => {
-                        onSaveNote((e.target as HTMLInputElement).value);
-                      }}
-                      onKeyDown={(e: KeyboardEvent): void => {
-                        if (e.key === "Enter") {
-                          onSaveNote((e.target as HTMLInputElement).value);
-                        }
-                      }}
+                      style="flex: 1; background: #1f2937; border: 1px solid #3b82f6; border-radius: 4px; padding: 4px 8px; color: white; font-size: 11px; outline: none; box-sizing: border-box;"
+                      onkeydown={(e: KeyboardEvent): void => { e.stopPropagation(); e.stopImmediatePropagation(); }}
                     />
+                    <Button callback={(): void => { onSaveNote(noteInputRef.getOrDefault()?.value || ""); }}>
+                      <div style="padding: 2px 8px; background: #3b82f6; border-radius: 4px; color: white; font-size: 10px; font-weight: 600; cursor: pointer;">OK</div>
+                    </Button>
                   </div>
                 </div>
 
