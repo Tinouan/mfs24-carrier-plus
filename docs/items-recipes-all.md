@@ -1,3 +1,16 @@
+# Items & Recipes — Documentation Complete T0-T5
+
+> **Version**: V5.0 (T0 a T5)
+> **Derniere mise a jour** : 13/02/2026
+> **Sources fusionnees** : items-recipes.md, new-items-recipes-t2-t5.md
+
+---
+
+
+---
+
+<!-- Source: items-recipes.md -->
+
 # Items & Recipes System — Documentation Technique
 
 > **Version**: V4.3 (Architecture Deux Carrières)
@@ -529,3 +542,483 @@ Les tiers 3 à 5 sont prévus pour les futures versions :
 - **T5** : Produits de luxe et spatiaux
 
 Les recettes T3+ nécessiteront des factories de tier correspondant (T3-T10) et des workers plus expérimentés.
+
+
+---
+
+<!-- Source: new-items-recipes-t2-t5.md -->
+
+# Nouveaux Items & Recettes T2-T5
+
+## Rappel des contraintes usines
+
+| Tier usine | Slots ingrédients | Recettes accessibles |
+|------------|-------------------|---------------------|
+| T1-T2 | 2 slots | T1, T2 |
+| T3-T4 | 3 slots | T1 à T3 (T3), T1 à T4 (T4) |
+| T5-T6 | 4 slots | T1 à T5 |
+| T7-T10 | 5 slots | Toutes |
+
+**Règle** : On peut mélanger les tiers d'ingrédients librement. Une recette T4 peut utiliser du T0 + T1 + T3.
+**Contrainte slots** : Le nombre d'ingrédients UNIQUES de la recette ≤ slots max du tier d'usine minimum requis.
+
+- Recettes T2 : max **2 ingrédients uniques** (usine T2 = 2 slots)
+- Recettes T3 : max **3 ingrédients uniques** (usine T3 = 3 slots)
+- Recettes T4 : max **3 ingrédients uniques** (usine T4 = 3 slots)
+- Recettes T5 : max **4 ingrédients uniques** (usine T5 = 4 slots)
+
+---
+
+# ITEMS T2 SUPPLÉMENTAIRES (20 items)
+
+On ajoute 20 items T2 aux 30 existants.
+
+### Construction & Industrie
+
+| Nom | Valeur | Poids | Tags |
+|-----|--------|-------|------|
+| Steel Beam | 120€ | 15.0kg | construction, metal, structural |
+| Copper Wire | 52€ | 1.5kg | electronics, metal, wiring |
+| Fiberglass | 78€ | 2.0kg | construction, composite |
+| Plywood | 38€ | 4.0kg | construction, wood |
+| Ceramic Tiles | 42€ | 5.0kg | construction, masonry |
+| Rubber Gasket | 45€ | 0.8kg | construction, industrial, seal |
+| Steel Nails | 28€ | 2.0kg | construction, metal, fastener |
+
+### Alimentaire
+
+| Nom | Valeur | Poids | Tags |
+|-----|--------|-------|------|
+| Canned Fish | 65€ | 1.0kg | food, preserved, quality |
+| Spiced Meat | 72€ | 1.8kg | food, meat, spiced |
+| Fruit Juice | 30€ | 1.0kg | food, drink, sweet |
+| Cheese Wheel | 95€ | 3.0kg | food, dairy, luxury |
+| Chili Sauce | 55€ | 0.6kg | food, sauce, spiced |
+| Vanilla Cake | 145€ | 1.0kg | food, baked, luxury |
+
+### Chimie & Énergie
+
+| Nom | Valeur | Poids | Tags |
+|-----|--------|-------|------|
+| Lubricant | 75€ | 3.0kg | chemical, industrial, oil |
+| Graphite Rod | 58€ | 1.5kg | construction, industrial |
+| Dye | 48€ | 1.0kg | chemical, textile |
+| Battery Cell | 125€ | 2.5kg | electronics, energy |
+| Firebricks | 55€ | 8.0kg | construction, industrial, heat |
+| Asphalt | 35€ | 10.0kg | construction, road |
+| Tempered Glass | 68€ | 5.0kg | construction, transparent, quality |
+
+---
+
+# RECETTES T2 SUPPLÉMENTAIRES (20 recettes)
+
+Toutes avec **2 ingrédients uniques** (slots T1-T2).
+
+### Construction & Industrie
+
+| Recette | Temps | Produit | Ingrédients | Mix tiers |
+|---------|-------|---------|-------------|-----------|
+| Steel Beam | 5h | 3x | 3× Reinforced Steel + 2× Iron Ore | T2+T0 |
+| Copper Wire | 2h | 10x | 2× Copper Ingot + 1× Rubber Sheets | T1+T1 |
+| Fiberglass | 4h | 6x | 3× Glass + 2× Plastic Sheets | T1+T2 |
+| Plywood | 2h | 8x | 3× Planks + 1× Adhesive | T1+T2 |
+| Ceramic Tiles | 3h | 10x | 3× Clay + 2× Sand | T0+T0 |
+| Rubber Gasket | 2h | 12x | 2× Rubber Sheets + 1× Sulfuric Acid | T1+T1 |
+| Steel Nails | 1.5h | 20x | 2× Steel Ingot + 1× Coal | T1+T0 |
+| Firebricks | 4h | 6x | 3× Bricks + 2× Charcoal | T1+T1 |
+| Asphalt | 2h | 10x | 3× Crude Oil + 2× Sand | T0+T0 |
+| Tempered Glass | 3h | 5x | 3× Glass + 1× Compressed Gas | T1+T1 |
+
+### Alimentaire
+
+| Recette | Temps | Produit | Ingrédients | Mix tiers |
+|---------|-------|---------|-------------|-----------|
+| Canned Fish | 3h | 8x | 2× Smoked Fish + 1× Steel Ingot | T2+T1 |
+| Spiced Meat | 4h | 6x | 2× Salted Meat + 2× Pepper | T1+T0 |
+| Fruit Juice | 1.5h | 12x | 3× Raw Fruits + 1× Water | T0+T0 |
+| Cheese Wheel | 10h | 3x | 4× Cheese + 1× Raw Salt | T2+T0 |
+| Chili Sauce | 2h | 10x | 3× Chili + 1× Raw Salt | T0+T0 |
+| Vanilla Cake | 4h | 4x | 2× Pastry + 1× Vanilla Extract | T2+T1 |
+
+### Chimie & Énergie
+
+| Recette | Temps | Produit | Ingrédients | Mix tiers |
+|---------|-------|---------|-------------|-----------|
+| Lubricant | 3h | 6x | 2× Crude Oil + 1× Sulfuric Acid | T0+T1 |
+| Graphite Rod | 3h | 8x | 3× Graphite + 1× Coal | T0+T0 |
+| Dye | 2h | 10x | 2× Raw Cocoa + 1× Sulfuric Acid | T0+T1 |
+| Battery Cell | 6h | 3x | 2× Copper Ingot + 1× Sulfuric Acid | T1+T1 |
+
+---
+
+# ITEMS T3 — Produits Intermédiaires (15 items)
+
+Produits industriels nécessitant des usines T3+ (3 slots max).
+
+### Construction Avancée
+
+| Nom | Valeur | Poids | Tags |
+|-----|--------|-------|------|
+| Structural Panel | 180€ | 12.0kg | construction, composite, structural |
+| Insulated Wall | 155€ | 10.0kg | construction, composite |
+| Armored Plate | 420€ | 8.0kg | construction, metal, armor |
+| Hydraulic Cylinder | 280€ | 6.0kg | mechanical, industrial |
+
+### Électronique & Machines
+
+| Nom | Valeur | Poids | Tags |
+|-----|--------|-------|------|
+| Electric Motor | 350€ | 8.0kg | electronics, mechanical, industrial |
+| Sensor Module | 290€ | 1.0kg | electronics, advanced |
+| Power Supply | 210€ | 3.0kg | electronics, energy |
+| LED Panel | 165€ | 1.5kg | electronics, lighting |
+
+### Alimentaire Premium
+
+| Nom | Valeur | Poids | Tags |
+|-----|--------|-------|------|
+| Premium Chocolate | 185€ | 0.5kg | food, luxury, sweet |
+| Gourmet Meal | 140€ | 2.0kg | food, luxury, cooked |
+| Aged Cheese | 195€ | 1.5kg | food, dairy, luxury, aged |
+
+### Chimie Avancée & Énergie
+
+| Nom | Valeur | Poids | Tags |
+|-----|--------|-------|------|
+| Carbon Fiber | 380€ | 1.0kg | construction, composite, advanced |
+| Industrial Solvent | 120€ | 3.0kg | chemical, industrial |
+| Turbine Blade | 520€ | 5.0kg | mechanical, advanced, aviation |
+| Advanced Battery | 450€ | 4.0kg | electronics, energy, advanced |
+
+---
+
+# RECETTES T3 (15 recettes)
+
+Toutes avec **3 ingrédients uniques** (slots T3-T4).
+
+### Construction Avancée
+
+| Recette | Temps | Produit | Ingrédients | Mix tiers |
+|---------|-------|---------|-------------|-----------|
+| Structural Panel | 6h | 4x | 2× Steel Beam + 2× Insulation + 1× Adhesive | T2+T2+T2 |
+| Insulated Wall | 5h | 4x | 2× Plywood + 2× Insulation + 1× Paint | T2+T2+T2 |
+| Armored Plate | 8h | 2x | 2× Titanium Plates + 1× Reinforced Steel + 1× Carbon Fiber | T2+T2+T3 ⚠ |
+| Hydraulic Cylinder | 6h | 3x | 2× Steel Pipes + 1× Lubricant + 1× Rubber Gasket | T2+T2+T2 |
+
+**⚠ Armored Plate** : Utilise Carbon Fiber (T3). Ça veut dire qu'il faut d'abord produire le Carbon Fiber, puis l'utiliser. Cela crée une **chaîne séquentielle** au sein du même tier, ce qui est intentionnel pour le gameplay.
+
+### Électronique & Machines
+
+| Recette | Temps | Produit | Ingrédients | Mix tiers |
+|---------|-------|---------|-------------|-----------|
+| Electric Motor | 8h | 2x | 2× Copper Wire + 1× Steel Ingot + 1× Rare Earth Metals | T2+T1+T0 |
+| Sensor Module | 10h | 3x | 1× Circuit Board + 1× Silicon Wafers + 1× Copper Wire | T2+T1+T2 |
+| Power Supply | 5h | 4x | 2× Battery Cell + 1× Copper Wire + 1× Circuit Board | T2+T2+T2 |
+| LED Panel | 4h | 6x | 1× Circuit Board + 1× Glass + 1× Rare Earth Metals | T2+T1+T0 |
+
+### Alimentaire Premium
+
+| Recette | Temps | Produit | Ingrédients | Mix tiers |
+|---------|-------|---------|-------------|-----------|
+| Premium Chocolate | 6h | 5x | 2× Chocolate Bar + 1× Vanilla Extract + 1× Butter | T2+T1+T1 |
+| Gourmet Meal | 4h | 4x | 1× Spiced Meat + 1× Quality Bread + 1× Vegetable Soup | T2+T2+T2 |
+| Aged Cheese | 12h | 3x | 3× Cheese Wheel + 1× Raw Salt + 1× Raw Wood | T2+T0+T0 |
+
+### Chimie Avancée & Énergie
+
+| Recette | Temps | Produit | Ingrédients | Mix tiers |
+|---------|-------|---------|-------------|-----------|
+| Carbon Fiber | 8h | 3x | 3× Graphite Rod + 2× Plastic Sheets + 1× Sulfuric Acid | T2+T2+T1 |
+| Industrial Solvent | 3h | 6x | 2× Sulfuric Acid + 1× Diesel + 1× Water | T1+T1+T0 |
+| Turbine Blade | 12h | 2x | 2× Titanium Plates + 1× Reinforced Steel + 1× Graphite Rod | T2+T2+T2 |
+| Advanced Battery | 10h | 2x | 3× Battery Cell + 1× Rare Earth Metals + 1× Graphite Rod | T2+T0+T2 |
+
+---
+
+# ITEMS T4 — Produits Finis (10 items)
+
+Produits haute technologie et équipements complets.
+
+### Aviation & Mécanique
+
+| Nom | Valeur | Poids | Tags |
+|-----|--------|-------|------|
+| Avionics Unit | 1,200€ | 4.0kg | aviation, electronics, advanced |
+| Landing Gear Part | 850€ | 12.0kg | aviation, mechanical, structural |
+| Navigation System | 980€ | 2.0kg | aviation, electronics |
+
+### Industrie & Énergie
+
+| Nom | Valeur | Poids | Tags |
+|-----|--------|-------|------|
+| Solar Panel | 680€ | 8.0kg | electronics, energy, renewable |
+| Industrial Robot Arm | 1,500€ | 15.0kg | mechanical, electronics, advanced |
+| Generator | 920€ | 20.0kg | mechanical, energy |
+
+### Haute Technologie
+
+| Nom | Valeur | Poids | Tags |
+|-----|--------|-------|------|
+| Satellite Dish | 750€ | 6.0kg | electronics, communication |
+| Medical Scanner | 1,800€ | 10.0kg | medical, electronics, advanced |
+
+### Construction Premium
+
+| Nom | Valeur | Poids | Tags |
+|-----|--------|-------|------|
+| Prefab Module | 580€ | 25.0kg | construction, structural, prefab |
+| Climate Control Unit | 720€ | 8.0kg | mechanical, electronics |
+
+---
+
+# RECETTES T4 (10 recettes)
+
+Toutes avec **3 ingrédients uniques** (slots T3-T4).
+
+### Aviation & Mécanique
+
+| Recette | Temps | Produit | Ingrédients | Mix tiers |
+|---------|-------|---------|-------------|-----------|
+| Avionics Unit | 16h | 1x | 2× Sensor Module + 1× Circuit Board + 1× Power Supply | T3+T2+T3 |
+| Landing Gear Part | 12h | 2x | 2× Hydraulic Cylinder + 2× Reinforced Steel + 1× Rubber Gasket | T3+T2+T2 |
+| Navigation System | 14h | 1x | 1× Sensor Module + 1× LED Panel + 1× Circuit Board | T3+T3+T2 |
+
+### Industrie & Énergie
+
+| Recette | Temps | Produit | Ingrédients | Mix tiers |
+|---------|-------|---------|-------------|-----------|
+| Solar Panel | 10h | 2x | 3× Silicon Wafers + 1× Aluminum Frame + 1× Wire Cable | T1+T2+T2 |
+| Industrial Robot Arm | 20h | 1x | 2× Electric Motor + 1× Sensor Module + 2× Reinforced Steel | T3+T3+T2 |
+| Generator | 14h | 1x | 2× Electric Motor + 2× Copper Wire + 1× Turbine Blade | T3+T2+T3 |
+
+### Haute Technologie
+
+| Recette | Temps | Produit | Ingrédients | Mix tiers |
+|---------|-------|---------|-------------|-----------|
+| Satellite Dish | 8h | 2x | 2× Aluminum Frame + 1× Sensor Module + 1× Wire Cable | T2+T3+T2 |
+| Medical Scanner | 24h | 1x | 1× Sensor Module + 1× LED Panel + 2× Circuit Board | T3+T3+T2 |
+
+### Construction Premium
+
+| Recette | Temps | Produit | Ingrédients | Mix tiers |
+|---------|-------|---------|-------------|-----------|
+| Prefab Module | 8h | 2x | 2× Structural Panel + 2× Insulated Wall + 1× Window Panes | T3+T3+T2 |
+| Climate Control Unit | 10h | 2x | 1× Electric Motor + 2× Copper Wire + 1× Compressed Gas | T3+T2+T1 |
+
+---
+
+# ITEMS T5 — Luxe & Ultra-Tech (8 items)
+
+Produits de très haute valeur, endgame.
+
+### Aviation Elite
+
+| Nom | Valeur | Poids | Tags |
+|-----|--------|-------|------|
+| Flight Computer | 3,500€ | 3.0kg | aviation, electronics, advanced, luxury |
+| Aircraft Engine Part | 5,200€ | 18.0kg | aviation, mechanical, advanced |
+
+### Technologie Spatiale
+
+| Nom | Valeur | Poids | Tags |
+|-----|--------|-------|------|
+| Satellite Component | 4,800€ | 5.0kg | electronics, space, advanced |
+| Nuclear Reactor Core | 12,000€ | 25.0kg | energy, nuclear, advanced |
+
+### Luxe & Rare
+
+| Nom | Valeur | Poids | Tags |
+|-----|--------|-------|------|
+| Luxury Watch | 2,800€ | 0.2kg | luxury, precision |
+| Fine Dining Set | 950€ | 3.0kg | food, luxury, gourmet |
+
+### Médical & Recherche
+
+| Nom | Valeur | Poids | Tags |
+|-----|--------|-------|------|
+| Surgical Robot | 8,500€ | 12.0kg | medical, electronics, advanced, luxury |
+| Research Lab Kit | 3,200€ | 8.0kg | medical, chemical, advanced |
+
+---
+
+# RECETTES T5 (8 recettes)
+
+Toutes avec **4 ingrédients uniques** (slots T5-T6).
+
+### Aviation Elite
+
+| Recette | Temps | Produit | Ingrédients | Mix tiers |
+|---------|-------|---------|-------------|-----------|
+| Flight Computer | 24h | 1x | 1× Avionics Unit + 1× Navigation System + 1× Advanced Battery + 1× Sensor Module | T4+T4+T3+T3 |
+| Aircraft Engine Part | 36h | 1x | 2× Turbine Blade + 1× Titanium Plates + 1× Hydraulic Cylinder + 1× Lubricant | T3+T2+T3+T2 |
+
+### Technologie Spatiale
+
+| Recette | Temps | Produit | Ingrédients | Mix tiers |
+|---------|-------|---------|-------------|-----------|
+| Satellite Component | 30h | 1x | 1× Navigation System + 1× Solar Panel + 1× Carbon Fiber + 1× Satellite Dish | T4+T4+T3+T4 |
+| Nuclear Reactor Core | 48h | 1x | 3× Nuclear Fuel Rod + 2× Armored Plate + 1× Hydraulic Cylinder + 1× Sensor Module | T2+T3+T3+T3 |
+
+### Luxe & Rare
+
+| Recette | Temps | Produit | Ingrédients | Mix tiers |
+|---------|-------|---------|-------------|-----------|
+| Luxury Watch | 16h | 2x | 1× Titanium Ingot + 1× Silicon Wafers + 1× Rare Earth Metals + 1× Tempered Glass | T1+T1+T0+T2 |
+| Fine Dining Set | 8h | 3x | 1× Premium Chocolate + 1× Aged Cheese + 1× Gourmet Meal + 1× Vanilla Extract | T3+T3+T3+T1 |
+
+### Médical & Recherche
+
+| Recette | Temps | Produit | Ingrédients | Mix tiers |
+|---------|-------|---------|-------------|-----------|
+| Surgical Robot | 40h | 1x | 1× Industrial Robot Arm + 1× Medical Scanner + 1× Sensor Module + 1× Power Supply | T4+T4+T3+T3 |
+| Research Lab Kit | 20h | 1x | 1× Medical Scanner + 1× Industrial Solvent + 1× Circuit Board + 1× Tempered Glass | T4+T3+T2+T2 |
+
+---
+
+# CHAÎNES DE PRODUCTION COMPLÈTES
+
+Exemples de supply chains du T0 au T5 :
+
+### Chaîne Aviation (T0 → T5)
+
+```
+T0: Iron Ore + Coal
+  ↓
+T1: Steel Ingot
+  ↓
+T2: Reinforced Steel + Copper Wire
+  ↓
+T3: Turbine Blade + Hydraulic Cylinder
+  ↓
+T4: Avionics Unit + Navigation System
+  ↓
+T5: Flight Computer (3,500€)
+     Aircraft Engine Part (5,200€)
+```
+
+### Chaîne Électronique (T0 → T5)
+
+```
+T0: Raw Silicon + Coal + Copper Ore + Rare Earth
+  ↓
+T1: Silicon Wafers + Copper Ingot
+  ↓
+T2: Circuit Board + Battery Cell + Copper Wire
+  ↓
+T3: Sensor Module + Power Supply + Electric Motor + Advanced Battery
+  ↓
+T4: Medical Scanner + Industrial Robot Arm + Navigation System
+  ↓
+T5: Surgical Robot (8,500€)
+     Satellite Component (4,800€)
+```
+
+### Chaîne Food Luxury (T0 → T5)
+
+```
+T0: Raw Cocoa + Raw Vanilla + Raw Milk + Raw Meat + Pepper
+  ↓
+T1: Cocoa Powder + Vanilla Extract + Butter + Salted Meat
+  ↓
+T2: Chocolate Bar + Pastry + Cheese + Spiced Meat + Quality Bread
+  ↓
+T3: Premium Chocolate + Gourmet Meal + Aged Cheese
+  ↓
+T5: Fine Dining Set (950€)
+```
+
+### Chaîne Nucléaire (T0 → T5)
+
+```
+T0: Uranium Ore + Water + Iron Ore + Coal + Titanium Ore
+  ↓
+T1: Uranium Pellets + Steel Ingot + Titanium Ingot
+  ↓
+T2: Nuclear Fuel Rod + Reinforced Steel + Titanium Plates
+  ↓
+T3: Armored Plate + Hydraulic Cylinder + Sensor Module
+  ↓
+T5: Nuclear Reactor Core (12,000€)
+```
+
+---
+
+# STATISTIQUES FINALES
+
+## Totaux items
+
+| Tier | Existants | Nouveaux | Total |
+|------|-----------|----------|-------|
+| T0 | 38 | 0 | **38** |
+| T1 | 30 | 0 | **30** |
+| T2 | 30 | +20 | **50** |
+| T3 | 0 | +15 | **15** |
+| T4 | 0 | +10 | **10** |
+| T5 | 0 | +8 | **8** |
+| **TOTAL** | **98** | **+53** | **151 items** |
+
+## Totaux recettes
+
+| Tier | Existantes | Nouvelles | Total |
+|------|------------|-----------|-------|
+| T1 | 30 | 0 | **30** |
+| T2 | 30 | +20 | **50** |
+| T3 | 0 | +15 | **15** |
+| T4 | 0 | +10 | **10** |
+| T5 | 0 | +8 | **8** |
+| **TOTAL** | **60** | **+53** | **113 recettes** |
+
+## Répartition par nombre d'ingrédients uniques
+
+| Ingrédients uniques | T1 | T2 | T3 | T4 | T5 | Total |
+|---------------------|----|----|----|----|----|----|
+| 1 | 0 | 4 | 0 | 0 | 0 | 4 |
+| 2 | 30 | 46 | 0 | 0 | 0 | 76 |
+| 3 | 0 | 0 | 15 | 10 | 0 | 25 |
+| 4 | 0 | 0 | 0 | 0 | 8 | 8 |
+
+## Valeurs par tier (moyenne)
+
+| Tier | Valeur moyenne | Temps moyen | Rentabilité gameplay |
+|------|---------------|-------------|---------------------|
+| T0 | ~20€ | Auto (NPC) | Matière première |
+| T1 | ~55€ | 2.5h | Accessible, bon ratio |
+| T2 | ~95€ | 4h | Intermédiaire |
+| T3 | ~310€ | 7.5h | Investissement sérieux |
+| T4 | ~1,100€ | 14h | Haute valeur, lent |
+| T5 | ~5,100€ | 28h | Endgame, très rentable si pipeline optimisé |
+
+---
+
+# NOTES GAMEPLAY
+
+## Progression naturelle
+
+1. **Début** : Usine T1 → recettes T1 simples (Bread, Steel Ingot)
+2. **Milieu** : Usine T2 → recettes T2 (Circuit Board, Canned Fish)
+3. **Mi-avancé** : Usine T3 → Electric Motor, Sensor Module (3 ingrédients = logistique + complexe)
+4. **Avancé** : Usine T4 → Avionics Unit, Industrial Robot Arm
+5. **Endgame** : Usine T5 → Flight Computer, Nuclear Reactor Core (4 ingrédients = empire logistique requis)
+
+## Goulots d'étranglement stratégiques
+
+| Ressource | Pourquoi c'est un goulot |
+|-----------|-------------------------|
+| Rare Earth Metals | 6 usines NPC (Chine surtout) → nécessaire pour Electric Motor, Sensor Module, Advanced Battery, Luxury Watch |
+| Titanium Ore | Peu d'usines NPC → chaîne vers Armored Plate → Nuclear Reactor Core |
+| Vanilla | 7 usines NPC → Premium Chocolate → Fine Dining Set |
+| Circuit Board | Utilisé par Sensor Module, Navigation, Power Supply → goulot T3-T4 |
+| Sensor Module | Utilisé par 5 recettes T4-T5 → le composant le plus demandé |
+
+## Recettes "raccourci" (T0 direct dans recettes hautes)
+
+| Recette | Ingrédient T0 direct | Pourquoi |
+|---------|---------------------|----------|
+| Electric Motor | Rare Earth Metals (T0) | Aimants = matière première directe |
+| LED Panel | Rare Earth Metals (T0) | Phosphores LED = terres rares |
+| Aged Cheese | Raw Salt + Raw Wood (T0) | Affinage traditionnel |
+| Luxury Watch | Rare Earth + Titanium Ingot (T0+T1) | Composants de base nobles |
+| Solar Panel | Silicon Wafers (T1) | Cellules solaires directes |
+
+Ces raccourcis sont intentionnels pour que les joueurs ne soient pas obligés de tout transformer en T2 avant de passer au T3+.
+

@@ -20,6 +20,7 @@ import {
 class FactorySchedulerClass {
   private batchInterval: ReturnType<typeof setInterval> | null = null;
   private hourlyInterval: ReturnType<typeof setInterval> | null = null;
+  private npcInterval: ReturnType<typeof setInterval> | null = null;
   private isRunning = false;
 
   /** Start the scheduler (Solo mode only) */
@@ -27,16 +28,26 @@ class FactorySchedulerClass {
     if (this.isRunning) return;
     this.isRunning = true;
 
-    // Check batch completions every 60 seconds
-    this.batchInterval = setInterval(() => this.checkBatches(), 60000);
+    // Check batch completions + upgrade completions every 60 seconds
+    this.batchInterval = setInterval(() => {
+      this.checkBatches();
+      this.checkUpgrades();
+    }, 60000);
 
     // Hourly tick for food/salaries/injuries
     this.hourlyInterval = setInterval(() => this.hourlyTick(), 3600000);
 
-    // Run an immediate check for any batches that completed while offline
-    this.checkBatches();
+    // NPC production tick every 5 minutes
+    this.npcInterval = setInterval(() => this.npcProductionTick(), 300000);
 
-    console.log("[FactoryScheduler] Started (batch check: 60s, hourly tick: 3600s)");
+    // Run immediate checks for anything that completed while offline
+    this.checkBatches();
+    this.checkUpgrades();
+
+    // Run immediate NPC production tick
+    this.npcProductionTick();
+
+    console.log("[FactoryScheduler] Started (batch+upgrades: 60s, hourly: 3600s, npc: 300s)");
   }
 
   /** Stop the scheduler */
@@ -48,6 +59,10 @@ class FactorySchedulerClass {
     if (this.hourlyInterval) {
       clearInterval(this.hourlyInterval);
       this.hourlyInterval = null;
+    }
+    if (this.npcInterval) {
+      clearInterval(this.npcInterval);
+      this.npcInterval = null;
     }
     this.isRunning = false;
     console.log("[FactoryScheduler] Stopped");
@@ -79,6 +94,30 @@ class FactorySchedulerClass {
 
     if (activeBatches.length > 0) {
       console.log(`[FactoryScheduler] Completed ${activeBatches.length} batch(es)`);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // UPGRADE COMPLETION CHECK (every 60 seconds)
+  // ─────────────────────────────────────────────────────────
+
+  private async checkUpgrades(): Promise<void> {
+    const now = new Date().toISOString();
+    const factories = factoryState.factories.get();
+    const upgrading = factories.filter(
+      f => f.status === "upgrading" && f.upgrade_completion && f.upgrade_completion <= now
+    );
+
+    for (const factory of upgrading) {
+      try {
+        await LocalFactoryService.completeUpgrade(factory.id);
+      } catch (error) {
+        console.error(`[FactoryScheduler] Failed to complete upgrade for factory ${factory.id}:`, error);
+      }
+    }
+
+    if (upgrading.length > 0) {
+      console.log(`[FactoryScheduler] Completed ${upgrading.length} upgrade(s)`);
     }
   }
 
@@ -234,6 +273,36 @@ class FactorySchedulerClass {
 
     if (totalSalaries > 0) {
       console.log(`[FactoryScheduler] Hourly tick: ${totalSalaries} CR in salaries paid`);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // NPC PRODUCTION TICK (every 5 minutes)
+  // ─────────────────────────────────────────────────────────
+
+  private async npcProductionTick(): Promise<void> {
+    const factories = factoryState.factories.get();
+    const npcFactories = factories.filter(
+      f => f.tier === 0 && f.status === "producing" && f.item_id
+    );
+
+    if (npcFactories.length === 0) return;
+
+    let updated = 0;
+    for (const factory of npcFactories) {
+      const stockMax = factory.stock_max || 1000;
+      const current = factory.stock_current || 0;
+      const rate = factory.production_rate || 50;
+
+      if (current >= stockMax) continue;
+
+      factory.stock_current = Math.min(current + rate, stockMax);
+      await DatabaseManager.put("factories", factory as any, false);
+      updated++;
+    }
+
+    if (updated > 0) {
+      factoryState.factories.set([...factories]);
     }
   }
 }

@@ -1162,7 +1162,7 @@
       ],
       "icon": "SO",
       "baseValue": 18,
-      "weightKg": 1.0,
+      "weightKg": 1,
       "isRaw": false,
       "stackSize": 60,
       "description": "Simple salted egg omelette",
@@ -1246,7 +1246,7 @@
       ],
       "icon": "Vs",
       "baseValue": 65,
-      "weightKg": 1.0,
+      "weightKg": 1,
       "isRaw": false,
       "stackSize": 40,
       "description": "Luxury salad with vanilla dressing",
@@ -1263,7 +1263,7 @@
       ],
       "icon": "Cm",
       "baseValue": 38,
-      "weightKg": 2.0,
+      "weightKg": 2,
       "isRaw": false,
       "stackSize": 60,
       "description": "Spicy meat with hot chili",
@@ -1283,7 +1283,8 @@
       "weightKg": 0.6,
       "isRaw": false,
       "stackSize": 70,
-      "description": "Artisan quality bread"
+      "description": "Artisan quality bread",
+      "icon_path": "Assets/icons/items/t2/quality_bread.svg"
     },
     {
       "id": "smoked-fish",
@@ -1299,7 +1300,8 @@
       "weightKg": 1.8,
       "isRaw": false,
       "stackSize": 60,
-      "description": "Premium smoked fish"
+      "description": "Premium smoked fish",
+      "icon_path": "Assets/icons/items/t2/smoked_fish.svg"
     },
     {
       "id": "chocolate-bar",
@@ -1315,7 +1317,8 @@
       "weightKg": 0.4,
       "isRaw": false,
       "stackSize": 50,
-      "description": "Rich chocolate bar"
+      "description": "Rich chocolate bar",
+      "icon_path": "Assets/icons/items/t2/chocolate_bar.svg"
     },
     {
       "id": "fruit-cake",
@@ -1331,7 +1334,8 @@
       "weightKg": 1.2,
       "isRaw": false,
       "stackSize": 40,
-      "description": "Dense fruit cake"
+      "description": "Dense fruit cake",
+      "icon_path": "Assets/icons/items/t2/fruit_cake.svg"
     },
     {
       "id": "cheese",
@@ -1347,7 +1351,8 @@
       "weightKg": 1,
       "isRaw": false,
       "stackSize": 50,
-      "description": "Aged cheese"
+      "description": "Aged cheese",
+      "icon_path": "Assets/icons/items/t2/cheese.svg"
     },
     {
       "id": "sausage",
@@ -1363,7 +1368,8 @@
       "weightKg": 1.5,
       "isRaw": false,
       "stackSize": 70,
-      "description": "Cured sausage"
+      "description": "Cured sausage",
+      "icon_path": "Assets/icons/items/t2/sausage.svg"
     },
     {
       "id": "vegetable-soup",
@@ -1379,7 +1385,8 @@
       "weightKg": 1.2,
       "isRaw": false,
       "stackSize": 50,
-      "description": "Rich vegetable soup"
+      "description": "Rich vegetable soup",
+      "icon_path": "Assets/icons/items/t2/vegetable_soup.svg"
     },
     {
       "id": "pastry",
@@ -1395,7 +1402,8 @@
       "weightKg": 0.5,
       "isRaw": false,
       "stackSize": 60,
-      "description": "Buttery pastries"
+      "description": "Buttery pastries",
+      "icon_path": "Assets/icons/items/t2/pastry.svg"
     },
     {
       "id": "dried-fruit",
@@ -1411,7 +1419,8 @@
       "weightKg": 0.8,
       "isRaw": false,
       "stackSize": 70,
-      "description": "Sun-dried fruits"
+      "description": "Sun-dried fruits",
+      "icon_path": "Assets/icons/items/t2/dried_fruit.svg"
     },
     {
       "id": "honey-bread",
@@ -1428,7 +1437,8 @@
       "weightKg": 0.7,
       "isRaw": false,
       "stackSize": 50,
-      "description": "Sweet honey bread"
+      "description": "Sweet honey bread",
+      "icon_path": "Assets/icons/items/t2/honey_bread.svg"
     },
     {
       "id": "reinforced-steel",
@@ -1444,7 +1454,8 @@
       "weightKg": 10,
       "isRaw": false,
       "stackSize": 60,
-      "description": "High-strength steel"
+      "description": "High-strength steel",
+      "icon_path": "Assets/icons/items/t2/reinforced_steel.svg"
     },
     {
       "id": "wire-cable",
@@ -1460,7 +1471,8 @@
       "weightKg": 3,
       "isRaw": false,
       "stackSize": 80,
-      "description": "Copper wire cables"
+      "description": "Copper wire cables",
+      "icon_path": "Assets/icons/items/t2/wire_cable.svg"
     },
     {
       "id": "wooden-beams",
@@ -1475,7 +1487,8 @@
       "weightKg": 8,
       "isRaw": false,
       "stackSize": 50,
-      "description": "Structural wooden beams"
+      "description": "Structural wooden beams",
+      "icon_path": "Assets/icons/items/t2/wooden_beams.svg"
     },
     {
       "id": "concrete-blocks",
@@ -1490,7 +1503,8 @@
       "weightKg": 15,
       "isRaw": false,
       "stackSize": 60,
-      "description": "Heavy concrete blocks"
+      "description": "Heavy concrete blocks",
+      "icon_path": "Assets/icons/items/t2/concrete_blocks.svg"
     },
     {
       "id": "window-panes",
@@ -1505,7 +1519,8 @@
       "weightKg": 6,
       "isRaw": false,
       "stackSize": 40,
-      "description": "Glass window frames"
+      "description": "Glass window frames",
+      "icon_path": "Assets/icons/items/t2/window_panes.svg"
     },
     {
       "id": "insulation",
@@ -1520,7 +1535,8 @@
       "weightKg": 3,
       "isRaw": false,
       "stackSize": 70,
-      "description": "Rubber insulation"
+      "description": "Rubber insulation",
+      "icon_path": "Assets/icons/items/t2/insulation.svg"
     },
     {
       "id": "steel-pipes",
@@ -1536,7 +1552,8 @@
       "weightKg": 9,
       "isRaw": false,
       "stackSize": 50,
-      "description": "Steel piping"
+      "description": "Steel piping",
+      "icon_path": "Assets/icons/items/t2/steel_pipes.svg"
     },
     {
       "id": "aluminum-frame",
@@ -1552,7 +1569,8 @@
       "weightKg": 5,
       "isRaw": false,
       "stackSize": 50,
-      "description": "Aluminum frames"
+      "description": "Aluminum frames",
+      "icon_path": "Assets/icons/items/t2/aluminum_frame.svg"
     },
     {
       "id": "circuit-board",
@@ -1567,7 +1585,8 @@
       "weightKg": 2,
       "isRaw": false,
       "stackSize": 40,
-      "description": "Basic circuit boards"
+      "description": "Basic circuit boards",
+      "icon_path": "Assets/icons/items/t2/circuit_board.svg"
     },
     {
       "id": "titanium-plates",
@@ -1584,7 +1603,8 @@
       "weightKg": 4,
       "isRaw": false,
       "stackSize": 30,
-      "description": "Armor-grade titanium"
+      "description": "Armor-grade titanium",
+      "icon_path": "Assets/icons/items/t2/titanium_plates.svg"
     },
     {
       "id": "jet-fuel",
@@ -1600,7 +1620,8 @@
       "weightKg": 5,
       "isRaw": false,
       "stackSize": 60,
-      "description": "Aviation-grade fuel"
+      "description": "Aviation-grade fuel",
+      "icon_path": "Assets/icons/items/t2/jet_fuel.svg"
     },
     {
       "id": "heating-oil",
@@ -1615,7 +1636,8 @@
       "weightKg": 4.5,
       "isRaw": false,
       "stackSize": 70,
-      "description": "Refined heating oil"
+      "description": "Refined heating oil",
+      "icon_path": "Assets/icons/items/t2/heating_oil.svg"
     },
     {
       "id": "premium-biofuel",
@@ -1631,7 +1653,8 @@
       "weightKg": 4,
       "isRaw": false,
       "stackSize": 50,
-      "description": "High-efficiency biofuel"
+      "description": "High-efficiency biofuel",
+      "icon_path": "Assets/icons/items/t2/premium_biofuel.svg"
     },
     {
       "id": "rocket-propellant",
@@ -1647,7 +1670,8 @@
       "weightKg": 6,
       "isRaw": false,
       "stackSize": 30,
-      "description": "Specialized rocket fuel"
+      "description": "Specialized rocket fuel",
+      "icon_path": "Assets/icons/items/t2/rocket_propellant.svg"
     },
     {
       "id": "nuclear-fuel-rod",
@@ -1663,7 +1687,8 @@
       "weightKg": 8,
       "isRaw": false,
       "stackSize": 20,
-      "description": "Enriched nuclear fuel rod"
+      "description": "Enriched nuclear fuel rod",
+      "icon_path": "Assets/icons/items/t2/nuclear_fuel_rod.svg"
     },
     {
       "id": "plastic-sheets",
@@ -1678,7 +1703,8 @@
       "weightKg": 2.5,
       "isRaw": false,
       "stackSize": 70,
-      "description": "Industrial plastic sheets"
+      "description": "Industrial plastic sheets",
+      "icon_path": "Assets/icons/items/t2/plastic_sheets.svg"
     },
     {
       "id": "medical-bandages",
@@ -1693,7 +1719,8 @@
       "weightKg": 0.5,
       "isRaw": false,
       "stackSize": 100,
-      "description": "Sterilized bandages"
+      "description": "Sterilized bandages",
+      "icon_path": "Assets/icons/items/t2/medical_bandages.svg"
     },
     {
       "id": "cleaning-solution",
@@ -1708,7 +1735,8 @@
       "weightKg": 3,
       "isRaw": false,
       "stackSize": 80,
-      "description": "Industrial cleaner"
+      "description": "Industrial cleaner",
+      "icon_path": "Assets/icons/items/t2/cleaning_solution.svg"
     },
     {
       "id": "paint",
@@ -1723,7 +1751,8 @@
       "weightKg": 3.5,
       "isRaw": false,
       "stackSize": 60,
-      "description": "Colored paint"
+      "description": "Colored paint",
+      "icon_path": "Assets/icons/items/t2/paint.svg"
     },
     {
       "id": "adhesive",
@@ -1738,7 +1767,980 @@
       "weightKg": 2,
       "isRaw": false,
       "stackSize": 50,
-      "description": "Strong industrial glue"
+      "description": "Strong industrial glue",
+      "icon_path": "Assets/icons/items/t2/adhesive.svg"
+    },
+    {
+      "id": "steel-beam",
+      "name": "Steel Beam",
+      "tier": 2,
+      "tags": [
+        "construction",
+        "metal",
+        "structural"
+      ],
+      "icon": "SB",
+      "baseValue": 120,
+      "weightKg": 15,
+      "isRaw": false,
+      "stackSize": 40,
+      "description": "Heavy structural steel beam",
+      "icon_path": "Assets/icons/items/t3/steel_beam.svg"
+    },
+    {
+      "id": "copper-wire",
+      "name": "Copper Wire",
+      "tier": 2,
+      "tags": [
+        "electronics",
+        "metal",
+        "wiring"
+      ],
+      "icon": "CW",
+      "baseValue": 52,
+      "weightKg": 1.5,
+      "isRaw": false,
+      "stackSize": 80,
+      "description": "Copper wire for electronics",
+      "icon_path": "Assets/icons/items/t2/copper_wire.svg"
+    },
+    {
+      "id": "fiberglass",
+      "name": "Fiberglass",
+      "tier": 2,
+      "tags": [
+        "construction",
+        "composite"
+      ],
+      "icon": "Fg",
+      "baseValue": 78,
+      "weightKg": 2,
+      "isRaw": false,
+      "stackSize": 60,
+      "description": "Composite fiberglass sheets",
+      "icon_path": "Assets/icons/items/t2/fiberglass.svg"
+    },
+    {
+      "id": "plywood",
+      "name": "Plywood",
+      "tier": 2,
+      "tags": [
+        "construction",
+        "wood"
+      ],
+      "icon": "Pw",
+      "baseValue": 38,
+      "weightKg": 4,
+      "isRaw": false,
+      "stackSize": 70,
+      "description": "Layered plywood sheets",
+      "icon_path": "Assets/icons/items/t2/plywood.svg"
+    },
+    {
+      "id": "ceramic-tiles",
+      "name": "Ceramic Tiles",
+      "tier": 2,
+      "tags": [
+        "construction",
+        "masonry"
+      ],
+      "icon": "CT",
+      "baseValue": 42,
+      "weightKg": 5,
+      "isRaw": false,
+      "stackSize": 60,
+      "description": "Fired ceramic tiles",
+      "icon_path": "Assets/icons/items/t2/ceramic_tiles.svg"
+    },
+    {
+      "id": "rubber-gasket",
+      "name": "Rubber Gasket",
+      "tier": 2,
+      "tags": [
+        "construction",
+        "industrial",
+        "seal"
+      ],
+      "icon": "RG",
+      "baseValue": 45,
+      "weightKg": 0.8,
+      "isRaw": false,
+      "stackSize": 80,
+      "description": "Industrial rubber gasket",
+      "icon_path": "Assets/icons/items/t2/rubber_gasket.svg"
+    },
+    {
+      "id": "steel-nails",
+      "name": "Steel Nails",
+      "tier": 2,
+      "tags": [
+        "construction",
+        "metal",
+        "fastener"
+      ],
+      "icon": "SN",
+      "baseValue": 28,
+      "weightKg": 2,
+      "isRaw": false,
+      "stackSize": 100,
+      "description": "Steel nails for construction",
+      "icon_path": "Assets/icons/items/t2/steel_nails.svg"
+    },
+    {
+      "id": "canned-fish",
+      "name": "Canned Fish",
+      "tier": 2,
+      "tags": [
+        "food",
+        "preserved",
+        "quality"
+      ],
+      "icon": "CF",
+      "baseValue": 65,
+      "weightKg": 1,
+      "isRaw": false,
+      "stackSize": 60,
+      "description": "Preserved canned fish",
+      "icon_path": "Assets/icons/items/t2/canned_fish.svg"
+    },
+    {
+      "id": "spiced-meat",
+      "name": "Spiced Meat",
+      "tier": 2,
+      "tags": [
+        "food",
+        "meat",
+        "spiced"
+      ],
+      "icon": "Sm",
+      "baseValue": 72,
+      "weightKg": 1.8,
+      "isRaw": false,
+      "stackSize": 50,
+      "description": "Seasoned spiced meat",
+      "icon_path": "Assets/icons/items/t2/spiced_meat.svg"
+    },
+    {
+      "id": "fruit-juice",
+      "name": "Fruit Juice",
+      "tier": 2,
+      "tags": [
+        "food",
+        "drink",
+        "sweet"
+      ],
+      "icon": "FJ",
+      "baseValue": 30,
+      "weightKg": 1,
+      "isRaw": false,
+      "stackSize": 80,
+      "description": "Fresh fruit juice",
+      "icon_path": "Assets/icons/items/t2/fruit_juice.svg"
+    },
+    {
+      "id": "cheese-wheel",
+      "name": "Cheese Wheel",
+      "tier": 2,
+      "tags": [
+        "food",
+        "dairy",
+        "luxury"
+      ],
+      "icon": "Cw",
+      "baseValue": 95,
+      "weightKg": 3,
+      "isRaw": false,
+      "stackSize": 30,
+      "description": "Full cheese wheel",
+      "icon_path": "Assets/icons/items/t2/cheese_wheel.svg"
+    },
+    {
+      "id": "chili-sauce",
+      "name": "Chili Sauce",
+      "tier": 2,
+      "tags": [
+        "food",
+        "sauce",
+        "spiced"
+      ],
+      "icon": "Cs",
+      "baseValue": 55,
+      "weightKg": 0.6,
+      "isRaw": false,
+      "stackSize": 80,
+      "description": "Hot chili sauce",
+      "icon_path": "Assets/icons/items/t2/chili_sauce.svg"
+    },
+    {
+      "id": "vanilla-cake",
+      "name": "Vanilla Cake",
+      "tier": 2,
+      "tags": [
+        "food",
+        "baked",
+        "luxury"
+      ],
+      "icon": "VC",
+      "baseValue": 145,
+      "weightKg": 1,
+      "isRaw": false,
+      "stackSize": 40,
+      "description": "Luxury vanilla cake",
+      "icon_path": "Assets/icons/items/t2/vanilla_cake.svg"
+    },
+    {
+      "id": "lubricant",
+      "name": "Lubricant",
+      "tier": 2,
+      "tags": [
+        "chemical",
+        "industrial",
+        "oil"
+      ],
+      "icon": "Lb",
+      "baseValue": 75,
+      "weightKg": 3,
+      "isRaw": false,
+      "stackSize": 60,
+      "description": "Industrial lubricant oil",
+      "icon_path": "Assets/icons/items/t2/lubricant.svg"
+    },
+    {
+      "id": "graphite-rod",
+      "name": "Graphite Rod",
+      "tier": 2,
+      "tags": [
+        "construction",
+        "industrial"
+      ],
+      "icon": "GR",
+      "baseValue": 58,
+      "weightKg": 1.5,
+      "isRaw": false,
+      "stackSize": 70,
+      "description": "Processed graphite rods",
+      "icon_path": "Assets/icons/items/t2/graphite_rod.svg"
+    },
+    {
+      "id": "dye",
+      "name": "Dye",
+      "tier": 2,
+      "tags": [
+        "chemical",
+        "textile"
+      ],
+      "icon": "Dy",
+      "baseValue": 48,
+      "weightKg": 1,
+      "isRaw": false,
+      "stackSize": 80,
+      "description": "Colored textile dye",
+      "icon_path": "Assets/icons/items/t2/dye.svg"
+    },
+    {
+      "id": "battery-cell",
+      "name": "Battery Cell",
+      "tier": 2,
+      "tags": [
+        "electronics",
+        "energy"
+      ],
+      "icon": "BC",
+      "baseValue": 125,
+      "weightKg": 2.5,
+      "isRaw": false,
+      "stackSize": 40,
+      "description": "Rechargeable battery cell",
+      "icon_path": "Assets/icons/items/t2/battery_cell.svg"
+    },
+    {
+      "id": "firebricks",
+      "name": "Firebricks",
+      "tier": 2,
+      "tags": [
+        "construction",
+        "industrial",
+        "heat"
+      ],
+      "icon": "FB",
+      "baseValue": 55,
+      "weightKg": 8,
+      "isRaw": false,
+      "stackSize": 50,
+      "description": "Heat-resistant firebricks",
+      "icon_path": "Assets/icons/items/t2/firebricks.svg"
+    },
+    {
+      "id": "asphalt",
+      "name": "Asphalt",
+      "tier": 2,
+      "tags": [
+        "construction",
+        "road"
+      ],
+      "icon": "As",
+      "baseValue": 35,
+      "weightKg": 10,
+      "isRaw": false,
+      "stackSize": 60,
+      "description": "Road asphalt",
+      "icon_path": "Assets/icons/items/t2/asphalt.svg"
+    },
+    {
+      "id": "tempered-glass",
+      "name": "Tempered Glass",
+      "tier": 2,
+      "tags": [
+        "construction",
+        "transparent",
+        "quality"
+      ],
+      "icon": "TG",
+      "baseValue": 68,
+      "weightKg": 5,
+      "isRaw": false,
+      "stackSize": 50,
+      "description": "Heat-tempered safety glass",
+      "icon_path": "Assets/icons/items/t2/tempered_glass.svg"
+    },
+    {
+      "id": "structural-panel",
+      "name": "Structural Panel",
+      "tier": 3,
+      "tags": [
+        "construction",
+        "composite",
+        "structural"
+      ],
+      "icon": "SP",
+      "baseValue": 180,
+      "weightKg": 12,
+      "isRaw": false,
+      "stackSize": 30,
+      "description": "Reinforced structural panel",
+      "icon_path": "Assets/icons/items/t3/structural_panel.svg"
+    },
+    {
+      "id": "insulated-wall",
+      "name": "Insulated Wall",
+      "tier": 3,
+      "tags": [
+        "construction",
+        "composite"
+      ],
+      "icon": "IW",
+      "baseValue": 155,
+      "weightKg": 10,
+      "isRaw": false,
+      "stackSize": 30,
+      "description": "Thermally insulated wall panel",
+      "icon_path": "Assets/icons/items/t3/structural_panel.svg"
+    },
+    {
+      "id": "armored-plate",
+      "name": "Armored Plate",
+      "tier": 3,
+      "tags": [
+        "construction",
+        "metal",
+        "armor"
+      ],
+      "icon": "AP",
+      "baseValue": 420,
+      "weightKg": 8,
+      "isRaw": false,
+      "stackSize": 20,
+      "description": "Armor-grade composite plate",
+      "icon_path": "Assets/icons/items/t3/armored_plate.svg"
+    },
+    {
+      "id": "hydraulic-cylinder",
+      "name": "Hydraulic Cylinder",
+      "tier": 3,
+      "tags": [
+        "mechanical",
+        "industrial"
+      ],
+      "icon": "HC",
+      "baseValue": 280,
+      "weightKg": 6,
+      "isRaw": false,
+      "stackSize": 30,
+      "description": "Industrial hydraulic cylinder",
+      "icon_path": "Assets/icons/items/t3/hydraulic_cylinder.svg"
+    },
+    {
+      "id": "electric-motor",
+      "name": "Electric Motor",
+      "tier": 3,
+      "tags": [
+        "electronics",
+        "mechanical",
+        "industrial"
+      ],
+      "icon": "EM",
+      "baseValue": 350,
+      "weightKg": 8,
+      "isRaw": false,
+      "stackSize": 20,
+      "description": "High-torque electric motor",
+      "icon_path": "Assets/icons/items/t3/electric_motor.svg"
+    },
+    {
+      "id": "sensor-module",
+      "name": "Sensor Module",
+      "tier": 3,
+      "tags": [
+        "electronics",
+        "advanced"
+      ],
+      "icon": "SM",
+      "baseValue": 290,
+      "weightKg": 1,
+      "isRaw": false,
+      "stackSize": 30,
+      "description": "Multi-sensor electronic module",
+      "icon_path": "Assets/icons/items/t3/sensor_module.svg"
+    },
+    {
+      "id": "power-supply",
+      "name": "Power Supply",
+      "tier": 3,
+      "tags": [
+        "electronics",
+        "energy"
+      ],
+      "icon": "PS",
+      "baseValue": 210,
+      "weightKg": 3,
+      "isRaw": false,
+      "stackSize": 30,
+      "description": "Regulated power supply unit",
+      "icon_path": "Assets/icons/items/t3/power_supply.svg"
+    },
+    {
+      "id": "led-panel",
+      "name": "LED Panel",
+      "tier": 3,
+      "tags": [
+        "electronics",
+        "lighting"
+      ],
+      "icon": "LP",
+      "baseValue": 165,
+      "weightKg": 1.5,
+      "isRaw": false,
+      "stackSize": 40,
+      "description": "High-brightness LED panel",
+      "icon_path": "Assets/icons/items/t3/led_panel.svg"
+    },
+    {
+      "id": "premium-chocolate",
+      "name": "Premium Chocolate",
+      "tier": 3,
+      "tags": [
+        "food",
+        "luxury",
+        "sweet"
+      ],
+      "icon": "PC",
+      "baseValue": 185,
+      "weightKg": 0.5,
+      "isRaw": false,
+      "stackSize": 40,
+      "description": "Premium artisan chocolate",
+      "icon_path": "Assets/icons/items/t3/premium_chocolate.svg"
+    },
+    {
+      "id": "gourmet-meal",
+      "name": "Gourmet Meal",
+      "tier": 3,
+      "tags": [
+        "food",
+        "luxury",
+        "cooked"
+      ],
+      "icon": "GM",
+      "baseValue": 140,
+      "weightKg": 2,
+      "isRaw": false,
+      "stackSize": 30,
+      "description": "Gourmet plated meal",
+      "icon_path": "Assets/icons/items/t3/gourmet_meal.svg"
+    },
+    {
+      "id": "aged-cheese",
+      "name": "Aged Cheese",
+      "tier": 3,
+      "tags": [
+        "food",
+        "dairy",
+        "luxury",
+        "aged"
+      ],
+      "icon": "AC",
+      "baseValue": 195,
+      "weightKg": 1.5,
+      "isRaw": false,
+      "stackSize": 30,
+      "description": "Long-aged artisan cheese",
+      "icon_path": "Assets/icons/items/t3/aged_cheese.svg"
+    },
+    {
+      "id": "carbon-fiber",
+      "name": "Carbon Fiber",
+      "tier": 3,
+      "tags": [
+        "construction",
+        "composite",
+        "advanced"
+      ],
+      "icon": "CF",
+      "baseValue": 380,
+      "weightKg": 1,
+      "isRaw": false,
+      "stackSize": 30,
+      "description": "Lightweight carbon fiber sheets",
+      "icon_path": "Assets/icons/items/t3/carbon_fiber.svg"
+    },
+    {
+      "id": "industrial-solvent",
+      "name": "Industrial Solvent",
+      "tier": 3,
+      "tags": [
+        "chemical",
+        "industrial"
+      ],
+      "icon": "IS",
+      "baseValue": 120,
+      "weightKg": 3,
+      "isRaw": false,
+      "stackSize": 50,
+      "description": "Industrial cleaning solvent",
+      "icon_path": "Assets/icons/items/t3/industrial_solvent.svg"
+    },
+    {
+      "id": "turbine-blade",
+      "name": "Turbine Blade",
+      "tier": 3,
+      "tags": [
+        "mechanical",
+        "advanced",
+        "aviation"
+      ],
+      "icon": "TB",
+      "baseValue": 520,
+      "weightKg": 5,
+      "isRaw": false,
+      "stackSize": 20,
+      "description": "Precision turbine blade",
+      "icon_path": "Assets/icons/items/t3/turbine_blade.svg"
+    },
+    {
+      "id": "advanced-battery",
+      "name": "Advanced Battery",
+      "tier": 3,
+      "tags": [
+        "electronics",
+        "energy",
+        "advanced"
+      ],
+      "icon": "AB",
+      "baseValue": 450,
+      "weightKg": 4,
+      "isRaw": false,
+      "stackSize": 20,
+      "description": "High-capacity advanced battery",
+      "icon_path": "Assets/icons/items/t3/advanced_battery.svg"
+    },
+    {
+      "id": "avionics-unit",
+      "name": "Avionics Unit",
+      "tier": 4,
+      "tags": [
+        "aviation",
+        "electronics",
+        "advanced"
+      ],
+      "icon": "AU",
+      "baseValue": 1200,
+      "weightKg": 4,
+      "isRaw": false,
+      "stackSize": 10,
+      "description": "Complete avionics electronics unit",
+      "icon_path": "Assets/icons/items/t4/avionics_unit.svg"
+    },
+    {
+      "id": "landing-gear-part",
+      "name": "Landing Gear Part",
+      "tier": 4,
+      "tags": [
+        "aviation",
+        "mechanical",
+        "structural"
+      ],
+      "icon": "LG",
+      "baseValue": 850,
+      "weightKg": 12,
+      "isRaw": false,
+      "stackSize": 10,
+      "description": "Aircraft landing gear component",
+      "icon_path": "Assets/icons/items/t4/landing_gear_part.svg"
+    },
+    {
+      "id": "navigation-system",
+      "name": "Navigation System",
+      "tier": 4,
+      "tags": [
+        "aviation",
+        "electronics"
+      ],
+      "icon": "NS",
+      "baseValue": 980,
+      "weightKg": 2,
+      "isRaw": false,
+      "stackSize": 10,
+      "description": "Aircraft navigation system",
+      "icon_path": "Assets/icons/items/t4/navigation_system.svg"
+    },
+    {
+      "id": "solar-panel",
+      "name": "Solar Panel",
+      "tier": 4,
+      "tags": [
+        "electronics",
+        "energy",
+        "renewable"
+      ],
+      "icon": "So",
+      "baseValue": 680,
+      "weightKg": 8,
+      "isRaw": false,
+      "stackSize": 10,
+      "description": "Photovoltaic solar panel",
+      "icon_path": "Assets/icons/items/t4/solar_panel.svg"
+    },
+    {
+      "id": "industrial-robot-arm",
+      "name": "Industrial Robot Arm",
+      "tier": 4,
+      "tags": [
+        "mechanical",
+        "electronics",
+        "advanced"
+      ],
+      "icon": "RA",
+      "baseValue": 1500,
+      "weightKg": 15,
+      "isRaw": false,
+      "stackSize": 5,
+      "description": "Precision robotic arm",
+      "icon_path": "Assets/icons/items/t4/industrial_robot_arm.svg"
+    },
+    {
+      "id": "generator",
+      "name": "Generator",
+      "tier": 4,
+      "tags": [
+        "mechanical",
+        "energy"
+      ],
+      "icon": "Ge",
+      "baseValue": 920,
+      "weightKg": 20,
+      "isRaw": false,
+      "stackSize": 5,
+      "description": "Electric power generator",
+      "icon_path": "Assets/icons/items/t4/generator.svg"
+    },
+    {
+      "id": "satellite-dish",
+      "name": "Satellite Dish",
+      "tier": 4,
+      "tags": [
+        "electronics",
+        "communication"
+      ],
+      "icon": "SD",
+      "baseValue": 750,
+      "weightKg": 6,
+      "isRaw": false,
+      "stackSize": 10,
+      "description": "Satellite communication dish",
+      "icon_path": "Assets/icons/items/t4/satellite_dish.svg"
+    },
+    {
+      "id": "medical-scanner",
+      "name": "Medical Scanner",
+      "tier": 4,
+      "tags": [
+        "medical",
+        "electronics",
+        "advanced"
+      ],
+      "icon": "Ms",
+      "baseValue": 1800,
+      "weightKg": 10,
+      "isRaw": false,
+      "stackSize": 5,
+      "description": "Medical imaging scanner",
+      "icon_path": "Assets/icons/items/t4/medical_scanner.svg"
+    },
+    {
+      "id": "prefab-module",
+      "name": "Prefab Module",
+      "tier": 4,
+      "tags": [
+        "construction",
+        "structural",
+        "prefab"
+      ],
+      "icon": "Pf",
+      "baseValue": 580,
+      "weightKg": 25,
+      "isRaw": false,
+      "stackSize": 5,
+      "description": "Prefabricated building module",
+      "icon_path": "Assets/icons/items/t4/prefab_module.svg"
+    },
+    {
+      "id": "climate-control",
+      "name": "Climate Control Unit",
+      "tier": 4,
+      "tags": [
+        "mechanical",
+        "electronics"
+      ],
+      "icon": "CC",
+      "baseValue": 720,
+      "weightKg": 8,
+      "isRaw": false,
+      "stackSize": 10,
+      "description": "HVAC climate control unit",
+      "icon_path": "Assets/icons/items/t4/climate_control.svg"
+    },
+    {
+      "id": "flight-computer",
+      "name": "Flight Computer",
+      "tier": 5,
+      "tags": [
+        "aviation",
+        "electronics",
+        "advanced",
+        "luxury"
+      ],
+      "icon": "FP",
+      "baseValue": 3500,
+      "weightKg": 3,
+      "isRaw": false,
+      "stackSize": 5,
+      "description": "Advanced flight management computer",
+      "icon_path": "Assets/icons/items/t5/flight_computer.svg"
+    },
+    {
+      "id": "aircraft-engine-part",
+      "name": "Aircraft Engine Part",
+      "tier": 5,
+      "tags": [
+        "aviation",
+        "mechanical",
+        "advanced"
+      ],
+      "icon": "AE",
+      "baseValue": 5200,
+      "weightKg": 18,
+      "isRaw": false,
+      "stackSize": 3,
+      "description": "Turbine engine component",
+      "icon_path": "Assets/icons/items/t5/aircraft_engine_part.svg"
+    },
+    {
+      "id": "satellite-component",
+      "name": "Satellite Component",
+      "tier": 5,
+      "tags": [
+        "electronics",
+        "space",
+        "advanced"
+      ],
+      "icon": "SC",
+      "baseValue": 4800,
+      "weightKg": 5,
+      "isRaw": false,
+      "stackSize": 5,
+      "description": "Satellite systems component",
+      "icon_path": "Assets/icons/items/t5/satellite_component.svg"
+    },
+    {
+      "id": "nuclear-reactor-core",
+      "name": "Nuclear Reactor Core",
+      "tier": 5,
+      "tags": [
+        "energy",
+        "nuclear",
+        "advanced"
+      ],
+      "icon": "NR",
+      "baseValue": 12000,
+      "weightKg": 25,
+      "isRaw": false,
+      "stackSize": 2,
+      "description": "Nuclear reactor core assembly",
+      "icon_path": "Assets/icons/items/t5/nuclear_reactor_core.svg"
+    },
+    {
+      "id": "luxury-watch",
+      "name": "Luxury Watch",
+      "tier": 5,
+      "tags": [
+        "luxury",
+        "precision"
+      ],
+      "icon": "LW",
+      "baseValue": 2800,
+      "weightKg": 0.2,
+      "isRaw": false,
+      "stackSize": 20,
+      "description": "Precision luxury timepiece",
+      "icon_path": "Assets/icons/items/t5/luxury_watch.svg"
+    },
+    {
+      "id": "fine-dining-set",
+      "name": "Fine Dining Set",
+      "tier": 5,
+      "tags": [
+        "food",
+        "luxury",
+        "gourmet"
+      ],
+      "icon": "FD",
+      "baseValue": 950,
+      "weightKg": 3,
+      "isRaw": false,
+      "stackSize": 20,
+      "description": "Premium fine dining service set",
+      "icon_path": "Assets/icons/items/t5/fine_dining_set.svg"
+    },
+    {
+      "id": "surgical-robot",
+      "name": "Surgical Robot",
+      "tier": 5,
+      "tags": [
+        "medical",
+        "electronics",
+        "advanced",
+        "luxury"
+      ],
+      "icon": "SR",
+      "baseValue": 8500,
+      "weightKg": 12,
+      "isRaw": false,
+      "stackSize": 3,
+      "description": "Precision surgical robotic system",
+      "icon_path": "Assets/icons/items/t5/surgical_robot.svg"
+    },
+    {
+      "id": "research-lab-kit",
+      "name": "Research Lab Kit",
+      "tier": 5,
+      "tags": [
+        "medical",
+        "chemical",
+        "advanced"
+      ],
+      "icon": "RL",
+      "baseValue": 3200,
+      "weightKg": 8,
+      "isRaw": false,
+      "stackSize": 5,
+      "description": "Complete research laboratory kit",
+      "icon_path": "Assets/icons/items/t5/research_lab_kit.svg"
+    },
+    {
+      "id": "airline-meal-kit",
+      "name": "Airline Meal Kit",
+      "tier": 4,
+      "tags": [
+        "food",
+        "aviation",
+        "quality"
+      ],
+      "icon": "AK",
+      "baseValue": 350,
+      "weightKg": 2.5,
+      "isRaw": false,
+      "stackSize": 30,
+      "description": "Complete airline meal tray with compartments",
+      "icon_path": "Assets/icons/items/t4/airline_meal_kit.svg"
+    },
+    {
+      "id": "luxury-chocolate-box",
+      "name": "Luxury Chocolate Box",
+      "tier": 4,
+      "tags": [
+        "food",
+        "sweet",
+        "luxury"
+      ],
+      "icon": "LB",
+      "baseValue": 280,
+      "weightKg": 1,
+      "isRaw": false,
+      "stackSize": 40,
+      "description": "Premium chocolate assortment in gift box",
+      "icon_path": "Assets/icons/items/t4/luxury_chocolate_box.svg"
+    },
+    {
+      "id": "artisan-cheese-platter",
+      "name": "Artisan Cheese Platter",
+      "tier": 4,
+      "tags": [
+        "food",
+        "dairy",
+        "luxury"
+      ],
+      "icon": "AP",
+      "baseValue": 320,
+      "weightKg": 2,
+      "isRaw": false,
+      "stackSize": 30,
+      "description": "Selection of aged artisan cheeses on board",
+      "icon_path": "Assets/icons/items/t4/artisan_cheese_platter.svg"
+    },
+    {
+      "id": "first-class-catering",
+      "name": "First Class Catering",
+      "tier": 5,
+      "tags": [
+        "food",
+        "aviation",
+        "luxury"
+      ],
+      "icon": "FC",
+      "baseValue": 1200,
+      "weightKg": 5,
+      "isRaw": false,
+      "stackSize": 20,
+      "description": "Full first-class catering service cart",
+      "icon_path": "Assets/icons/items/t5/first_class_catering.svg"
+    },
+    {
+      "id": "royal-banquet-set",
+      "name": "Royal Banquet Set",
+      "tier": 5,
+      "tags": [
+        "food",
+        "luxury",
+        "gourmet",
+        "rare"
+      ],
+      "icon": "RB",
+      "baseValue": 1800,
+      "weightKg": 8,
+      "isRaw": false,
+      "stackSize": 10,
+      "description": "Grand royal banquet under silver dome",
+      "icon_path": "Assets/icons/items/t5/royal_banquet_set.svg"
     },
     {
       "id": "worker",

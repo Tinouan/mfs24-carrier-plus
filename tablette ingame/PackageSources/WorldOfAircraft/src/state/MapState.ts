@@ -44,6 +44,16 @@ export interface MapStateType {
   // Nearby airports
   nearbyAirportsStatus: Subject<LoadingStatus>;
   nearbyAirportsError: Subject<string | null>;
+
+  // NPC factory tooltip (shown on map click)
+  npcFactoryTooltip: Subject<{
+    name: string;
+    itemName: string;
+    stockCurrent: number;
+    stockMax: number;
+    x: number;
+    y: number;
+  } | null>;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -84,6 +94,16 @@ export const mapState: MapStateType = {
   // Nearby airports
   nearbyAirportsStatus: Subject.create<LoadingStatus>("idle"),
   nearbyAirportsError: Subject.create<string | null>(null),
+
+  // NPC factory tooltip
+  npcFactoryTooltip: Subject.create<{
+    name: string;
+    itemName: string;
+    stockCurrent: number;
+    stockMax: number;
+    x: number;
+    y: number;
+  } | null>(null),
 };
 
 // ═══════════════════════════════════════════════════════════

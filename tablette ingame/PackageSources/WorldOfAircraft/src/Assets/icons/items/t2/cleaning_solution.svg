@@ -1,0 +1,11 @@
+<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- Cleaning Solution - spray bottle -->
+        <rect x="16" y="20" width="16" height="20" rx="3" fill="#3b82f6"/>
+        <rect x="16" y="20" width="16" height="20" rx="3" stroke="#2563eb" stroke-width="1"/>
+        <rect x="20" y="12" width="8" height="10" rx="2" fill="#60a5fa"/>
+        <path d="M28 16 L34 12" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="34" cy="12" r="2" fill="#93c5fd" opacity="0.5"/>
+        <circle cx="36" cy="10" r="1" fill="#93c5fd" opacity="0.3"/>
+        <rect x="18" y="28" width="12" height="6" rx="1" fill="#1e3a5f"/>
+        <text x="24" y="33" text-anchor="middle" fill="#93c5fd" font-size="5">CLN</text>
+      </svg>

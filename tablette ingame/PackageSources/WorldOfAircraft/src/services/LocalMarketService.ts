@@ -189,11 +189,47 @@ class LocalMarketServiceClass {
           item_name: item?.name || inv.item_code,
           qty: inv.quantity,
           weight_kg: item?.weightKg || 0,
+          owner_type: (inv.owner_type as "player" | "company") || "company",
           source: inv.source,
           contract_id: inv.contract_id,
         };
       }),
     }));
+
+    // Add workers/engineers from workers table as personnel items
+    const allWorkers = factoryState.workers.get();
+    const workersAtAirport = allWorkers.filter(
+      w => w.airport_ident === icao.toUpperCase() && w.status === "available"
+    );
+    if (workersAtAirport.length > 0) {
+      const personnelByType = new Map<string, number>();
+      for (const w of workersAtAirport) {
+        const key = w.item_id; // "worker" or "engineer"
+        personnelByType.set(key, (personnelByType.get(key) || 0) + 1);
+      }
+      const personnelItems = Array.from(personnelByType.entries()).map(([itemId, qty]) => {
+        const item = items.find((i) => i.id === itemId || i.code === itemId);
+        return {
+          item_id: itemId,
+          item_name: item?.name || itemId,
+          qty,
+          weight_kg: item?.weightKg || 80,
+          owner_type: "company" as const,
+          source: "personnel",
+        };
+      });
+      // Add to the first container or create a personnel container
+      if (containers.length > 0) {
+        containers[0].items.push(...personnelItems);
+      } else {
+        containers.push({
+          id: icao.toUpperCase(),
+          name: `Storage ${icao.toUpperCase()}`,
+          type: "warehouse",
+          items: personnelItems,
+        });
+      }
+    }
 
     return { containers };
   }

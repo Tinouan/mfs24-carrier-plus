@@ -86,7 +86,9 @@
       "Bash(npm install:*)",
       "Bash(cd:*)",
       "Bash(node extract-icons.js:*)",
-      "Bash(node update-items.js:*)"
+      "Bash(node update-items.js:*)",
+      "Bash(node extract-svgs.js:*)",
+      "Bash(node:*)"
     ]
   }
 }

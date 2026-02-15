@@ -1,0 +1,9 @@
+<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- Wire Cable - coiled copper wire -->
+        <path d="M12 14 C18 8, 30 8, 36 14 C42 20, 42 28, 36 34 C30 40, 18 40, 12 34" stroke="#d97706" stroke-width="3" fill="none"/>
+        <path d="M16 18 C20 14, 28 14, 32 18 C36 22, 36 26, 32 30 C28 34, 20 34, 16 30" stroke="#f59e0b" stroke-width="2" fill="none"/>
+        <circle cx="12" cy="14" r="2" fill="#d97706"/>
+        <circle cx="12" cy="34" r="2" fill="#d97706"/>
+        <rect x="10" y="12" width="4" height="4" rx="1" fill="#475569"/>
+        <rect x="10" y="32" width="4" height="4" rx="1" fill="#475569"/>
+      </svg>

@@ -1395,6 +1395,1358 @@
           "quantity": 1
         }
       ]
+    },
+    {
+      "id": "airline-meal-kit",
+      "name": "Airline Meal Kit",
+      "tier": 4,
+      "resultItemId": "airline-meal-kit",
+      "resultQuantity": 3,
+      "productionTimeHours": 8,
+      "baseWorkers": 10,
+      "description": "Complete airline meal tray",
+      "ingredients": [
+        {
+          "itemId": "gourmet-meal",
+          "quantity": 1
+        },
+        {
+          "itemId": "quality-bread",
+          "quantity": 1
+        },
+        {
+          "itemId": "fruit-juice",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "luxury-chocolate-box",
+      "name": "Luxury Chocolate Box",
+      "tier": 4,
+      "resultItemId": "luxury-chocolate-box",
+      "resultQuantity": 4,
+      "productionTimeHours": 6,
+      "baseWorkers": 10,
+      "description": "Premium chocolate assortment in gift box",
+      "ingredients": [
+        {
+          "itemId": "premium-chocolate",
+          "quantity": 2
+        },
+        {
+          "itemId": "vanilla-extract",
+          "quantity": 1
+        },
+        {
+          "itemId": "dried-fruit",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "artisan-cheese-platter",
+      "name": "Artisan Cheese Platter",
+      "tier": 4,
+      "resultItemId": "artisan-cheese-platter",
+      "resultQuantity": 3,
+      "productionTimeHours": 10,
+      "baseWorkers": 10,
+      "description": "Selection of aged artisan cheeses",
+      "ingredients": [
+        {
+          "itemId": "aged-cheese",
+          "quantity": 2
+        },
+        {
+          "itemId": "honey-bread",
+          "quantity": 1
+        },
+        {
+          "itemId": "fruit-jam",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "first-class-catering",
+      "name": "First Class Catering",
+      "tier": 5,
+      "resultItemId": "first-class-catering",
+      "resultQuantity": 2,
+      "productionTimeHours": 16,
+      "baseWorkers": 10,
+      "description": "Full first-class catering service",
+      "ingredients": [
+        {
+          "itemId": "airline-meal-kit",
+          "quantity": 1
+        },
+        {
+          "itemId": "luxury-chocolate-box",
+          "quantity": 1
+        },
+        {
+          "itemId": "artisan-cheese-platter",
+          "quantity": 1
+        },
+        {
+          "itemId": "vanilla-extract",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "royal-banquet-set",
+      "name": "Royal Banquet Set",
+      "tier": 5,
+      "resultItemId": "royal-banquet-set",
+      "resultQuantity": 1,
+      "productionTimeHours": 24,
+      "baseWorkers": 10,
+      "description": "Grand royal banquet under silver dome",
+      "ingredients": [
+        {
+          "itemId": "first-class-catering",
+          "quantity": 1
+        },
+        {
+          "itemId": "premium-chocolate",
+          "quantity": 1
+        },
+        {
+          "itemId": "aged-cheese",
+          "quantity": 1
+        },
+        {
+          "itemId": "gourmet-meal",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "steel-beam",
+      "name": "Steel Beam",
+      "tier": 2,
+      "resultItemId": "steel-beam",
+      "resultQuantity": 3,
+      "productionTimeHours": 5,
+      "baseWorkers": 10,
+      "description": "Heavy structural steel beam",
+      "ingredients": [
+        {
+          "itemId": "reinforced-steel",
+          "quantity": 3
+        },
+        {
+          "itemId": "iron-ore",
+          "quantity": 2
+        }
+      ]
+    },
+    {
+      "id": "copper-wire",
+      "name": "Copper Wire",
+      "tier": 2,
+      "resultItemId": "copper-wire",
+      "resultQuantity": 10,
+      "productionTimeHours": 2,
+      "baseWorkers": 10,
+      "description": "Copper wire for electronics",
+      "ingredients": [
+        {
+          "itemId": "copper-ingot",
+          "quantity": 2
+        },
+        {
+          "itemId": "rubber-sheets",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "fiberglass",
+      "name": "Fiberglass",
+      "tier": 2,
+      "resultItemId": "fiberglass",
+      "resultQuantity": 6,
+      "productionTimeHours": 4,
+      "baseWorkers": 10,
+      "description": "Composite fiberglass sheets",
+      "ingredients": [
+        {
+          "itemId": "glass",
+          "quantity": 3
+        },
+        {
+          "itemId": "plastic-sheets",
+          "quantity": 2
+        }
+      ]
+    },
+    {
+      "id": "plywood",
+      "name": "Plywood",
+      "tier": 2,
+      "resultItemId": "plywood",
+      "resultQuantity": 8,
+      "productionTimeHours": 2,
+      "baseWorkers": 10,
+      "description": "Layered plywood sheets",
+      "ingredients": [
+        {
+          "itemId": "planks",
+          "quantity": 3
+        },
+        {
+          "itemId": "adhesive",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "ceramic-tiles",
+      "name": "Ceramic Tiles",
+      "tier": 2,
+      "resultItemId": "ceramic-tiles",
+      "resultQuantity": 10,
+      "productionTimeHours": 3,
+      "baseWorkers": 10,
+      "description": "Fired ceramic tiles",
+      "ingredients": [
+        {
+          "itemId": "clay",
+          "quantity": 3
+        },
+        {
+          "itemId": "sand",
+          "quantity": 2
+        }
+      ]
+    },
+    {
+      "id": "rubber-gasket",
+      "name": "Rubber Gasket",
+      "tier": 2,
+      "resultItemId": "rubber-gasket",
+      "resultQuantity": 12,
+      "productionTimeHours": 2,
+      "baseWorkers": 10,
+      "description": "Industrial rubber gasket",
+      "ingredients": [
+        {
+          "itemId": "rubber-sheets",
+          "quantity": 2
+        },
+        {
+          "itemId": "sulfuric-acid",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "steel-nails",
+      "name": "Steel Nails",
+      "tier": 2,
+      "resultItemId": "steel-nails",
+      "resultQuantity": 20,
+      "productionTimeHours": 1.5,
+      "baseWorkers": 10,
+      "description": "Steel nails for construction",
+      "ingredients": [
+        {
+          "itemId": "steel-ingot",
+          "quantity": 2
+        },
+        {
+          "itemId": "coal",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "canned-fish",
+      "name": "Canned Fish",
+      "tier": 2,
+      "resultItemId": "canned-fish",
+      "resultQuantity": 8,
+      "productionTimeHours": 3,
+      "baseWorkers": 10,
+      "description": "Preserved canned fish",
+      "ingredients": [
+        {
+          "itemId": "smoked-fish",
+          "quantity": 2
+        },
+        {
+          "itemId": "steel-ingot",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "spiced-meat",
+      "name": "Spiced Meat",
+      "tier": 2,
+      "resultItemId": "spiced-meat",
+      "resultQuantity": 6,
+      "productionTimeHours": 4,
+      "baseWorkers": 10,
+      "description": "Seasoned spiced meat",
+      "ingredients": [
+        {
+          "itemId": "salted-meat",
+          "quantity": 2
+        },
+        {
+          "itemId": "raw-pepper",
+          "quantity": 2
+        }
+      ]
+    },
+    {
+      "id": "fruit-juice",
+      "name": "Fruit Juice",
+      "tier": 2,
+      "resultItemId": "fruit-juice",
+      "resultQuantity": 12,
+      "productionTimeHours": 1.5,
+      "baseWorkers": 10,
+      "description": "Fresh fruit juice",
+      "ingredients": [
+        {
+          "itemId": "raw-fruits",
+          "quantity": 3
+        },
+        {
+          "itemId": "water",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "cheese-wheel",
+      "name": "Cheese Wheel",
+      "tier": 2,
+      "resultItemId": "cheese-wheel",
+      "resultQuantity": 3,
+      "productionTimeHours": 10,
+      "baseWorkers": 10,
+      "description": "Full cheese wheel",
+      "ingredients": [
+        {
+          "itemId": "cheese",
+          "quantity": 4
+        },
+        {
+          "itemId": "raw-salt",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "chili-sauce",
+      "name": "Chili Sauce",
+      "tier": 2,
+      "resultItemId": "chili-sauce",
+      "resultQuantity": 10,
+      "productionTimeHours": 2,
+      "baseWorkers": 10,
+      "description": "Hot chili sauce",
+      "ingredients": [
+        {
+          "itemId": "raw-chili",
+          "quantity": 3
+        },
+        {
+          "itemId": "raw-salt",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "vanilla-cake",
+      "name": "Vanilla Cake",
+      "tier": 2,
+      "resultItemId": "vanilla-cake",
+      "resultQuantity": 4,
+      "productionTimeHours": 4,
+      "baseWorkers": 10,
+      "description": "Luxury vanilla cake",
+      "ingredients": [
+        {
+          "itemId": "pastry",
+          "quantity": 2
+        },
+        {
+          "itemId": "vanilla-extract",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "lubricant",
+      "name": "Lubricant",
+      "tier": 2,
+      "resultItemId": "lubricant",
+      "resultQuantity": 6,
+      "productionTimeHours": 3,
+      "baseWorkers": 10,
+      "description": "Industrial lubricant oil",
+      "ingredients": [
+        {
+          "itemId": "crude-oil",
+          "quantity": 2
+        },
+        {
+          "itemId": "sulfuric-acid",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "graphite-rod",
+      "name": "Graphite Rod",
+      "tier": 2,
+      "resultItemId": "graphite-rod",
+      "resultQuantity": 8,
+      "productionTimeHours": 3,
+      "baseWorkers": 10,
+      "description": "Processed graphite rods",
+      "ingredients": [
+        {
+          "itemId": "graphite",
+          "quantity": 3
+        },
+        {
+          "itemId": "coal",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "dye",
+      "name": "Dye",
+      "tier": 2,
+      "resultItemId": "dye",
+      "resultQuantity": 10,
+      "productionTimeHours": 2,
+      "baseWorkers": 10,
+      "description": "Colored textile dye",
+      "ingredients": [
+        {
+          "itemId": "raw-cocoa",
+          "quantity": 2
+        },
+        {
+          "itemId": "sulfuric-acid",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "battery-cell",
+      "name": "Battery Cell",
+      "tier": 2,
+      "resultItemId": "battery-cell",
+      "resultQuantity": 3,
+      "productionTimeHours": 6,
+      "baseWorkers": 10,
+      "description": "Rechargeable battery cell",
+      "ingredients": [
+        {
+          "itemId": "copper-ingot",
+          "quantity": 2
+        },
+        {
+          "itemId": "sulfuric-acid",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "firebricks",
+      "name": "Firebricks",
+      "tier": 2,
+      "resultItemId": "firebricks",
+      "resultQuantity": 6,
+      "productionTimeHours": 4,
+      "baseWorkers": 10,
+      "description": "Heat-resistant firebricks",
+      "ingredients": [
+        {
+          "itemId": "bricks",
+          "quantity": 3
+        },
+        {
+          "itemId": "charcoal",
+          "quantity": 2
+        }
+      ]
+    },
+    {
+      "id": "asphalt",
+      "name": "Asphalt",
+      "tier": 2,
+      "resultItemId": "asphalt",
+      "resultQuantity": 10,
+      "productionTimeHours": 2,
+      "baseWorkers": 10,
+      "description": "Road asphalt",
+      "ingredients": [
+        {
+          "itemId": "crude-oil",
+          "quantity": 3
+        },
+        {
+          "itemId": "sand",
+          "quantity": 2
+        }
+      ]
+    },
+    {
+      "id": "tempered-glass",
+      "name": "Tempered Glass",
+      "tier": 2,
+      "resultItemId": "tempered-glass",
+      "resultQuantity": 5,
+      "productionTimeHours": 3,
+      "baseWorkers": 10,
+      "description": "Heat-tempered safety glass",
+      "ingredients": [
+        {
+          "itemId": "glass",
+          "quantity": 3
+        },
+        {
+          "itemId": "compressed-gas",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "structural-panel",
+      "name": "Structural Panel",
+      "tier": 3,
+      "resultItemId": "structural-panel",
+      "resultQuantity": 4,
+      "productionTimeHours": 6,
+      "baseWorkers": 10,
+      "description": "Reinforced structural panel",
+      "ingredients": [
+        {
+          "itemId": "steel-beam",
+          "quantity": 2
+        },
+        {
+          "itemId": "insulation",
+          "quantity": 2
+        },
+        {
+          "itemId": "adhesive",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "insulated-wall",
+      "name": "Insulated Wall",
+      "tier": 3,
+      "resultItemId": "insulated-wall",
+      "resultQuantity": 4,
+      "productionTimeHours": 5,
+      "baseWorkers": 10,
+      "description": "Thermally insulated wall panel",
+      "ingredients": [
+        {
+          "itemId": "plywood",
+          "quantity": 2
+        },
+        {
+          "itemId": "insulation",
+          "quantity": 2
+        },
+        {
+          "itemId": "paint",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "armored-plate",
+      "name": "Armored Plate",
+      "tier": 3,
+      "resultItemId": "armored-plate",
+      "resultQuantity": 2,
+      "productionTimeHours": 8,
+      "baseWorkers": 10,
+      "description": "Armor-grade composite plate",
+      "ingredients": [
+        {
+          "itemId": "titanium-plates",
+          "quantity": 2
+        },
+        {
+          "itemId": "reinforced-steel",
+          "quantity": 1
+        },
+        {
+          "itemId": "carbon-fiber",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "hydraulic-cylinder",
+      "name": "Hydraulic Cylinder",
+      "tier": 3,
+      "resultItemId": "hydraulic-cylinder",
+      "resultQuantity": 3,
+      "productionTimeHours": 6,
+      "baseWorkers": 10,
+      "description": "Industrial hydraulic cylinder",
+      "ingredients": [
+        {
+          "itemId": "steel-pipes",
+          "quantity": 2
+        },
+        {
+          "itemId": "lubricant",
+          "quantity": 1
+        },
+        {
+          "itemId": "rubber-gasket",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "electric-motor",
+      "name": "Electric Motor",
+      "tier": 3,
+      "resultItemId": "electric-motor",
+      "resultQuantity": 2,
+      "productionTimeHours": 8,
+      "baseWorkers": 10,
+      "description": "High-torque electric motor",
+      "ingredients": [
+        {
+          "itemId": "copper-wire",
+          "quantity": 2
+        },
+        {
+          "itemId": "steel-ingot",
+          "quantity": 1
+        },
+        {
+          "itemId": "rare-earth-metals",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "sensor-module",
+      "name": "Sensor Module",
+      "tier": 3,
+      "resultItemId": "sensor-module",
+      "resultQuantity": 3,
+      "productionTimeHours": 10,
+      "baseWorkers": 10,
+      "description": "Multi-sensor electronic module",
+      "ingredients": [
+        {
+          "itemId": "circuit-board",
+          "quantity": 1
+        },
+        {
+          "itemId": "silicon-wafers",
+          "quantity": 1
+        },
+        {
+          "itemId": "copper-wire",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "power-supply",
+      "name": "Power Supply",
+      "tier": 3,
+      "resultItemId": "power-supply",
+      "resultQuantity": 4,
+      "productionTimeHours": 5,
+      "baseWorkers": 10,
+      "description": "Regulated power supply unit",
+      "ingredients": [
+        {
+          "itemId": "battery-cell",
+          "quantity": 2
+        },
+        {
+          "itemId": "copper-wire",
+          "quantity": 1
+        },
+        {
+          "itemId": "circuit-board",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "led-panel",
+      "name": "LED Panel",
+      "tier": 3,
+      "resultItemId": "led-panel",
+      "resultQuantity": 6,
+      "productionTimeHours": 4,
+      "baseWorkers": 10,
+      "description": "High-brightness LED panel",
+      "ingredients": [
+        {
+          "itemId": "circuit-board",
+          "quantity": 1
+        },
+        {
+          "itemId": "glass",
+          "quantity": 1
+        },
+        {
+          "itemId": "rare-earth-metals",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "premium-chocolate",
+      "name": "Premium Chocolate",
+      "tier": 3,
+      "resultItemId": "premium-chocolate",
+      "resultQuantity": 5,
+      "productionTimeHours": 6,
+      "baseWorkers": 10,
+      "description": "Premium artisan chocolate",
+      "ingredients": [
+        {
+          "itemId": "chocolate-bar",
+          "quantity": 2
+        },
+        {
+          "itemId": "vanilla-extract",
+          "quantity": 1
+        },
+        {
+          "itemId": "butter",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "gourmet-meal",
+      "name": "Gourmet Meal",
+      "tier": 3,
+      "resultItemId": "gourmet-meal",
+      "resultQuantity": 4,
+      "productionTimeHours": 4,
+      "baseWorkers": 10,
+      "description": "Gourmet plated meal",
+      "ingredients": [
+        {
+          "itemId": "spiced-meat",
+          "quantity": 1
+        },
+        {
+          "itemId": "quality-bread",
+          "quantity": 1
+        },
+        {
+          "itemId": "vegetable-soup",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "aged-cheese",
+      "name": "Aged Cheese",
+      "tier": 3,
+      "resultItemId": "aged-cheese",
+      "resultQuantity": 3,
+      "productionTimeHours": 12,
+      "baseWorkers": 10,
+      "description": "Long-aged artisan cheese",
+      "ingredients": [
+        {
+          "itemId": "cheese-wheel",
+          "quantity": 3
+        },
+        {
+          "itemId": "raw-salt",
+          "quantity": 1
+        },
+        {
+          "itemId": "raw-wood",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "carbon-fiber",
+      "name": "Carbon Fiber",
+      "tier": 3,
+      "resultItemId": "carbon-fiber",
+      "resultQuantity": 3,
+      "productionTimeHours": 8,
+      "baseWorkers": 10,
+      "description": "Lightweight carbon fiber sheets",
+      "ingredients": [
+        {
+          "itemId": "graphite-rod",
+          "quantity": 3
+        },
+        {
+          "itemId": "plastic-sheets",
+          "quantity": 2
+        },
+        {
+          "itemId": "sulfuric-acid",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "industrial-solvent",
+      "name": "Industrial Solvent",
+      "tier": 3,
+      "resultItemId": "industrial-solvent",
+      "resultQuantity": 6,
+      "productionTimeHours": 3,
+      "baseWorkers": 10,
+      "description": "Industrial cleaning solvent",
+      "ingredients": [
+        {
+          "itemId": "sulfuric-acid",
+          "quantity": 2
+        },
+        {
+          "itemId": "diesel",
+          "quantity": 1
+        },
+        {
+          "itemId": "water",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "turbine-blade",
+      "name": "Turbine Blade",
+      "tier": 3,
+      "resultItemId": "turbine-blade",
+      "resultQuantity": 2,
+      "productionTimeHours": 12,
+      "baseWorkers": 10,
+      "description": "Precision turbine blade",
+      "ingredients": [
+        {
+          "itemId": "titanium-plates",
+          "quantity": 2
+        },
+        {
+          "itemId": "reinforced-steel",
+          "quantity": 1
+        },
+        {
+          "itemId": "graphite-rod",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "advanced-battery",
+      "name": "Advanced Battery",
+      "tier": 3,
+      "resultItemId": "advanced-battery",
+      "resultQuantity": 2,
+      "productionTimeHours": 10,
+      "baseWorkers": 10,
+      "description": "High-capacity advanced battery",
+      "ingredients": [
+        {
+          "itemId": "battery-cell",
+          "quantity": 3
+        },
+        {
+          "itemId": "rare-earth-metals",
+          "quantity": 1
+        },
+        {
+          "itemId": "graphite-rod",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "avionics-unit",
+      "name": "Avionics Unit",
+      "tier": 4,
+      "resultItemId": "avionics-unit",
+      "resultQuantity": 1,
+      "productionTimeHours": 16,
+      "baseWorkers": 10,
+      "description": "Complete avionics electronics unit",
+      "ingredients": [
+        {
+          "itemId": "sensor-module",
+          "quantity": 2
+        },
+        {
+          "itemId": "circuit-board",
+          "quantity": 1
+        },
+        {
+          "itemId": "power-supply",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "landing-gear-part",
+      "name": "Landing Gear Part",
+      "tier": 4,
+      "resultItemId": "landing-gear-part",
+      "resultQuantity": 2,
+      "productionTimeHours": 12,
+      "baseWorkers": 10,
+      "description": "Aircraft landing gear component",
+      "ingredients": [
+        {
+          "itemId": "hydraulic-cylinder",
+          "quantity": 2
+        },
+        {
+          "itemId": "reinforced-steel",
+          "quantity": 2
+        },
+        {
+          "itemId": "rubber-gasket",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "navigation-system",
+      "name": "Navigation System",
+      "tier": 4,
+      "resultItemId": "navigation-system",
+      "resultQuantity": 1,
+      "productionTimeHours": 14,
+      "baseWorkers": 10,
+      "description": "Aircraft navigation system",
+      "ingredients": [
+        {
+          "itemId": "sensor-module",
+          "quantity": 1
+        },
+        {
+          "itemId": "led-panel",
+          "quantity": 1
+        },
+        {
+          "itemId": "circuit-board",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "solar-panel",
+      "name": "Solar Panel",
+      "tier": 4,
+      "resultItemId": "solar-panel",
+      "resultQuantity": 2,
+      "productionTimeHours": 10,
+      "baseWorkers": 10,
+      "description": "Photovoltaic solar panel",
+      "ingredients": [
+        {
+          "itemId": "silicon-wafers",
+          "quantity": 3
+        },
+        {
+          "itemId": "aluminum-frame",
+          "quantity": 1
+        },
+        {
+          "itemId": "wire-cable",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "industrial-robot-arm",
+      "name": "Industrial Robot Arm",
+      "tier": 4,
+      "resultItemId": "industrial-robot-arm",
+      "resultQuantity": 1,
+      "productionTimeHours": 20,
+      "baseWorkers": 10,
+      "description": "Precision robotic arm",
+      "ingredients": [
+        {
+          "itemId": "electric-motor",
+          "quantity": 2
+        },
+        {
+          "itemId": "sensor-module",
+          "quantity": 1
+        },
+        {
+          "itemId": "reinforced-steel",
+          "quantity": 2
+        }
+      ]
+    },
+    {
+      "id": "generator",
+      "name": "Generator",
+      "tier": 4,
+      "resultItemId": "generator",
+      "resultQuantity": 1,
+      "productionTimeHours": 14,
+      "baseWorkers": 10,
+      "description": "Electric power generator",
+      "ingredients": [
+        {
+          "itemId": "electric-motor",
+          "quantity": 2
+        },
+        {
+          "itemId": "copper-wire",
+          "quantity": 2
+        },
+        {
+          "itemId": "turbine-blade",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "satellite-dish",
+      "name": "Satellite Dish",
+      "tier": 4,
+      "resultItemId": "satellite-dish",
+      "resultQuantity": 2,
+      "productionTimeHours": 8,
+      "baseWorkers": 10,
+      "description": "Satellite communication dish",
+      "ingredients": [
+        {
+          "itemId": "aluminum-frame",
+          "quantity": 2
+        },
+        {
+          "itemId": "sensor-module",
+          "quantity": 1
+        },
+        {
+          "itemId": "wire-cable",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "medical-scanner",
+      "name": "Medical Scanner",
+      "tier": 4,
+      "resultItemId": "medical-scanner",
+      "resultQuantity": 1,
+      "productionTimeHours": 24,
+      "baseWorkers": 10,
+      "description": "Medical imaging scanner",
+      "ingredients": [
+        {
+          "itemId": "sensor-module",
+          "quantity": 1
+        },
+        {
+          "itemId": "led-panel",
+          "quantity": 1
+        },
+        {
+          "itemId": "circuit-board",
+          "quantity": 2
+        }
+      ]
+    },
+    {
+      "id": "prefab-module",
+      "name": "Prefab Module",
+      "tier": 4,
+      "resultItemId": "prefab-module",
+      "resultQuantity": 2,
+      "productionTimeHours": 8,
+      "baseWorkers": 10,
+      "description": "Prefabricated building module",
+      "ingredients": [
+        {
+          "itemId": "structural-panel",
+          "quantity": 2
+        },
+        {
+          "itemId": "insulated-wall",
+          "quantity": 2
+        },
+        {
+          "itemId": "window-panes",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "climate-control",
+      "name": "Climate Control Unit",
+      "tier": 4,
+      "resultItemId": "climate-control",
+      "resultQuantity": 2,
+      "productionTimeHours": 10,
+      "baseWorkers": 10,
+      "description": "HVAC climate control unit",
+      "ingredients": [
+        {
+          "itemId": "electric-motor",
+          "quantity": 1
+        },
+        {
+          "itemId": "copper-wire",
+          "quantity": 2
+        },
+        {
+          "itemId": "compressed-gas",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "flight-computer",
+      "name": "Flight Computer",
+      "tier": 5,
+      "resultItemId": "flight-computer",
+      "resultQuantity": 1,
+      "productionTimeHours": 24,
+      "baseWorkers": 10,
+      "description": "Advanced flight management computer",
+      "ingredients": [
+        {
+          "itemId": "avionics-unit",
+          "quantity": 1
+        },
+        {
+          "itemId": "navigation-system",
+          "quantity": 1
+        },
+        {
+          "itemId": "advanced-battery",
+          "quantity": 1
+        },
+        {
+          "itemId": "sensor-module",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "aircraft-engine-part",
+      "name": "Aircraft Engine Part",
+      "tier": 5,
+      "resultItemId": "aircraft-engine-part",
+      "resultQuantity": 1,
+      "productionTimeHours": 36,
+      "baseWorkers": 10,
+      "description": "Turbine engine component",
+      "ingredients": [
+        {
+          "itemId": "turbine-blade",
+          "quantity": 2
+        },
+        {
+          "itemId": "titanium-plates",
+          "quantity": 1
+        },
+        {
+          "itemId": "hydraulic-cylinder",
+          "quantity": 1
+        },
+        {
+          "itemId": "lubricant",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "satellite-component",
+      "name": "Satellite Component",
+      "tier": 5,
+      "resultItemId": "satellite-component",
+      "resultQuantity": 1,
+      "productionTimeHours": 30,
+      "baseWorkers": 10,
+      "description": "Satellite systems component",
+      "ingredients": [
+        {
+          "itemId": "navigation-system",
+          "quantity": 1
+        },
+        {
+          "itemId": "solar-panel",
+          "quantity": 1
+        },
+        {
+          "itemId": "carbon-fiber",
+          "quantity": 1
+        },
+        {
+          "itemId": "satellite-dish",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "nuclear-reactor-core",
+      "name": "Nuclear Reactor Core",
+      "tier": 5,
+      "resultItemId": "nuclear-reactor-core",
+      "resultQuantity": 1,
+      "productionTimeHours": 48,
+      "baseWorkers": 10,
+      "description": "Nuclear reactor core assembly",
+      "ingredients": [
+        {
+          "itemId": "nuclear-fuel-rod",
+          "quantity": 3
+        },
+        {
+          "itemId": "armored-plate",
+          "quantity": 2
+        },
+        {
+          "itemId": "hydraulic-cylinder",
+          "quantity": 1
+        },
+        {
+          "itemId": "sensor-module",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "luxury-watch",
+      "name": "Luxury Watch",
+      "tier": 5,
+      "resultItemId": "luxury-watch",
+      "resultQuantity": 2,
+      "productionTimeHours": 16,
+      "baseWorkers": 10,
+      "description": "Precision luxury timepiece",
+      "ingredients": [
+        {
+          "itemId": "titanium-ingot",
+          "quantity": 1
+        },
+        {
+          "itemId": "silicon-wafers",
+          "quantity": 1
+        },
+        {
+          "itemId": "rare-earth-metals",
+          "quantity": 1
+        },
+        {
+          "itemId": "tempered-glass",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "fine-dining-set",
+      "name": "Fine Dining Set",
+      "tier": 5,
+      "resultItemId": "fine-dining-set",
+      "resultQuantity": 3,
+      "productionTimeHours": 8,
+      "baseWorkers": 10,
+      "description": "Premium fine dining service set",
+      "ingredients": [
+        {
+          "itemId": "premium-chocolate",
+          "quantity": 1
+        },
+        {
+          "itemId": "aged-cheese",
+          "quantity": 1
+        },
+        {
+          "itemId": "gourmet-meal",
+          "quantity": 1
+        },
+        {
+          "itemId": "vanilla-extract",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "surgical-robot",
+      "name": "Surgical Robot",
+      "tier": 5,
+      "resultItemId": "surgical-robot",
+      "resultQuantity": 1,
+      "productionTimeHours": 40,
+      "baseWorkers": 10,
+      "description": "Precision surgical robotic system",
+      "ingredients": [
+        {
+          "itemId": "industrial-robot-arm",
+          "quantity": 1
+        },
+        {
+          "itemId": "medical-scanner",
+          "quantity": 1
+        },
+        {
+          "itemId": "sensor-module",
+          "quantity": 1
+        },
+        {
+          "itemId": "power-supply",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": "research-lab-kit",
+      "name": "Research Lab Kit",
+      "tier": 5,
+      "resultItemId": "research-lab-kit",
+      "resultQuantity": 1,
+      "productionTimeHours": 20,
+      "baseWorkers": 10,
+      "description": "Complete research laboratory kit",
+      "ingredients": [
+        {
+          "itemId": "medical-scanner",
+          "quantity": 1
+        },
+        {
+          "itemId": "industrial-solvent",
+          "quantity": 1
+        },
+        {
+          "itemId": "circuit-board",
+          "quantity": 1
+        },
+        {
+          "itemId": "tempered-glass",
+          "quantity": 1
+        }
+      ]
     }
   ]
 }

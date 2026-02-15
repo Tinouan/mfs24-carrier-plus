@@ -20,7 +20,10 @@ import {
   FOOD_TIER_BONUS,
   calculateEngineerBonus,
   WORKER_XP_TIERS,
+  UPGRADE_COSTS,
+  UPGRADE_CANCEL_REFUND_RATE,
 } from "../constants/factory";
+import { ItemService } from "./ItemService";
 
 class LocalFactoryServiceClass {
   // ─────────────────────────────────────────────────────────
@@ -128,7 +131,7 @@ class LocalFactoryServiceClass {
     return maxSlots - usedSlots;
   }
 
-  /** Upgrade a factory to the next tier */
+  /** Start a timed upgrade to the next tier (consumes CR + items, factory enters "upgrading" status) */
   async upgradeFactory(factoryId: string): Promise<Factory> {
     const player = await DatabaseManager.getPlayer();
     if (!player) throw new Error("No player found");
@@ -144,45 +147,155 @@ class LocalFactoryServiceClass {
     if (factory.status !== "idle") throw new Error("Factory must be idle to upgrade");
     if (factory.tier >= 10) throw new Error("Factory is already at maximum tier");
 
-    // Get next tier config
     const nextTier = factory.tier + 1;
-    const nextConfig = getFactoryTierConfig(nextTier);
+    const upgradeCost = UPGRADE_COSTS[nextTier];
+    if (!upgradeCost) throw new Error(`No upgrade cost defined for T${nextTier}`);
 
-    // Check funds (upgrade_cost is for upgrading TO this tier)
-    if (company.balance < nextConfig.upgrade_cost) {
-      throw new Error(`Insufficient funds. Need ${nextConfig.upgrade_cost} CR, have ${company.balance} CR`);
+    // Check funds
+    if (company.balance < upgradeCost.credits) {
+      throw new Error(`Insufficient funds. Need ${upgradeCost.credits.toLocaleString()} CR, have ${company.balance.toLocaleString()} CR`);
     }
 
-    // Deduct cost
-    company.balance -= nextConfig.upgrade_cost;
+    // Check items in inventory at factory airport
+    const inventory = await DatabaseManager.getInventoryAt("airport", factory.airport_ident);
+    for (const req of upgradeCost.items) {
+      const inv = inventory.find(i => i.item_code === req.item_id);
+      const have = inv?.quantity || 0;
+      if (have < req.quantity) {
+        throw new Error(`Insufficient ${req.name}: need ${req.quantity}, have ${have}`);
+      }
+    }
+
+    // Deduct CR
+    company.balance -= upgradeCost.credits;
     company.balance = Math.round(company.balance);
     await DatabaseManager.put("company", company);
 
     await DatabaseManager.saveTransaction({
       timestamp: new Date().toISOString(),
       type: "factory_upgrade",
-      amount: -nextConfig.upgrade_cost,
+      amount: -upgradeCost.credits,
       balance_after: company.balance,
       wallet: "company",
-      description: `Factory "${factory.name}" upgraded T${factory.tier}→T${nextTier}`,
+      description: `Factory "${factory.name}" upgrade T${factory.tier}→T${nextTier}`,
       airport_icao: factory.airport_ident,
     });
 
-    // Apply upgrade
+    // Consume items
+    for (const req of upgradeCost.items) {
+      const inv = inventory.find(i => i.item_code === req.item_id)!;
+      inv.quantity -= req.quantity;
+      if (inv.quantity <= 0) {
+        await DatabaseManager.delete("inventory", inv.id, false);
+      } else {
+        await DatabaseManager.put("inventory", inv, false);
+      }
+    }
+
+    // Apply upgrade instantly
+    const config = getFactoryTierConfig(nextTier);
     factory.tier = nextTier;
-    factory.max_workers = nextConfig.max_workers;
-    factory.max_engineers = nextConfig.max_engineers;
-    factory.max_ingredients = nextConfig.max_ingredients;
-    factory.food_capacity = nextConfig.food_capacity;
+    factory.max_workers = config.max_workers;
+    factory.max_engineers = config.max_engineers;
+    factory.max_ingredients = config.max_ingredients;
+    factory.food_capacity = config.food_capacity;
+
+    // Update default name if it matches pattern "...T{n}..."
+    const tierNameMatch = factory.name.match(/^(.*)T(\d+)(.*)$/);
+    if (tierNameMatch && parseInt(tierNameMatch[2]) === nextTier - 1) {
+      factory.name = `${tierNameMatch[1]}T${nextTier}${tierNameMatch[3]}`;
+    }
 
     // Save
     await DatabaseManager.put("factories", factory, false);
     factoryState.factories.set([...factories.filter(f => f.id !== factoryId), factory]);
 
     await DatabaseManager.forceSave();
-    console.log(`[LocalFactoryService] Upgraded factory "${factory.name}" to T${nextTier}`);
+    console.log(`[LocalFactoryService] Upgrade complete: "${factory.name}" is now T${nextTier}`);
 
     return factory;
+  }
+
+  /** Complete an upgrade (called by scheduler when timer is up) */
+  async completeUpgrade(factoryId: string): Promise<void> {
+    const factories = factoryState.factories.get();
+    const factory = factories.find(f => f.id === factoryId);
+    if (!factory || factory.status !== "upgrading") return;
+
+    const targetTier = factory.upgrade_target_tier || factory.tier + 1;
+    const config = getFactoryTierConfig(targetTier);
+
+    // Apply tier config
+    factory.tier = targetTier;
+    factory.max_workers = config.max_workers;
+    factory.max_engineers = config.max_engineers;
+    factory.max_ingredients = config.max_ingredients;
+    factory.food_capacity = config.food_capacity;
+
+    // Reset upgrade fields
+    factory.status = "idle";
+    factory.upgrade_started_at = null;
+    factory.upgrade_completion = null;
+    factory.upgrade_target_tier = null;
+
+    // Update default name if it matches pattern "Usine T{n}"
+    const oldName = factory.name;
+    const tierNameMatch = oldName.match(/^(.*)T(\d+)(.*)$/);
+    if (tierNameMatch && parseInt(tierNameMatch[2]) === targetTier - 1) {
+      factory.name = `${tierNameMatch[1]}T${targetTier}${tierNameMatch[3]}`;
+    }
+
+    await DatabaseManager.put("factories", factory, false);
+    factoryState.factories.set([...factories.filter(f => f.id !== factoryId), factory]);
+    await DatabaseManager.forceSave();
+
+    console.log(`[LocalFactoryService] Upgrade complete: "${factory.name}" is now T${targetTier}`);
+  }
+
+  /** Cancel an in-progress upgrade (80% CR refund, items lost) */
+  async cancelUpgrade(factoryId: string): Promise<void> {
+    const player = await DatabaseManager.getPlayer();
+    if (!player) throw new Error("No player found");
+
+    const company = await DatabaseManager.getCompanyByOwner(player.id);
+    if (!company) throw new Error("No company found");
+
+    const factories = factoryState.factories.get();
+    const factory = factories.find(f => f.id === factoryId);
+    if (!factory) throw new Error("Factory not found");
+    if (factory.status !== "upgrading") throw new Error("Factory is not upgrading");
+
+    const targetTier = factory.upgrade_target_tier || factory.tier + 1;
+    const upgradeCost = UPGRADE_COSTS[targetTier];
+    if (!upgradeCost) throw new Error("Upgrade cost not found");
+
+    // Refund 80% of CR
+    const refund = Math.floor(upgradeCost.credits * UPGRADE_CANCEL_REFUND_RATE);
+    company.balance += refund;
+    company.balance = Math.round(company.balance);
+    await DatabaseManager.put("company", company);
+
+    await DatabaseManager.saveTransaction({
+      timestamp: new Date().toISOString(),
+      type: "factory_upgrade_cancel",
+      amount: refund,
+      balance_after: company.balance,
+      wallet: "company",
+      description: `Factory "${factory.name}" upgrade cancelled — ${refund.toLocaleString()} CR refunded (80%)`,
+      airport_icao: factory.airport_ident,
+    });
+
+    // Reset factory to idle (items are NOT refunded)
+    factory.status = "idle";
+    factory.upgrade_started_at = null;
+    factory.upgrade_completion = null;
+    factory.upgrade_target_tier = null;
+
+    await DatabaseManager.put("factories", factory, false);
+    factoryState.factories.set([...factories.filter(f => f.id !== factoryId), factory]);
+    await DatabaseManager.forceSave();
+
+    console.log(`[LocalFactoryService] Upgrade cancelled: "${factory.name}" — ${refund} CR refunded`);
   }
 
   /** Delete a factory (must be idle, no workers assigned) */
@@ -501,6 +614,17 @@ class LocalFactoryServiceClass {
   // FOOD MANAGEMENT
   // ─────────────────────────────────────────────────────────
 
+  /** Recalculate food_tier_min from food_items array */
+  private recalcFoodTierMin(factory: import("../managers/DatabaseManager").Factory): void {
+    const items = factory.food_items ?? [];
+    const active = items.filter(fi => fi.quantity > 0);
+    if (active.length === 0) {
+      factory.food_tier_min = 0;
+    } else {
+      factory.food_tier_min = Math.min(...active.map(fi => fi.tier));
+    }
+  }
+
   /** Deposit food items into a factory */
   async depositFood(factoryId: string, itemId: string, quantity: number): Promise<void> {
     const factories = factoryState.factories.get();
@@ -531,7 +655,7 @@ class LocalFactoryServiceClass {
       throw new Error("Factory food storage is full");
     }
 
-    // Transfer
+    // Transfer from inventory
     foodInv.quantity -= toDeposit;
     if (foodInv.quantity <= 0) {
       await DatabaseManager.delete("inventory", foodInv.id, false);
@@ -539,17 +663,75 @@ class LocalFactoryServiceClass {
       await DatabaseManager.put("inventory", foodInv, false);
     }
 
+    // Update factory food stock
     factory.food_stock += toDeposit;
 
-    // Update food_tier_min: lowest tier in stock pulls bonus down
-    const currentMin = factory.food_tier_min ?? 0;
-    factory.food_tier_min = Math.min(currentMin, foodTier);
+    // Track individual food items
+    if (!factory.food_items) factory.food_items = [];
+    const existing = factory.food_items.find(fi => fi.item_code === itemId);
+    if (existing) {
+      existing.quantity += toDeposit;
+    } else {
+      factory.food_items.push({ item_code: itemId, quantity: toDeposit, tier: foodTier });
+    }
+
+    this.recalcFoodTierMin(factory);
 
     await DatabaseManager.put("factories", factory, false);
     factoryState.factories.set(factories.map(f => f.id === factoryId ? factory : f));
 
     await DatabaseManager.forceSave();
-    console.log(`[LocalFactoryService] Deposited ${toDeposit} food (T${foodTier}) to factory "${factory.name}" (food_tier_min=${factory.food_tier_min})`);
+    console.log(`[LocalFactoryService] Deposited ${toDeposit} ${itemId} (T${foodTier}) to factory "${factory.name}" (food_tier_min=${factory.food_tier_min})`);
+  }
+
+  /** Withdraw food from a factory — returns items to airport inventory */
+  async withdrawFood(factoryId: string, itemCode: string, quantity: number): Promise<void> {
+    const factories = factoryState.factories.get();
+    const factory = factories.find(f => f.id === factoryId);
+    if (!factory) throw new Error("Factory not found");
+
+    if (factory.food_stock <= 0) throw new Error("No food in factory");
+
+    // Find the tracked food item
+    const foodItems = factory.food_items ?? [];
+    const tracked = foodItems.find(fi => fi.item_code === itemCode);
+    if (!tracked || tracked.quantity <= 0) {
+      throw new Error("This food item is not in the factory");
+    }
+
+    const toRemove = Math.min(quantity, tracked.quantity);
+
+    // Remove from factory
+    tracked.quantity -= toRemove;
+    factory.food_stock -= toRemove;
+    if (factory.food_stock < 0) factory.food_stock = 0;
+
+    // Clean up empty entries
+    factory.food_items = foodItems.filter(fi => fi.quantity > 0);
+
+    this.recalcFoodTierMin(factory);
+
+    // Return items to airport inventory
+    const inventory = await DatabaseManager.getInventoryAt("airport", factory.airport_ident);
+    const existingInv = inventory.find(i => i.item_code === itemCode);
+    if (existingInv) {
+      existingInv.quantity += toRemove;
+      await DatabaseManager.put("inventory", existingInv, false);
+    } else {
+      await DatabaseManager.put("inventory", {
+        id: this.generateUUID(),
+        location_type: "airport" as const,
+        location_id: factory.airport_ident,
+        item_code: itemCode,
+        quantity: toRemove,
+      }, false);
+    }
+
+    await DatabaseManager.put("factories", factory, false);
+    factoryState.factories.set(factories.map(f => f.id === factoryId ? factory : f));
+
+    await DatabaseManager.forceSave();
+    console.log(`[LocalFactoryService] Withdrew ${toRemove} ${itemCode} from "${factory.name}" back to ${factory.airport_ident} (remaining stock: ${factory.food_stock})`);
   }
 
   // ─────────────────────────────────────────────────────────

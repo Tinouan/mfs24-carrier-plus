@@ -1,0 +1,8 @@
+<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- Pastry - croissant shape -->
+        <path d="M10 28 Q14 14, 24 16 Q34 14, 38 28 Q32 32, 24 30 Q16 32, 10 28Z" fill="#f59e0b"/>
+        <path d="M10 28 Q14 16, 24 18 Q34 16, 38 28" fill="#fbbf24"/>
+        <path d="M16 22 Q24 18, 32 22" stroke="#d97706" stroke-width="0.8" fill="none"/>
+        <path d="M14 26 Q24 20, 34 26" stroke="#d97706" stroke-width="0.8" fill="none"/>
+        <rect x="20" y="32" width="8" height="3" rx="1" fill="#92400e" opacity="0.3"/>
+      </svg>

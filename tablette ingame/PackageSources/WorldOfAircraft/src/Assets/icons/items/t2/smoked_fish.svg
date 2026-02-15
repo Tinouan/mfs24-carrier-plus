@@ -1,0 +1,9 @@
+<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- Smoked Fish - fish with smoke wisps -->
+        <path d="M8 24 Q14 16, 24 20 Q34 16, 40 24 Q34 32, 24 28 Q14 32, 8 24Z" fill="#d97706"/>
+        <path d="M8 24 Q14 18, 24 21 Q34 18, 40 24" fill="#f59e0b"/>
+        <circle cx="34" cy="22" r="1.5" fill="#1e293b"/>
+        <path d="M14 12 Q16 8, 14 4" stroke="#94a3b8" stroke-width="1" fill="none" opacity="0.5"/>
+        <path d="M24 10 Q26 6, 24 2" stroke="#94a3b8" stroke-width="1" fill="none" opacity="0.5"/>
+        <path d="M34 12 Q36 8, 34 4" stroke="#94a3b8" stroke-width="1" fill="none" opacity="0.5"/>
+      </svg>

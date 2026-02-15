@@ -30,6 +30,7 @@ import seedData from "../data/seed.json";
 import itemsData from "../data/items.json";
 import recipesData from "../data/recipes.json";
 import aircraftData from "../data/aircraft.json";
+import npcFactoriesSeed from "../data/npc_factories_seed.json";
 // Airports loaded separately due to size (24MB)
 
 // ═══════════════════════════════════════════════════════════
@@ -265,14 +266,20 @@ class InitServiceClass {
     this.reportProgress("Chargement des usines...", 80);
     await this.loadFactoryState();
 
+    // 4b. Initialize NPC T0 factories (if not already created)
+    this.reportProgress("Chargement des usines NPC...", 85);
+    await this.initNpcFactories();
+
     // 5. Start factory scheduler (Solo mode: local batch completion + hourly tick)
     FactoryScheduler.start();
 
     // 6. Auto-save is handled by DatabaseManager.schedulePersistentSave() → saveToDataStore()
     // which saves to "WorldOfAircraftData". No need for separate NativePersistence auto-save.
 
-    // DEBUG: Seed T0 items x100 at LFRK for testing (remove after testing)
-    await this.seedTestInventoryT0();
+    // DEBUG: Seed ALL items x100 at LFRK + 10M credits for testing (remove after testing)
+    await this.seedTestInventoryAll();
+    // Reload factory state so newly seeded workers/engineers appear in UI
+    await this.loadFactoryState();
 
     // 7. Ready!
     this.initialized = true;
@@ -457,6 +464,70 @@ class InitServiceClass {
     factoryState.productionBatches.set(batches as any);
 
     console.log(`[InitService] Factory state loaded: ${factories.length} factories, ${workers.length} workers, ${batches.length} batches`);
+  }
+
+  /**
+   * Phase 9.5: Initialize NPC T0 factories from seed data
+   * Creates ~411 NPC factories worldwide that auto-produce T0 raw materials
+   * Skips factories with invalid ICAO codes (not in airports cache)
+   */
+  private async initNpcFactories(): Promise<void> {
+    const existingFactories = await DatabaseManager.getAll<import("../managers/DatabaseManager").Factory>("factories");
+    const npcFactories = existingFactories.filter(f => f.tier === 0 && f.company_id === "NPC");
+
+    if (npcFactories.length > 0) {
+      console.log(`[InitService] NPC factories already exist: ${npcFactories.length}, skipping seed`);
+      return;
+    }
+
+    const airports = DatabaseManager.getAirportsCache();
+    const airportSet = new Set(airports.map(a => a.ident));
+    const now = new Date().toISOString();
+    let created = 0;
+    let skipped = 0;
+
+    for (const entry of npcFactoriesSeed) {
+      // Verify ICAO exists in our airports database
+      if (!airportSet.has(entry.airport_ident)) {
+        skipped++;
+        continue;
+      }
+
+      const factory: import("../managers/DatabaseManager").Factory = {
+        id: this.generateUUID(),
+        company_id: "NPC",
+        airport_ident: entry.airport_ident,
+        name: entry.name,
+        tier: 0,
+        factory_type: "npc_t0",
+        status: "producing",
+        current_recipe_id: null,
+        is_active: true,
+        max_workers: 0,
+        max_engineers: 0,
+        max_ingredients: 0,
+        food_stock: 0,
+        food_capacity: 0,
+        food_tier_min: 0,
+        food_consumption_per_hour: 0,
+        item_id: entry.item_id,
+        stock_current: 500,
+        stock_max: 1000,
+        production_rate: 50,
+        created_at: now,
+      };
+
+      await DatabaseManager.put("factories", factory, false);
+      created++;
+    }
+
+    if (skipped > 0) {
+      console.warn(`[InitService] NPC factories: ${skipped} skipped (ICAO not found in airports cache)`);
+    }
+    console.log(`[InitService] NPC factories created: ${created} factories`);
+
+    // Re-load factory state to include NPC factories
+    await this.loadFactoryState();
   }
 
   /**
@@ -1160,26 +1231,41 @@ class InitServiceClass {
   // ─────────────────────────────────────────────────────────
 
   /**
-   * DEBUG: Add 100 of each T0 item to company inventory at LFRK
-   * Only runs once (checks for existing debug_seed items)
+   * DEBUG: Add 100 of ALL items (T0-T5) + 10M credits + 100 workers at LFRK
+   * Only runs once (checks for existing debug_seed_all items)
    */
-  private async seedTestInventoryT0(): Promise<void> {
-    // Find the company
+  private async seedTestInventoryAll(): Promise<void> {
     const companies = await DatabaseManager.getAll<Company>("company");
     if (companies.length === 0) {
-      console.log("[InitService] seedTestInventoryT0: No company found, skipping");
+      console.log("[InitService] seedTestInventoryAll: No company found, skipping");
       return;
     }
 
+    const company = companies[0];
     const now = new Date().toISOString();
 
-    // --- T0 items x100 ---
+    // --- 10M credits ---
+    if (company.balance < 10_000_000) {
+      company.balance = 10_000_000;
+      company.updated_at = now;
+      await DatabaseManager.put("company", company, false);
+      console.log(`[InitService] seedTestInventoryAll: Set ${company.name} balance to 10,000,000 CR`);
+    }
+
+    // --- ALL items x100 at LFRK ---
     const existingInv = await DatabaseManager.getInventoryAt("airport", "LFRK");
-    const debugItems = existingInv.filter(i => i.source === "debug_seed");
+    const debugItems = existingInv.filter(i => i.source === "debug_seed_all");
     if (debugItems.length > 0) {
-      console.log(`[InitService] seedTestInventoryT0: Items already seeded (${debugItems.length}), skipping items`);
+      console.log(`[InitService] seedTestInventoryAll: Items already seeded (${debugItems.length}), skipping`);
     } else {
-      const t0Items = [
+      // Remove old debug_seed items first
+      const oldDebug = existingInv.filter(i => i.source === "debug_seed");
+      for (const old of oldDebug) {
+        await DatabaseManager.delete("inventory", old.id, false);
+      }
+
+      const allItems = [
+        // T0 — Raw Materials (37)
         "raw-fish", "raw-meat", "raw-vegetables", "raw-wheat", "raw-fruits",
         "raw-salt", "raw-sugar", "raw-milk", "raw-cocoa", "raw-vanilla",
         "iron-ore", "copper-ore", "raw-wood", "raw-stone", "sand",
@@ -1187,9 +1273,46 @@ class InitServiceClass {
         "crude-oil", "coal", "natural-gas", "uranium-ore", "biomass",
         "raw-rubber", "cotton", "raw-silicon", "rare-earth-metals",
         "sulfur", "phosphate", "graphite", "water",
-        "raw-pepper", "raw-egg", "raw-salad", "raw-chili"
+        "raw-pepper", "raw-egg", "raw-salad", "raw-chili",
+        // T1 — Processed (39)
+        "dried-fish", "bread", "salted-meat", "vegetable-stew", "fruit-jam",
+        "sugar-syrup", "butter", "flour", "cocoa-powder", "vanilla-extract",
+        "steel-ingot", "copper-ingot", "planks", "stone-bricks", "glass",
+        "bricks", "cement", "aluminum-ingot", "titanium-ingot", "marble-slabs",
+        "diesel", "charcoal", "compressed-gas", "biofuel", "uranium-pellets",
+        "rubber-sheets", "fabric", "silicon-wafers", "sulfuric-acid", "fertilizer",
+        "peppered-meat", "meat-omelette", "salted-omelette", "pepper-omelette",
+        "fish-omelette", "meat-salad", "seafood-salad", "vanilla-salad", "chili-meat",
+        // T2 — Intermediate (49)
+        "quality-bread", "smoked-fish", "chocolate-bar", "fruit-cake", "cheese",
+        "sausage", "vegetable-soup", "pastry", "dried-fruit", "honey-bread",
+        "reinforced-steel", "wire-cable", "wooden-beams", "concrete-blocks",
+        "window-panes", "insulation", "steel-pipes", "aluminum-frame",
+        "circuit-board", "titanium-plates", "jet-fuel", "heating-oil",
+        "premium-biofuel", "rocket-propellant", "nuclear-fuel-rod",
+        "plastic-sheets", "medical-bandages", "cleaning-solution", "paint", "adhesive",
+        "steel-beam", "copper-wire", "fiberglass", "plywood", "ceramic-tiles",
+        "rubber-gasket", "steel-nails", "canned-fish", "spiced-meat", "fruit-juice",
+        "cheese-wheel", "chili-sauce", "vanilla-cake", "lubricant", "graphite-rod",
+        "dye", "battery-cell", "firebricks", "asphalt", "tempered-glass",
+        // T3 — Advanced (15)
+        "structural-panel", "insulated-wall", "armored-plate", "hydraulic-cylinder",
+        "electric-motor", "sensor-module", "power-supply", "led-panel",
+        "premium-chocolate", "gourmet-meal", "aged-cheese",
+        "carbon-fiber", "industrial-solvent", "turbine-blade", "advanced-battery",
+        // T4 — High-Tech (13)
+        "avionics-unit", "landing-gear-part", "navigation-system",
+        "solar-panel", "industrial-robot-arm", "generator",
+        "satellite-dish", "medical-scanner", "prefab-module", "climate-control",
+        "airline-meal-kit", "luxury-chocolate-box", "artisan-cheese-platter",
+        // T5 — Elite (10)
+        "flight-computer", "aircraft-engine-part", "satellite-component",
+        "nuclear-reactor-core", "luxury-watch", "fine-dining-set",
+        "surgical-robot", "research-lab-kit",
+        "first-class-catering", "royal-banquet-set",
       ];
-      for (const itemCode of t0Items) {
+
+      for (const itemCode of allItems) {
         const invItem: import("../managers/DatabaseManager").InventoryItem = {
           id: this.generateUUID(),
           location_type: "airport",
@@ -1197,26 +1320,26 @@ class InitServiceClass {
           item_code: itemCode,
           quantity: 100,
           owner_type: "company",
-          source: "debug_seed",
+          source: "debug_seed_all",
           created_at: now,
           updated_at: now,
         };
         await DatabaseManager.put("inventory", invItem, false);
       }
-      console.log(`[InitService] seedTestInventoryT0: Added ${t0Items.length} T0 items x100 at LFRK`);
+      console.log(`[InitService] seedTestInventoryAll: Added ${allItems.length} items x100 at LFRK`);
     }
 
     // --- 100 workers (separate check) ---
-    const existingWorkers = await DatabaseManager.getWorkersByCompany(companies[0].id);
+    const existingWorkers = await DatabaseManager.getWorkersByCompany(company.id);
     const workersAtLFRK = existingWorkers.filter(w => w.airport_ident === "LFRK");
     if (workersAtLFRK.length >= 100) {
-      console.log(`[InitService] seedTestInventoryT0: Workers already seeded (${workersAtLFRK.length}), skipping workers`);
+      console.log(`[InitService] seedTestInventoryAll: Workers already seeded (${workersAtLFRK.length}), skipping`);
     } else {
       const toCreate = 100 - workersAtLFRK.length;
       for (let i = 0; i < toCreate; i++) {
         const worker: import("../managers/DatabaseManager").WorkerInstance = {
           id: this.generateUUID(),
-          owner_company_id: companies[0].id,
+          owner_company_id: company.id,
           owner_player_id: null,
           owner_type: "company",
           item_id: "worker",
@@ -1237,7 +1360,41 @@ class InitServiceClass {
         };
         await DatabaseManager.put("workers", worker, false);
       }
-      console.log(`[InitService] seedTestInventoryT0: Added ${toCreate} workers at LFRK for ${companies[0].name}`);
+      console.log(`[InitService] seedTestInventoryAll: Added ${toCreate} workers at LFRK`);
+    }
+
+    // --- 20 engineers (separate check) ---
+    const allWorkersNow = await DatabaseManager.getWorkersByCompany(company.id);
+    const engineersAtLFRK = allWorkersNow.filter(w => w.airport_ident === "LFRK" && w.item_id === "engineer");
+    if (engineersAtLFRK.length >= 20) {
+      console.log(`[InitService] seedTestInventoryAll: Engineers already seeded (${engineersAtLFRK.length}), skipping`);
+    } else {
+      const toCreate = 20 - engineersAtLFRK.length;
+      for (let i = 0; i < toCreate; i++) {
+        const engineer: import("../managers/DatabaseManager").WorkerInstance = {
+          id: this.generateUUID(),
+          owner_company_id: company.id,
+          owner_player_id: null,
+          owner_type: "company",
+          item_id: "engineer",
+          airport_ident: "LFRK",
+          country_code: "FR",
+          speed: 60 + Math.floor(Math.random() * 20),
+          resistance: 55 + Math.floor(Math.random() * 15),
+          xp: 0,
+          tier: 0,
+          hourly_salary: 30,
+          status: "available",
+          factory_id: null,
+          for_sale: false,
+          sale_price: null,
+          injured_at: null,
+          injury_duration_days: 0,
+          created_at: now,
+        };
+        await DatabaseManager.put("workers", engineer, false);
+      }
+      console.log(`[InitService] seedTestInventoryAll: Added ${toCreate} engineers at LFRK`);
     }
   }
 

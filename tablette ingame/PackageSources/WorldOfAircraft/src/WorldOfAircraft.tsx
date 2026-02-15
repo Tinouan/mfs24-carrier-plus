@@ -787,6 +787,11 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
         console.log("[WOA] SEED connection and initialization complete");
         authState.seedConnectionStatus.set("connected");
         this.initializePersistenceAndEconomy();
+        // Airports are now loaded — trigger map reload + centering
+        if (this.mapController.isMapInitialized()) {
+          this.mapController.refreshMapSize();
+          void this.mapController.centerMapOnPlayerAirport();
+        }
       },
       onError: (error) => {
         console.error("[WOA] Initialization failed:", error);
@@ -848,6 +853,11 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
       .then(() => {
         gameModeState.modeSwitchLoading.set(false);
         this.initializePersistenceAndEconomy();
+        // Airports are now loaded — trigger map reload + centering
+        if (this.mapController.isMapInitialized()) {
+          this.mapController.refreshMapSize();
+          void this.mapController.centerMapOnPlayerAirport();
+        }
       })
       .catch((e) => {
         console.error("[WOA] Mode initialization error:", e);
@@ -1378,7 +1388,10 @@ class WorldOfAircraftView extends AppView<RequiredProps<AppViewProps, "bus">> {
 
     // Refresh map if it exists and we're on map tab (handles resume from pause)
     if (navigationState.activeTab.get() === "map") {
-      setTimeout(() => this.mapController.refreshMapSize(), 100);
+      setTimeout(() => {
+        this.mapController.refreshMapSize();
+        void this.mapController.centerMapOnPlayerAirport();
+      }, 100);
     }
   }
 

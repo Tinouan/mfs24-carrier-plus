@@ -18,19 +18,116 @@ export interface FactoryTierConfig {
 
 export const FACTORY_TIER_CONFIG: FactoryTierConfig[] = [
   { tier: 1,  max_ingredients: 2, max_workers: 10,  max_engineers: 0, upgrade_cost: 0,       food_capacity: 200 },
-  { tier: 2,  max_ingredients: 2, max_workers: 20,  max_engineers: 1, upgrade_cost: 5000,    food_capacity: 500 },
-  { tier: 3,  max_ingredients: 3, max_workers: 30,  max_engineers: 1, upgrade_cost: 15000,   food_capacity: 1000 },
-  { tier: 4,  max_ingredients: 3, max_workers: 40,  max_engineers: 2, upgrade_cost: 35000,   food_capacity: 2000 },
-  { tier: 5,  max_ingredients: 4, max_workers: 50,  max_engineers: 2, upgrade_cost: 75000,   food_capacity: 3000 },
-  { tier: 6,  max_ingredients: 4, max_workers: 60,  max_engineers: 3, upgrade_cost: 150000,  food_capacity: 4000 },
-  { tier: 7,  max_ingredients: 5, max_workers: 70,  max_engineers: 3, upgrade_cost: 300000,  food_capacity: 5000 },
-  { tier: 8,  max_ingredients: 5, max_workers: 80,  max_engineers: 4, upgrade_cost: 500000,  food_capacity: 7000 },
-  { tier: 9,  max_ingredients: 5, max_workers: 90,  max_engineers: 4, upgrade_cost: 800000,  food_capacity: 9000 },
-  { tier: 10, max_ingredients: 5, max_workers: 100, max_engineers: 5, upgrade_cost: 1500000, food_capacity: 12000 },
+  { tier: 2,  max_ingredients: 2, max_workers: 20,  max_engineers: 1, upgrade_cost: 5_000,   food_capacity: 500 },
+  { tier: 3,  max_ingredients: 3, max_workers: 30,  max_engineers: 1, upgrade_cost: 10_000,  food_capacity: 1000 },
+  { tier: 4,  max_ingredients: 3, max_workers: 40,  max_engineers: 2, upgrade_cost: 20_000,  food_capacity: 2000 },
+  { tier: 5,  max_ingredients: 4, max_workers: 50,  max_engineers: 2, upgrade_cost: 40_000,  food_capacity: 3000 },
+  { tier: 6,  max_ingredients: 4, max_workers: 60,  max_engineers: 3, upgrade_cost: 60_000,  food_capacity: 4000 },
+  { tier: 7,  max_ingredients: 5, max_workers: 70,  max_engineers: 3, upgrade_cost: 90_000,  food_capacity: 5000 },
+  { tier: 8,  max_ingredients: 5, max_workers: 80,  max_engineers: 4, upgrade_cost: 130_000, food_capacity: 7000 },
+  { tier: 9,  max_ingredients: 5, max_workers: 90,  max_engineers: 4, upgrade_cost: 180_000, food_capacity: 9000 },
+  { tier: 10, max_ingredients: 5, max_workers: 100, max_engineers: 5, upgrade_cost: 250_000, food_capacity: 12000 },
 ];
 
-/** Cost to create a new T1 factory — PLACEHOLDER */
-export const FACTORY_CREATION_COST = 10000;
+/** Cost to create a new T1 factory */
+export const FACTORY_CREATION_COST = 25_000;
+
+// ═══════════════════════════════════════════════════════════
+// UPGRADE COSTS (items + duration per target tier)
+// ═══════════════════════════════════════════════════════════
+
+export interface UpgradeCost {
+  credits: number;
+  items: { item_id: string; name: string; quantity: number }[];
+  time_hours: number;
+}
+
+/** Upgrade cost to reach target tier (key = target tier) — instant upgrades, no timer */
+export const UPGRADE_COSTS: Record<number, UpgradeCost> = {
+  2: {
+    credits: 5_000,
+    items: [
+      { item_id: "steel-ingot", name: "Steel Ingot", quantity: 10 },
+      { item_id: "bricks", name: "Bricks", quantity: 5 },
+    ],
+    time_hours: 0,
+  },
+  3: {
+    credits: 10_000,
+    items: [
+      { item_id: "reinforced-steel", name: "Reinforced Steel", quantity: 15 },
+      { item_id: "cement", name: "Cement", quantity: 10 },
+      { item_id: "glass", name: "Glass", quantity: 5 },
+    ],
+    time_hours: 0,
+  },
+  4: {
+    credits: 20_000,
+    items: [
+      { item_id: "reinforced-steel", name: "Reinforced Steel", quantity: 20 },
+      { item_id: "window-panes", name: "Window Panes", quantity: 10 },
+      { item_id: "wire-cable", name: "Wire Cable", quantity: 5 },
+    ],
+    time_hours: 0,
+  },
+  5: {
+    credits: 40_000,
+    items: [
+      { item_id: "steel-beam", name: "Steel Beam", quantity: 15 },
+      { item_id: "insulation", name: "Insulation", quantity: 10 },
+      { item_id: "circuit-board", name: "Circuit Board", quantity: 5 },
+    ],
+    time_hours: 0,
+  },
+  6: {
+    credits: 60_000,
+    items: [
+      { item_id: "steel-beam", name: "Steel Beam", quantity: 20 },
+      { item_id: "structural-panel", name: "Structural Panel", quantity: 10 },
+      { item_id: "electric-motor", name: "Electric Motor", quantity: 5 },
+    ],
+    time_hours: 0,
+  },
+  7: {
+    credits: 90_000,
+    items: [
+      { item_id: "structural-panel", name: "Structural Panel", quantity: 15 },
+      { item_id: "armored-plate", name: "Armored Plate", quantity: 10 },
+      { item_id: "sensor-module", name: "Sensor Module", quantity: 5 },
+    ],
+    time_hours: 0,
+  },
+  8: {
+    credits: 130_000,
+    items: [
+      { item_id: "armored-plate", name: "Armored Plate", quantity: 20 },
+      { item_id: "power-supply", name: "Power Supply", quantity: 10 },
+      { item_id: "advanced-battery", name: "Advanced Battery", quantity: 5 },
+    ],
+    time_hours: 0,
+  },
+  9: {
+    credits: 180_000,
+    items: [
+      { item_id: "avionics-unit", name: "Avionics Unit", quantity: 10 },
+      { item_id: "generator", name: "Generator", quantity: 10 },
+      { item_id: "industrial-robot-arm", name: "Industrial Robot Arm", quantity: 5 },
+    ],
+    time_hours: 0,
+  },
+  10: {
+    credits: 250_000,
+    items: [
+      { item_id: "satellite-component", name: "Satellite Component", quantity: 5 },
+      { item_id: "flight-computer", name: "Flight Computer", quantity: 5 },
+      { item_id: "surgical-robot", name: "Surgical Robot", quantity: 3 },
+    ],
+    time_hours: 0,
+  },
+};
+
+/** Cancel upgrade refund rate (80% of CR) */
+export const UPGRADE_CANCEL_REFUND_RATE = 0.80;
 
 // ═══════════════════════════════════════════════════════════
 // AIRPORT FACTORY SLOTS
@@ -106,8 +203,9 @@ export const FOOD_TIER_BONUS: Record<number, number> = {
   0: 1.0,   // T0 raw food (meat, fish, wheat…)
   1: 1.15,  // T1 processed (bread, salted meat…)
   2: 1.30,  // T2 quality (quality bread, cheese…)
-  3: 1.45,  // T3 (future)
-  4: 1.60,  // T4 (future)
+  3: 1.45,  // T3 gourmet
+  4: 1.60,  // T4 premium
+  5: 1.80,  // T5 elite
 };
 
 // ═══════════════════════════════════════════════════════════

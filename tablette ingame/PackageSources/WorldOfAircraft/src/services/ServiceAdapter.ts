@@ -567,6 +567,21 @@ class ServiceAdapterClass {
           iso_country: a.country,
         }));
       },
+      // Single-pass query with multiple types (faster than calling getAirportsInBounds per type)
+      getAirportsInBoundsByTypes: (minLat: number, maxLat: number, minLon: number, maxLon: number, types: string[], limit = 5000) => {
+        const all = DatabaseManager.getAirportsCache();
+        const typeSet = new Set(types);
+        const results: { ident: string; name: string; type: string; latitude_deg: number; longitude_deg: number }[] = [];
+        for (const a of all) {
+          if (results.length >= limit) break;
+          if (a.latitude >= minLat && a.latitude <= maxLat &&
+              a.longitude >= minLon && a.longitude <= maxLon &&
+              typeSet.has(a.type)) {
+            results.push({ ident: a.ident, name: a.name, type: a.type, latitude_deg: a.latitude, longitude_deg: a.longitude });
+          }
+        }
+        return results;
+      },
       getAircraftCatalog: () => DatabaseManager.getAll<AircraftCatalog>("aircraft_catalog"),
       getAircraftType: (id: string) => DatabaseManager.get<AircraftCatalog>("aircraft_catalog", id),
     };
@@ -997,6 +1012,13 @@ class ServiceAdapterClass {
         return LocalFactoryService.depositFood(factoryId, itemId, quantity);
       },
 
+      withdrawFood: async (factoryId: string, itemCode: string, quantity: number): Promise<void> => {
+        if (isOnlineMode()) {
+          throw new Error("Factories not yet available in Online mode");
+        }
+        return LocalFactoryService.withdrawFood(factoryId, itemCode, quantity);
+      },
+
       startProduction: async (factoryId: string, recipeId: string, quantity: number) => {
         if (isOnlineMode()) {
           throw new Error("Factories not yet available in Online mode");
@@ -1009,6 +1031,13 @@ class ServiceAdapterClass {
           throw new Error("Factories not yet available in Online mode");
         }
         return LocalFactoryService.cancelProduction(factoryId);
+      },
+
+      cancelUpgrade: async (factoryId: string): Promise<void> => {
+        if (isOnlineMode()) {
+          throw new Error("Factories not yet available in Online mode");
+        }
+        return LocalFactoryService.cancelUpgrade(factoryId);
       },
     };
   }

@@ -1,0 +1,30 @@
+<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- First Class Catering - elegant cart/trolley -->
+  <!-- Cart body -->
+  <rect x="10" y="10" width="28" height="26" rx="3" fill="#1e293b"/>
+  <rect x="10" y="10" width="28" height="26" rx="3" stroke="#f59e0b" stroke-width="1.5"/>
+  <!-- Shelves -->
+  <line x1="10" y1="20" x2="38" y2="20" stroke="#f59e0b" stroke-width="0.8"/>
+  <line x1="10" y1="28" x2="38" y2="28" stroke="#f59e0b" stroke-width="0.8"/>
+  <!-- Top shelf - champagne -->
+  <rect x="14" y="12" width="4" height="7" rx="1" fill="#22c55e" opacity="0.5"/>
+  <rect x="14" y="11" width="4" height="2" rx="1" fill="#f59e0b"/>
+  <rect x="22" y="13" width="4" height="6" rx="1" fill="#22c55e" opacity="0.5"/>
+  <rect x="22" y="12" width="4" height="2" rx="1" fill="#f59e0b"/>
+  <!-- Middle shelf - plates -->
+  <circle cx="16" cy="24" r="3" fill="#f1f5f9" stroke="#e2e8f0" stroke-width="0.5"/>
+  <circle cx="16" cy="24" r="1" fill="#ef4444" opacity="0.5"/>
+  <circle cx="26" cy="24" r="3" fill="#f1f5f9" stroke="#e2e8f0" stroke-width="0.5"/>
+  <circle cx="26" cy="24" r="1" fill="#22c55e" opacity="0.5"/>
+  <!-- Bottom shelf - covered dish -->
+  <rect x="14" y="30" width="10" height="4" rx="2" fill="#94a3b8"/>
+  <path d="M14 30 Q19 26, 24 30" fill="#cbd5e1"/>
+  <!-- Wheels -->
+  <circle cx="14" cy="38" r="2" fill="#475569" stroke="#64748b" stroke-width="1"/>
+  <circle cx="34" cy="38" r="2" fill="#475569" stroke="#64748b" stroke-width="1"/>
+  <!-- Star badge -->
+  <text x="34" y="16" text-anchor="middle" fill="#f59e0b" font-size="8">&#x2605;</text>
+  <!-- Handle -->
+  <rect x="36" y="14" width="6" height="2" rx="1" fill="#94a3b8"/>
+  <rect x="40" y="14" width="2" height="18" rx="1" fill="#94a3b8"/>
+</svg>

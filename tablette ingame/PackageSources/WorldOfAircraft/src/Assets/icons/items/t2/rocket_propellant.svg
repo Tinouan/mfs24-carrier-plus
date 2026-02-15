@@ -1,0 +1,10 @@
+<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- Rocket Propellant - rocket-shaped container -->
+        <rect x="16" y="14" width="16" height="24" rx="3" fill="#475569"/>
+        <path d="M16 14 Q24 4, 32 14" fill="#64748b" stroke="#475569" stroke-width="1"/>
+        <circle cx="24" cy="10" r="2" fill="#ef4444"/>
+        <rect x="18" y="22" width="12" height="6" rx="1" fill="#1e293b"/>
+        <text x="24" y="27" text-anchor="middle" fill="#ef4444" font-size="5" font-weight="bold">RP</text>
+        <path d="M16 36 L12 42 M32 36 L36 42" stroke="#f59e0b" stroke-width="2"/>
+        <path d="M20 38 L18 44 M28 38 L30 44" stroke="#f97316" stroke-width="1.5"/>
+      </svg>

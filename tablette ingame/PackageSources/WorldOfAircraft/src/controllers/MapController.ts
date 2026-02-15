@@ -10,6 +10,7 @@ import { DatabaseManager } from "../managers/DatabaseManager";
 import type { Player } from "../managers/DatabaseManager";
 import { WorldRouter, TransferRouter } from "../services";
 import { mapState, simVarState, authState, transferState, marketState } from "../state";
+import { navigationState } from "../state/NavigationState";
 import { showNotification } from "../state/PopupState";
 import { isGameReady } from "../state/GameModeState";
 import { factoryState } from "../state/FactoryState";
@@ -17,6 +18,7 @@ import { RecipeService } from "../services/RecipeService";
 import { ItemService } from "../services/ItemService";
 import { ITEM_ICON_MAP } from "../data/itemIconMap";
 import { renderAirportsListHtml } from "../helpers";
+import type { FactoryIconState } from "../managers/MapManager";
 
 export class MapController {
   // Refs (passed from WorldOfAircraft)
@@ -32,6 +34,7 @@ export class MapController {
   private factoriesSource: VectorSource<Feature<Point>> | null = null;
   private helipadsSource: VectorSource<Feature<Point>> | null = null;
   private lastLoadedZoom: number = 7;
+  private factoriesLoaded = false;
   private nearbyAirports: Array<{ icao: string; name: string; distance_nm: number }> = [];
 
   // Translation
@@ -80,6 +83,8 @@ export class MapController {
   public refreshMapSize(): void {
     if (this.olMap) {
       this.olMap.updateSize();
+      // Reload airports after resize (visible bounds may have changed)
+      this.fetchAirportsForMap();
     }
   }
 
@@ -132,6 +137,15 @@ export class MapController {
         if (mapState.showHelipadsOnMap.get() && (zoomCrossedThreshold || mapManager.shouldReloadAirports(bounds))) {
           void this.fetchHelipadsForMap();
         }
+
+        // Auto-load factories at zoom >= 5
+        if (currentZoom >= 5) {
+          if (!this.factoriesLoaded) {
+            this.factoriesLoaded = true;
+            this.fetchFactoriesForMap();
+          }
+          mapManager.repositionFactoryFeatures(currentZoom);
+        }
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       t: (section: any, key: any) => this.t(section, key),
@@ -151,6 +165,7 @@ export class MapController {
     this.airportsSource = null;
     this.factoriesSource = null;
     this.helipadsSource = null;
+    this.factoriesLoaded = false;
   }
 
   public initializeMap(): void {
@@ -345,6 +360,9 @@ export class MapController {
   private async handleMapClick(e: MouseEvent, container: HTMLElement): Promise<void> {
     if (!this.olMap) return;
 
+    // Clear NPC tooltip on any click
+    mapState.npcFactoryTooltip.set(null);
+
     // Get pixel relative to map container
     const rect = container.getBoundingClientRect();
     const pixel: [number, number] = [e.clientX - rect.left, e.clientY - rect.top];
@@ -362,11 +380,32 @@ export class MapController {
     const zoom = this.olMap.getView().getZoom() || 7;
     // Tolerance in degrees - larger when zoomed out, smaller when zoomed in
     const tolerance = 0.5 / Math.pow(2, zoom - 5);
+    // Tighter tolerance for factory icons (they're smaller)
+    const factoryTolerance = tolerance * 0.6;
 
-    // Search for nearest airport feature manually
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let nearestFeature: any = null;
     let nearestDistance = Infinity;
+    let nearestIsFactory = false;
+
+    // Check factories layer first (higher zIndex, on top)
+    if (this.factoriesSource && zoom >= 5) {
+      this.factoriesSource.getFeatures().forEach((feature) => {
+        const geom = feature.getGeometry();
+        if (geom) {
+          const featureCoord = toLonLat(geom.getCoordinates());
+          const dx = featureCoord[0] - clickLonLat[0];
+          const dy = featureCoord[1] - clickLonLat[1];
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          if (distance < factoryTolerance && distance < nearestDistance) {
+            nearestDistance = distance;
+            nearestFeature = feature;
+            nearestIsFactory = true;
+          }
+        }
+      });
+    }
 
     // Check airports layer (if any airport type is visible)
     const anyAirportsVisible = mapState.showLargeAirports.get() || mapState.showMediumAirports.get() || mapState.showSmallAirports.get();
@@ -382,6 +421,7 @@ export class MapController {
           if (distance < tolerance && distance < nearestDistance) {
             nearestDistance = distance;
             nearestFeature = feature;
+            nearestIsFactory = false;
           }
         }
       });
@@ -400,11 +440,39 @@ export class MapController {
           if (distance < tolerance && distance < nearestDistance) {
             nearestDistance = distance;
             nearestFeature = feature;
+            nearestIsFactory = false;
           }
         }
       });
     }
 
+    // Handle factory click
+    if (nearestFeature && nearestIsFactory) {
+      const isNpc = nearestFeature.get("isNpc") as boolean;
+
+      if (isNpc) {
+        // NPC factory: show tooltip
+        mapState.npcFactoryTooltip.set({
+          name: nearestFeature.get("name") as string,
+          itemName: nearestFeature.get("itemName") as string,
+          stockCurrent: nearestFeature.get("stockCurrent") as number,
+          stockMax: nearestFeature.get("stockMax") as number,
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top,
+        });
+      } else {
+        // Player factory: navigate to factory detail
+        const factoryId = nearestFeature.get("id") as string;
+        if (factoryId) {
+          factoryState.selectedFactoryId.set(factoryId);
+          navigationState.activeTab.set("company");
+          navigationState.companySubTab.set("usines");
+        }
+      }
+      return;
+    }
+
+    // Handle airport/helipad click
     if (nearestFeature) {
       const icao = nearestFeature.get("icao");
       const name = nearestFeature.get("name");
@@ -595,26 +663,46 @@ export class MapController {
           mapManager.updateAircraftPosition(airport.latitude, airport.longitude, 0);
           this.olMap.getView().animate({
             center: fromLonLat([airport.longitude, airport.latitude]),
-            zoom: 9,
+            zoom: 11,
             duration: 500,
           });
           return;
         }
       }
 
-      // Fallback: last_latitude/longitude
+      // Priority 2: last_latitude/longitude from player data
       if (user?.last_latitude && user?.last_longitude) {
         console.log(`[WOA] Centering on player saved position: (${user.last_latitude}, ${user.last_longitude})`);
         mapManager.updateAircraftPosition(user.last_latitude, user.last_longitude, 0);
         this.olMap.getView().animate({
           center: fromLonLat([user.last_longitude, user.last_latitude]),
-          zoom: 9,
+          zoom: 11,
           duration: 500,
         });
         return;
       }
 
-      console.log("[WOA] No player position or airport to center on");
+      // Priority 3: SimVar position (aircraft GPS in-flight)
+      const svLat = simVarState.latitude.get();
+      const svLon = simVarState.longitude.get();
+      if (Math.abs(svLat) > 0.1) {
+        console.log(`[WOA] Centering on SimVar position: (${svLat}, ${svLon})`);
+        mapManager.updateAircraftPosition(svLat, svLon, simVarState.heading.get());
+        this.olMap.getView().animate({
+          center: fromLonLat([svLon, svLat]),
+          zoom: 11,
+          duration: 500,
+        });
+        return;
+      }
+
+      // Priority 4: Default to LFPG (Paris CDG) — never leave map at 0,0
+      console.log("[WOA] No player position found, defaulting to LFPG");
+      this.olMap.getView().animate({
+        center: fromLonLat([2.55, 49.0]),
+        zoom: 6,
+        duration: 500,
+      });
     } catch (e) {
       console.warn("[WOA] Could not center on player airport:", e);
     }
@@ -786,11 +874,14 @@ export class MapController {
   // AIRPORT/HELIPAD/FACTORY LOADING
   // ═══════════════════════════════════════════════════════════
 
-  private async fetchAirportsForMap(): Promise<void> {
+  private fetchAirportsForMap(): void {
     if (!mapManager.isInitialized()) return;
 
     const map = mapManager.getMap();
     if (!map) return;
+
+    // Skip if airports cache not yet loaded (InitService still loading)
+    if (DatabaseManager.getAirportsCache().length === 0) return;
 
     // Get current zoom level
     const zoom = map.getView().getZoom() || 7;
@@ -816,78 +907,54 @@ export class MapController {
     const minLon = bounds.minLon - lonPadding;
     const maxLon = bounds.maxLon + lonPadding;
 
-    // Set loading status
-    mapState.largeAirportsStatus.set("loading");
-    mapState.mediumAirportsStatus.set("loading");
-    mapState.smallAirportsStatus.set("loading");
+    // Determine types by zoom level
+    const types: string[] = ["large_airport"];
+    if (zoom >= 7) types.push("medium_airport");
+    if (zoom >= 9) types.push("small_airport");
 
-    try {
-      // ZOOM-BASED LOADING STRATEGY
-      // Zoom < 7  : large only (500 max)
-      // Zoom 7-9  : large + medium (2000 max)
-      // Zoom 9-11 : large + medium + small (6000 max)
-      // Zoom > 11 : all types (7000 max)
+    // Single synchronous pass over the airports cache (no async, no 3x scans)
+    const airports = WorldRouter.getAirportsInBoundsByTypes(minLat, maxLat, minLon, maxLon, types, 5000);
 
-      const promises: Promise<Array<{ ident: string; name: string; type: string; latitude_deg: number; longitude_deg: number; elevation_ft?: number; municipality?: string; iso_country?: string }>>[] = [];
+    console.log(`[WOA] Zoom ${zoom.toFixed(1)} - Fetched ${airports.length} airports (types: ${types.join(",")})`);
 
-      // Always load large airports
-      promises.push(WorldRouter.getAirportsInBounds(minLat, maxLat, minLon, maxLon, "large_airport", 500));
+    // Update last loaded zoom
+    this.lastLoadedZoom = zoom;
 
-      // Medium airports at zoom >= 7
-      if (zoom >= 7) {
-        promises.push(WorldRouter.getAirportsInBounds(minLat, maxLat, minLon, maxLon, "medium_airport", 1500));
-      }
+    // Diff-based update: only add new, remove stale (no clear+recreate)
+    mapManager.updateAirportFeatures(airports);
 
-      // Small airports at zoom >= 9
-      if (zoom >= 9) {
-        promises.push(WorldRouter.getAirportsInBounds(minLat, maxLat, minLon, maxLon, "small_airport", 4000));
-      }
+    mapState.largeAirportsStatus.set("success");
+    mapState.mediumAirportsStatus.set("success");
+    mapState.smallAirportsStatus.set("success");
 
-      const results = await Promise.all(promises);
-      // Note: Array.flat() not supported in Coherent GT - use concat spread instead
-      const airports = ([] as typeof results[0]).concat(...results);
+    // Save loaded bounds for comparison on next move
+    mapManager.setLastLoadedBounds({ minLat, maxLat, minLon, maxLon });
 
-      console.log(`[WOA] Zoom ${zoom.toFixed(1)} - Fetched ${airports.length} airports (L:${results[0]?.length || 0} M:${results[1]?.length || 0} S:${results[2]?.length || 0})`);
-
-      // Update last loaded zoom
-      this.lastLoadedZoom = zoom;
-
-      // V2.1: Delegate feature creation to MapManager
-      mapManager.loadAirports(airports);
-
-      mapState.largeAirportsStatus.set("success");
-      mapState.mediumAirportsStatus.set("success");
-      mapState.smallAirportsStatus.set("success");
-
-      // Save loaded bounds for comparison on next move
-      mapManager.setLastLoadedBounds({ minLat, maxLat, minLon, maxLon });
-
-      // Apply filters after loading
-      this.filterAirportsOnMap();
-
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error("[WOA] Fetch airports for map FAILED:", errorMsg);
-      mapState.largeAirportsStatus.set("error");
-      mapState.mediumAirportsStatus.set("error");
-      mapState.smallAirportsStatus.set("error");
-    }
+    // Apply filters after loading
+    this.filterAirportsOnMap();
   }
 
   public toggleFactoriesOnMap(): void {
     const newState = !mapState.showFactoriesOnMap.get();
     mapState.showFactoriesOnMap.set(newState);
 
-    mapManager.setFactoriesVisible(newState);
-
-    // Fetch factories when toggling on
+    // Fetch/refresh factories when toggling on
     if (newState) {
+      this.factoriesLoaded = true;
       this.fetchFactoriesForMap();
+    } else {
+      this.factoriesLoaded = false;
+      // Clear factory features when toggling off
+      const source = mapManager.getFactoriesSource();
+      if (source) source.clear();
     }
   }
 
   private fetchFactoriesForMap(): void {
     if (!mapManager.isInitialized()) return;
+
+    const map = mapManager.getMap();
+    const currentZoom = map?.getView().getZoom() || 10;
 
     // Load factories from local state + resolve airport coordinates
     const factories = factoryState.factories.get();
@@ -896,21 +963,43 @@ export class MapController {
     const mapFactories = factories
       .map(f => {
         const airport = airports.find(a => a.ident === f.airport_ident);
+        const isNpc = f.tier === 0;
 
-        // Resolve product icon SVG
+        // Resolve product icon SVG + item name
         let productIconSvg: string | undefined;
         let isProducing = false;
+        let itemName = "";
 
-        if (f.status === "producing" && f.current_recipe_id) {
+        if (isNpc && f.item_id) {
+          // NPC factories (tier 0): use item_id directly
+          const item = ItemService.getItemById(f.item_id);
+          if (item?.icon_path) productIconSvg = ITEM_ICON_MAP[item.icon_path];
+          itemName = item?.name || f.item_id;
+          isProducing = f.status === "producing";
+        } else if (f.status === "producing" && f.current_recipe_id) {
           isProducing = true;
           const recipe = RecipeService.getRecipeById(f.current_recipe_id);
           if (recipe) {
             const item = ItemService.getItemById(recipe.resultItemId);
             if (item?.icon_path) productIconSvg = ITEM_ICON_MAP[item.icon_path];
+            itemName = item?.name || "";
           }
         } else if (f.last_result_item_id) {
           const item = ItemService.getItemById(f.last_result_item_id);
           if (item?.icon_path) productIconSvg = ITEM_ICON_MAP[item.icon_path];
+          itemName = item?.name || "";
+        }
+
+        // Determine icon state
+        let iconState: FactoryIconState;
+        if (isNpc) {
+          iconState = "npc";
+        } else if (isProducing) {
+          iconState = "producing";
+        } else if (productIconSvg) {
+          iconState = "idle";
+        } else {
+          iconState = "empty";
         }
 
         return {
@@ -922,11 +1011,16 @@ export class MapController {
           tier: f.tier,
           productIconSvg,
           isProducing,
+          iconState,
+          isNpc,
+          stockCurrent: f.stock_current,
+          stockMax: f.stock_max,
+          itemName,
         };
       })
       .filter(f => f.latitude !== 0 || f.longitude !== 0);
 
-    mapManager.loadFactories(mapFactories);
+    mapManager.loadFactories(mapFactories, currentZoom);
     mapState.factoriesOnMapStatus.set("success");
     console.log(`[WOA] Loaded ${mapFactories.length} factories on map`);
   }

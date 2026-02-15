@@ -4,7 +4,7 @@
  */
 
 import { DatabaseManager } from "../managers/DatabaseManager";
-import type { Item, MarketOrder, InventoryItem, SellOrder } from "../managers/DatabaseManager";
+import type { Item, MarketOrder, InventoryItem, SellOrder, Factory } from "../managers/DatabaseManager";
 import { marketState } from "../state/MarketState";
 import { factoryState } from "../state/FactoryState";
 import { localMarketService } from "./LocalMarketService";
@@ -254,9 +254,11 @@ class AIEconomyServiceClass {
 
   private async generateAIOrders(): Promise<void> {
     try {
-      // Remove old AI orders
+      // Remove old AI + NPC orders
       const existingOrders = await DatabaseManager.getAll<MarketOrder>("market_orders");
-      const oldAIOrders = existingOrders.filter((o) => o.seller_id === "AI" && o.is_active);
+      const oldAIOrders = existingOrders.filter(
+        (o) => (o.seller_id === "AI" || o.seller_id === "NPC") && o.is_active
+      );
 
       for (const order of oldAIOrders) {
         order.is_active = false;
@@ -303,6 +305,10 @@ class AIEconomyServiceClass {
         }
       }
 
+      // Generate NPC factory sell orders (from actual factory stock)
+      const npcOrders = await this.generateNpcFactoryOrders(items);
+      totalOrders += npcOrders;
+
       // Refresh market state
       const allActiveOrders = await DatabaseManager.getActiveMarketOrders();
       const listings = allActiveOrders.map((o) => ({
@@ -317,12 +323,60 @@ class AIEconomyServiceClass {
       }));
       marketState.marketListings.set(listings as any);
 
-      console.log(`[AIEconomyService] Generated ${totalOrders} AI orders across ${AI_AIRPORTS.length} airports`);
+      console.log(`[AIEconomyService] Generated ${totalOrders} AI orders (${npcOrders} from NPC factories)`);
       this.callbacks.onOrdersGenerated?.(totalOrders);
 
     } catch (error) {
       console.error("[AIEconomyService] Failed to generate AI orders:", error);
     }
+  }
+
+  /**
+   * Generate sell orders from NPC factory stock
+   * Each NPC factory with stock_current > 0 creates a sell order at its airport
+   */
+  private async generateNpcFactoryOrders(items: Item[]): Promise<number> {
+    const factories = factoryState.factories.get();
+    const npcFactories = factories.filter(
+      f => f.tier === 0 && f.company_id === "NPC" && f.item_id && (f.stock_current || 0) > 0
+    );
+
+    if (npcFactories.length === 0) return 0;
+
+    let orderCount = 0;
+
+    for (const factory of npcFactories) {
+      const stockAvailable = factory.stock_current || 0;
+      if (stockAvailable <= 0) continue;
+
+      // Sell up to 50 per cycle
+      const quantity = Math.min(stockAvailable, 50);
+
+      // Find item for pricing
+      const item = items.find(i => i.id === factory.item_id || i.code === factory.item_id);
+      if (!item) continue;
+
+      // Price: 85-115% of base
+      const supplyFactor = 0.85 + Math.random() * 0.3;
+      const price = Math.round(item.base_price * supplyFactor * 100) / 100;
+
+      const order: MarketOrder = {
+        id: this.generateUUID(),
+        type: "sell",
+        item_code: factory.item_id!,
+        quantity,
+        price_per_unit: price,
+        icao: factory.airport_ident,
+        seller_id: "NPC",
+        is_active: true,
+        created_at: new Date().toISOString(),
+      };
+
+      await DatabaseManager.put("market_orders", order, false);
+      orderCount++;
+    }
+
+    return orderCount;
   }
 
   // ─────────────────────────────────────────────────────────

@@ -1,0 +1,11 @@
+<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- Adhesive - glue tube -->
+        <rect x="14" y="18" width="20" height="20" rx="3" fill="#d97706"/>
+        <rect x="14" y="18" width="20" height="20" rx="3" stroke="#b45309" stroke-width="1"/>
+        <rect x="20" y="10" width="8" height="10" rx="2" fill="#f59e0b"/>
+        <path d="M22 10 L24 4 L26 10" fill="#fbbf24"/>
+        <path d="M24 4 L24 2" stroke="#f59e0b" stroke-width="1.5" stroke-linecap="round"/>
+        <circle cx="24" cy="2" r="1.5" fill="#fbbf24"/>
+        <rect x="16" y="26" width="16" height="6" rx="1" fill="#92400e"/>
+        <text x="24" y="31" text-anchor="middle" fill="#fbbf24" font-size="5" font-weight="bold">GLU</text>
+      </svg>

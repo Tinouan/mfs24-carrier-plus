@@ -294,7 +294,13 @@ export interface Factory {
   food_stock: number;
   food_capacity: number;
   food_tier_min: number;               // Lowest food tier in stock (determines bonus)
+  food_items?: { item_code: string; quantity: number; tier: number }[]; // Tracked food deposits
   food_consumption_per_hour: number;
+  // NPC fields (tier 0 only)
+  item_id?: string;              // T0 item produced (only for NPC tier=0)
+  stock_current?: number;        // Current stock (0-stock_max)
+  stock_max?: number;            // Max stock capacity (default 1000)
+  production_rate?: number;      // Items produced per tick (default 50)
   created_at: string;
 }
 
@@ -864,6 +870,9 @@ class DatabaseManagerClass {
   // In-memory cache for airports (static data, no need to persist)
   private airportsCache: Airport[] = [];
 
+  // In-memory cache for NPC factories (tier 0) — not persisted to save localStorage quota
+  private npcFactoriesCache: any[] = [];
+
   // ─────────────────────────────────────────────────────────
   // INITIALIZATION
   // ─────────────────────────────────────────────────────────
@@ -882,9 +891,88 @@ class DatabaseManagerClass {
         throw new Error("localStorage is not available");
       }
 
-      // Test localStorage
-      localStorage.setItem(STORAGE_PREFIX + "test", "1");
-      localStorage.removeItem(STORAGE_PREFIX + "test");
+      // ── QUOTA CLEANUP ──
+      // Coherent GT has a very small localStorage quota (~5MB).
+      // Remove non-essential data FIRST using removeItem (never throws),
+      // then re-write smaller versions only after freeing space.
+
+      // 1. Strip NPC factories (tier 0) — read, remove, then re-write player-only
+      let playerFactories: any[] = [];
+      try {
+        const factoriesKey = STORAGE_PREFIX + "factories";
+        const raw = localStorage.getItem(factoriesKey);
+        if (raw) {
+          const all = JSON.parse(raw) as any[];
+          playerFactories = all.filter((f: any) => f.tier !== 0);
+          const npcCount = all.length - playerFactories.length;
+          // Always removeItem first (frees quota immediately, never throws)
+          localStorage.removeItem(factoriesKey);
+          if (npcCount > 0) {
+            console.log(`[DatabaseManager] Stripped ${npcCount} NPC factories from localStorage`);
+          }
+        }
+      } catch (e) {
+        localStorage.removeItem(STORAGE_PREFIX + "factories");
+        console.warn("[DatabaseManager] Cleared corrupted factories store");
+      }
+
+      // 2. Nuke sync_log entirely (non-essential, rebuilt on sync)
+      localStorage.removeItem(STORAGE_PREFIX + "sync_log");
+
+      // 3. Trim large non-critical stores to prevent quota overflow
+      const TRIM_STORES: { name: string; maxEntries: number }[] = [
+        { name: "transaction_log", maxEntries: 200 },
+        { name: "flight_history", maxEntries: 100 },
+        { name: "market_orders", maxEntries: 200 },
+        { name: "sell_orders", maxEntries: 100 },
+        { name: "company_messages", maxEntries: 50 },
+      ];
+      for (const { name, maxEntries } of TRIM_STORES) {
+        try {
+          const key = STORAGE_PREFIX + name;
+          const raw = localStorage.getItem(key);
+          if (raw && raw.length > 20000) {
+            const entries = JSON.parse(raw) as any[];
+            if (entries.length > maxEntries) {
+              localStorage.removeItem(key);
+              const trimmed = entries.slice(-maxEntries);
+              localStorage.setItem(key, JSON.stringify(trimmed));
+              console.log(`[DatabaseManager] Trimmed ${name}: ${entries.length} → ${trimmed.length}`);
+            }
+          }
+        } catch (e) {
+          localStorage.removeItem(STORAGE_PREFIX + name);
+        }
+      }
+
+      // 4. Re-write player factories (now that quota is freed)
+      if (playerFactories.length > 0) {
+        try {
+          localStorage.setItem(STORAGE_PREFIX + "factories", JSON.stringify(playerFactories));
+        } catch (e) {
+          console.error("[DatabaseManager] Cannot save player factories — quota still full");
+        }
+      }
+
+      // 5. Test localStorage
+      try {
+        localStorage.setItem(STORAGE_PREFIX + "test", "1");
+        localStorage.removeItem(STORAGE_PREFIX + "test");
+      } catch (e) {
+        // Last resort: clear ALL non-essential stores
+        console.warn("[DatabaseManager] Quota STILL exceeded — emergency purge");
+        const essential = ["player", "company", "aircraft", "inventory", "factories", "workers"];
+        const allKeys = Object.keys(localStorage).filter(k => k.startsWith(STORAGE_PREFIX));
+        for (const key of allKeys) {
+          const storeName = key.replace(STORAGE_PREFIX, "");
+          if (!essential.includes(storeName)) {
+            localStorage.removeItem(key);
+          }
+        }
+        // Retry
+        localStorage.setItem(STORAGE_PREFIX + "test", "1");
+        localStorage.removeItem(STORAGE_PREFIX + "test");
+      }
 
       // Debug: Log all localStorage keys with woa_ prefix
       console.log("[DatabaseManager] === INITIALIZATION DEBUG ===");
@@ -1089,7 +1177,13 @@ class DatabaseManagerClass {
 
   private saveStore<T>(storeName: StoreName, data: T[]): void {
     const key = this.getStoreKey(storeName);
-    localStorage.setItem(key, JSON.stringify(data));
+    // NPC factories (tier 0) are re-seeded on each init — don't persist to save quota
+    if (storeName === "factories") {
+      const playerOnly = (data as any[]).filter((f: any) => f.tier !== 0);
+      localStorage.setItem(key, JSON.stringify(playerOnly));
+    } else {
+      localStorage.setItem(key, JSON.stringify(data));
+    }
   }
 
   private getNextSyncId(): number {
@@ -1123,6 +1217,12 @@ class DatabaseManagerClass {
       return this.airportsCache.find((a) => a.ident === key) as T | undefined;
     }
 
+    // Factories: check NPC cache first, then localStorage
+    if (storeName === "factories") {
+      const npc = this.npcFactoriesCache.find((f: any) => f.id === key);
+      if (npc) return npc as T;
+    }
+
     const keyPath = KEY_PATHS[storeName];
     const data = this.loadStore<T>(storeName);
     return data.find((item: any) => item[keyPath] === key);
@@ -1136,11 +1236,29 @@ class DatabaseManagerClass {
       return this.airportsCache as T[];
     }
 
+    // Factories: merge player (localStorage) + NPC (memory cache)
+    if (storeName === "factories") {
+      const playerFactories = this.loadStore<T>(storeName);
+      return ([] as T[]).concat(playerFactories, this.npcFactoriesCache as T[]);
+    }
+
     return this.loadStore<T>(storeName);
   }
 
   async put<T>(storeName: StoreName, record: T, logSync = true): Promise<void> {
     if (!this.initialized) throw new Error("Database not initialized");
+
+    // NPC factories (tier 0): store in memory only, not localStorage
+    if (storeName === "factories" && (record as any).tier === 0) {
+      const keyValue = (record as any).id;
+      const idx = this.npcFactoriesCache.findIndex((f: any) => f.id === keyValue);
+      if (idx >= 0) {
+        this.npcFactoriesCache[idx] = record;
+      } else {
+        this.npcFactoriesCache.push(record);
+      }
+      return; // Skip localStorage + sync
+    }
 
     const keyPath = KEY_PATHS[storeName];
     const data = this.loadStore<T>(storeName);

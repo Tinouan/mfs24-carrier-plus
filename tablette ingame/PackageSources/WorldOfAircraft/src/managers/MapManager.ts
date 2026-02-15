@@ -42,6 +42,8 @@ export interface AirportData {
   name?: string;
 }
 
+export type FactoryIconState = "npc" | "producing" | "idle" | "empty";
+
 export interface FactoryData {
   id: string;
   name: string;
@@ -55,6 +57,15 @@ export interface FactoryData {
   productIconSvg?: string;
   /** true = producing, false = idle/paused */
   isProducing?: boolean;
+  /** Icon state for zoom-based display */
+  iconState?: FactoryIconState;
+  /** NPC factory flag */
+  isNpc?: boolean;
+  /** NPC stock info (for tooltip) */
+  stockCurrent?: number;
+  stockMax?: number;
+  /** Item display name (for tooltip) */
+  itemName?: string;
 }
 
 export interface MapCallbacks {
@@ -95,6 +106,16 @@ class MapManager {
   private showLargeAirports = true;
   private showMediumAirports = true;
   private showSmallAirports = false;
+
+  // Factory airport coords cache for circle repositioning
+  private factoryAirportCoords: Record<string, { lon: number; lat: number }> = {};
+
+  // Diff-based airport tracking (avoid clear+recreate)
+  private loadedAirportIdents: Record<string, boolean> = {};
+
+  // Cached SVG styles per airport type (generated once, reused for all features)
+  private airportStyleCache: Record<string, Style> = {};
+  private airportHiddenStyle = new Style({});
 
   // ═══════════════════════════════════════════════════════════════════════════
   // INITIALIZATION
@@ -195,12 +216,12 @@ class MapManager {
         visible: false,
       });
 
-      // Create factories layer
+      // Create factories layer (visible at zoom >= 10)
       this.factoriesSource = new VectorSource();
       this.factoriesLayer = new VectorLayer({
         source: this.factoriesSource,
         zIndex: 60,
-        visible: false,
+        minZoom: 5,
       });
 
       // Create helipads layer
@@ -286,6 +307,8 @@ class MapManager {
     this.helipadsLayer = null;
     this.mapInitialized = false;
     this.lastLoadedBounds = null;
+    this.factoryAirportCoords = {};
+    this.loadedAirportIdents = {};
 
     if (this.mapMoveDebounceTimer !== null) {
       clearTimeout(this.mapMoveDebounceTimer);
@@ -438,66 +461,108 @@ class MapManager {
   }
 
   /**
-   * Clear and reload airports on the map
+   * Get (or create) a cached Style for an airport type.
+   * Only 6 possible types — each SVG is encoded once and reused.
+   */
+  private getAirportStyle(type: string): Style {
+    if (this.airportStyleCache[type]) return this.airportStyleCache[type];
+
+    const colors: Record<string, string> = {
+      "large_airport": "#FF5722",
+      "medium_airport": "#FFC107",
+      "small_airport": "#FFFFFF",
+      "heliport": "#2196F3",
+      "seaplane_base": "#00BCD4",
+      "closed": "#9E9E9E",
+    };
+    const sizes: Record<string, number> = {
+      "large_airport": 12,
+      "medium_airport": 9,
+      "small_airport": 6,
+      "heliport": 7,
+      "seaplane_base": 7,
+      "closed": 5,
+    };
+    const color = colors[type] || "#FFFFFF";
+    const size = sizes[type] || 6;
+
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28">
+      <circle cx="14" cy="14" r="${size}" fill="${color}" stroke="#1a1a24" stroke-width="2"/>
+    </svg>`;
+    const iconUrl = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+
+    const style = new Style({ image: new Icon({ src: iconUrl, scale: 1 }) });
+    this.airportStyleCache[type] = style;
+    return style;
+  }
+
+  /**
+   * Diff-based airport update: only add new features, remove stale ones.
+   * Much faster than clear+recreate when panning.
+   */
+  updateAirportFeatures(airports: AirportData[]): void {
+    if (!this.airportsSource) return;
+
+    // Build set of incoming idents
+    const incomingIdents: Record<string, boolean> = {};
+    for (const a of airports) {
+      const icao = a.ident || a.icao || "";
+      if (icao) incomingIdents[icao] = true;
+    }
+
+    // Remove features no longer in the result set
+    const toRemove: Feature<Point>[] = [];
+    this.airportsSource.getFeatures().forEach((f) => {
+      const icao = f.get("icao") as string;
+      if (!incomingIdents[icao]) {
+        toRemove.push(f);
+        delete this.loadedAirportIdents[icao];
+      }
+    });
+    for (const f of toRemove) {
+      this.airportsSource.removeFeature(f);
+    }
+
+    // Add only new airports (skip already loaded)
+    let added = 0;
+    for (const airport of airports) {
+      const icao = airport.ident || airport.icao || "????";
+      if (this.loadedAirportIdents[icao]) continue;
+
+      const lat = airport.latitude_deg || airport.lat || 0;
+      const lon = airport.longitude_deg || airport.lon || 0;
+      if (lat === 0 && lon === 0) continue;
+
+      const type = airport.type || "small_airport";
+      const feature = new Feature({
+        geometry: new Point(fromLonLat([lon, lat])),
+      });
+
+      feature.setStyle(this.getAirportStyle(type));
+      feature.set("icao", icao);
+      feature.set("name", airport.name || "");
+      feature.set("type", type);
+
+      this.airportsSource.addFeature(feature);
+      this.loadedAirportIdents[icao] = true;
+      added++;
+    }
+
+    if (added > 0 || toRemove.length > 0) {
+      console.log(`[MapManager] Airports diff: +${added} -${toRemove.length} (total: ${this.airportsSource.getFeatures().length})`);
+    }
+  }
+
+  /**
+   * Full reload: clear everything and load from scratch.
+   * Used when toggling airport types on/off.
    */
   loadAirports(airports: AirportData[]): void {
     if (!this.airportsSource) return;
 
     this.airportsSource.clear();
-
-    airports.forEach((airport) => {
-      const lat = airport.latitude_deg || airport.lat || 0;
-      const lon = airport.longitude_deg || airport.lon || 0;
-      const icao = airport.ident || airport.icao || "????";
-      const type = airport.type || "small_airport";
-
-      if (lat === 0 && lon === 0) return;
-
-      const feature = new Feature({
-        geometry: new Point(fromLonLat([lon, lat])),
-      });
-
-      // Colors by type
-      const colors: Record<string, string> = {
-        "large_airport": "#FF5722",
-        "medium_airport": "#FFC107",
-        "small_airport": "#FFFFFF",
-        "heliport": "#2196F3",
-        "seaplane_base": "#00BCD4",
-        "closed": "#9E9E9E",
-      };
-      const color = colors[type] || "#FFFFFF";
-
-      // Sizes by type
-      const sizes: Record<string, number> = {
-        "large_airport": 12,
-        "medium_airport": 9,
-        "small_airport": 6,
-        "heliport": 7,
-        "seaplane_base": 7,
-        "closed": 5,
-      };
-      const size = sizes[type] || 6;
-
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28">
-        <circle cx="14" cy="14" r="${size}" fill="${color}" stroke="#1a1a24" stroke-width="2"/>
-      </svg>`;
-      const iconUrl = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
-
-      feature.setStyle(
-        new Style({
-          image: new Icon({ src: iconUrl, scale: 1 }),
-        })
-      );
-
-      feature.set("icao", icao);
-      feature.set("name", airport.name || "");
-      feature.set("type", type);
-
-      this.airportsSource?.addFeature(feature);
-    });
-
-    console.log("[MapManager] Loaded", airports.length, "airports");
+    this.loadedAirportIdents = {};
+    this.updateAirportFeatures(airports);
   }
 
   /**
@@ -514,34 +579,11 @@ class MapManager {
       if (type === "medium_airport" && this.showMediumAirports) visible = true;
       if (type === "small_airport" && this.showSmallAirports) visible = true;
 
-      // Hide by setting empty style or show by restoring
+      // Hide by setting empty style or show by restoring cached style
       if (!visible) {
-        feature.setStyle(new Style({}));
+        feature.setStyle(this.airportHiddenStyle);
       } else {
-        // Restore style based on type
-        const colors: Record<string, string> = {
-          "large_airport": "#FF5722",
-          "medium_airport": "#FFC107",
-          "small_airport": "#FFFFFF",
-        };
-        const sizes: Record<string, number> = {
-          "large_airport": 12,
-          "medium_airport": 9,
-          "small_airport": 6,
-        };
-        const color = colors[type] || "#FFFFFF";
-        const size = sizes[type] || 6;
-
-        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28">
-          <circle cx="14" cy="14" r="${size}" fill="${color}" stroke="#1a1a24" stroke-width="2"/>
-        </svg>`;
-        const iconUrl = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
-
-        feature.setStyle(
-          new Style({
-            image: new Icon({ src: iconUrl, scale: 1 }),
-          })
-        );
+        feature.setStyle(this.getAirportStyle(type));
       }
     });
   }
@@ -600,116 +642,236 @@ class MapManager {
   }
 
   /**
-   * Load factories on the map
+   * Compute circle positions for factory icons around an airport
    */
-  loadFactories(factories: FactoryData[]): void {
+  private getFactoryIconPositions(
+    centerLon: number, centerLat: number,
+    factoryCount: number, zoom: number
+  ): { lon: number; lat: number }[] {
+    // Radius in degrees — adapts to zoom for constant visual spacing
+    // At zoom 7: ~0.24° (~25km), zoom 10: ~0.03° (~3km), zoom 14: ~0.002°
+    const radiusDeg = 0.03 / Math.pow(2, zoom - 10);
+
+    if (factoryCount <= 0) return [];
+
+    // Single factory: place above the airport marker
+    if (factoryCount === 1) {
+      return [{ lon: centerLon, lat: centerLat + radiusDeg * 0.7 }];
+    }
+
+    // Two concentric rings for 8+ factories
+    if (factoryCount > 8) {
+      const innerCount = Math.ceil(factoryCount / 2);
+      const outerCount = factoryCount - innerCount;
+      const inner = this.computeRingPositions(centerLon, centerLat, innerCount, radiusDeg);
+      const outer = this.computeRingPositions(centerLon, centerLat, outerCount, radiusDeg * 1.8);
+      return inner.concat(outer);
+    }
+
+    return this.computeRingPositions(centerLon, centerLat, factoryCount, radiusDeg);
+  }
+
+  private computeRingPositions(
+    centerLon: number, centerLat: number,
+    count: number, radiusDeg: number
+  ): { lon: number; lat: number }[] {
+    const positions: { lon: number; lat: number }[] = [];
+    const angleStep = (2 * Math.PI) / count;
+    const startAngle = -Math.PI / 2; // Start from top
+
+    for (let i = 0; i < count; i++) {
+      const angle = startAngle + (i * angleStep);
+      positions.push({
+        lon: centerLon + radiusDeg * Math.cos(angle),
+        lat: centerLat + radiusDeg * Math.sin(angle) * 0.7, // Mercator correction
+      });
+    }
+    return positions;
+  }
+
+  /**
+   * Load factories on the map — positioned in circles around airports
+   */
+  loadFactories(factories: FactoryData[], zoom?: number): void {
     if (!this.factoriesSource) return;
 
     this.factoriesSource.clear();
+    this.factoryAirportCoords = {};
 
-    factories.forEach((factory) => {
+    const currentZoom = zoom || this.olMap?.getView().getZoom() || 10;
+
+    // Group factories by airport
+    const byAirport: Record<string, FactoryData[]> = {};
+    for (const factory of factories) {
       const lat = factory.latitude || 0;
       const lon = factory.longitude || 0;
+      if (lat === 0 && lon === 0) continue;
 
-      if (lat === 0 && lon === 0) return;
-
-      const feature = new Feature({
-        geometry: new Point(fromLonLat([lon, lat])),
-      });
-
-      // Color based on tier
-      const tier = factory.tier || 0;
-      const tierColors: Record<number, string> = {
-        0: "#607D8B", 1: "#4CAF50", 2: "#8BC34A", 3: "#CDDC39", 4: "#FFEB3B",
-        5: "#FFC107", 6: "#FF9800", 7: "#FF5722", 8: "#F44336", 9: "#E91E63", 10: "#9C27B0",
-      };
-      const bgColor = tierColors[tier] || "#607D8B";
-
-      // Build marker SVG — use product icon if available, else fallback to shape
-      let svg: string;
-      if (factory.productIconSvg) {
-        svg = this.getFactoryProductSvg(factory.productIconSvg, bgColor, factory.isProducing !== false);
-      } else {
-        const emoji = factory.emoji || "🏭";
-        svg = this.getFactoryShapeSvg(emoji, bgColor);
+      const icao = factory.airport_ident;
+      if (!byAirport[icao]) {
+        byAirport[icao] = [];
+        this.factoryAirportCoords[icao] = { lon, lat };
       }
-      const iconUrl = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+      byAirport[icao].push(factory);
+    }
 
-      feature.setStyle(
-        new Style({
-          image: new Icon({ src: iconUrl, scale: 1.2 }),
-        })
+    // Create features with circle positioning
+    const icaos = Object.keys(byAirport);
+    for (const icao of icaos) {
+      const airportFactories = byAirport[icao];
+      const coords = this.factoryAirportCoords[icao];
+      const positions = this.getFactoryIconPositions(
+        coords.lon, coords.lat, airportFactories.length, currentZoom
       );
 
-      feature.set("id", factory.id);
-      feature.set("name", factory.name || "");
-      feature.set("tier", tier);
-      feature.set("airport", factory.airport_ident || "");
-      feature.set("product", factory.product_type || "");
+      for (let i = 0; i < airportFactories.length; i++) {
+        const factory = airportFactories[i];
+        const pos = positions[i];
+        if (!pos) continue;
 
-      this.factoriesSource?.addFeature(feature);
-    });
+        const feature = new Feature({
+          geometry: new Point(fromLonLat([pos.lon, pos.lat])),
+        });
 
-    console.log("[MapManager] Loaded", factories.length, "factories");
+        // Determine icon state
+        const state: FactoryIconState = factory.iconState || (
+          factory.isNpc ? "npc" :
+          factory.isProducing ? "producing" :
+          factory.productIconSvg ? "idle" : "empty"
+        );
+
+        // Build marker SVG (pass tier for color ring on player factories)
+        const tier = factory.tier || 0;
+        const svg = this.getFactoryIconSvg(factory.productIconSvg || null, state, tier);
+        const iconUrl = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+
+        feature.setStyle(
+          new Style({
+            image: new Icon({ src: iconUrl, scale: 1 }),
+          })
+        );
+
+        // Feature properties for click handling and repositioning
+        feature.set("id", factory.id);
+        feature.set("name", factory.name || "");
+        feature.set("tier", factory.tier || 0);
+        feature.set("airport", icao);
+        feature.set("factoryIndex", i);
+        feature.set("factoryTotal", airportFactories.length);
+        feature.set("isNpc", factory.isNpc || false);
+        feature.set("stockCurrent", factory.stockCurrent || 0);
+        feature.set("stockMax", factory.stockMax || 0);
+        feature.set("itemName", factory.itemName || "");
+        feature.set("iconState", state);
+
+        this.factoriesSource?.addFeature(feature);
+      }
+    }
+
+    console.log("[MapManager] Loaded", factories.length, "factories at", Object.keys(byAirport).length, "airports");
   }
 
   /**
-   * Get factory shape SVG (Coherent GT compatible geometric shapes)
+   * Reposition factory features when zoom changes (constant visual spacing)
    */
-  private getFactoryShapeSvg(emoji: string, bgColor: string): string {
-    const shapeMap: Record<string, string> = {
-      "🌾": `<path d="M18 8 L18 20 M14 12 L18 16 L22 12" stroke="#ffffff" stroke-width="2.5" fill="none"/>`,
-      "🫒": `<ellipse cx="18" cy="18" rx="6" ry="8" fill="#ffffff"/>`,
-      "🍇": `<circle cx="15" cy="14" r="4" fill="#ffffff"/><circle cx="21" cy="14" r="4" fill="#ffffff"/><circle cx="18" cy="20" r="4" fill="#ffffff"/>`,
-      "🧀": `<path d="M8 24 L18 8 L28 24 Z" fill="#ffffff"/>`,
-      "🍫": `<rect x="11" y="12" width="14" height="12" rx="2" fill="#ffffff"/>`,
-      "🥫": `<rect x="12" y="10" width="12" height="16" rx="3" fill="#ffffff"/>`,
-      "⛏️": `<path d="M12 24 L24 12 M10 14 L20 14 L20 10" stroke="#ffffff" stroke-width="2.5" fill="none"/>`,
-      "🪨": `<polygon points="18,10 26,18 22,26 14,26 10,18" fill="#ffffff"/>`,
-      "💎": `<polygon points="18,10 26,18 18,26 10,18" fill="#ffffff"/>`,
-      "🪵": `<rect x="10" y="14" width="16" height="8" rx="2" fill="#ffffff"/>`,
-      "🧱": `<rect x="10" y="12" width="7" height="5" fill="#ffffff"/><rect x="19" y="12" width="7" height="5" fill="#ffffff"/><rect x="14" y="19" width="8" height="5" fill="#ffffff"/>`,
-      "🛢️": `<rect x="12" y="10" width="12" height="16" rx="2" fill="#ffffff"/>`,
-      "⚙️": `<circle cx="18" cy="18" r="6" stroke="#ffffff" stroke-width="2.5" fill="none"/><circle cx="18" cy="18" r="2" fill="#ffffff"/>`,
-      "🏭": `<path d="M10 26 L10 16 L14 12 L14 16 L18 12 L18 16 L22 12 L22 26 Z" fill="#ffffff"/>`,
-      "📦": `<rect x="11" y="11" width="14" height="14" rx="1" fill="#ffffff"/>`,
+  repositionFactoryFeatures(zoom: number): void {
+    if (!this.factoriesSource) return;
+
+    // Group features by airport for batch repositioning
+    const byAirport: Record<string, Feature<Point>[]> = {};
+    for (const feature of this.factoriesSource.getFeatures()) {
+      const icao = feature.get("airport") as string;
+      if (!byAirport[icao]) byAirport[icao] = [];
+      byAirport[icao].push(feature);
+    }
+
+    for (const icao of Object.keys(byAirport)) {
+      const features = byAirport[icao];
+      const coords = this.factoryAirportCoords[icao];
+      if (!coords) continue;
+
+      const positions = this.getFactoryIconPositions(
+        coords.lon, coords.lat, features.length, zoom
+      );
+
+      for (const feature of features) {
+        const idx = feature.get("factoryIndex") as number;
+        if (positions[idx]) {
+          const geom = feature.getGeometry();
+          if (geom) {
+            geom.setCoordinates(fromLonLat([positions[idx].lon, positions[idx].lat]));
+          }
+        }
+      }
+    }
+  }
+
+  // Tier border colors (matches RenderHelpers.ts TIER_BORDER_COLORS)
+  private static readonly TIER_COLORS: Record<number, string> = {
+    0: "#4a5568",  // Gray — NPC/Raw
+    1: "#22c55e",  // Green — Common
+    2: "#3b82f6",  // Blue — Advanced
+    3: "#a855f7",  // Purple — Rare
+    4: "#f59e0b",  // Orange — Epic
+    5: "#ef4444",  // Red — Legendary
+  };
+
+  /**
+   * Build factory icon SVG based on state (npc, producing, idle, empty)
+   * Player factories (tier >= 1) use tier color for the border
+   */
+  private getFactoryIconSvg(productSvgRaw: string | null, state: FactoryIconState, tier: number = 0): string {
+    const tierColor = MapManager.TIER_COLORS[tier] || "#4a5568";
+    const isPlayer = tier >= 1;
+
+    // Style per state
+    const styles: Record<FactoryIconState, {
+      border: string; borderStyle: string; bg: string;
+      opacity: string; filter: string; grayscale: boolean;
+    }> = {
+      npc:       { border: "#4a5568", borderStyle: "solid", bg: "#1e293b", opacity: "1.0", filter: "", grayscale: false },
+      producing: { border: "#22c55e", borderStyle: "solid", bg: "#0d1a2e", opacity: "1.0", filter: `<filter id="glow"><feDropShadow dx="0" dy="0" stdDeviation="2" flood-color="${tierColor}" flood-opacity="0.5"/></filter>`, grayscale: false },
+      idle:      { border: "#3b82f6", borderStyle: "solid", bg: "#0d1a2e", opacity: "0.6", filter: `<filter id="gray"><feColorMatrix type="saturate" values="0"/></filter>`, grayscale: true },
+      empty:     { border: "#3b82f6", borderStyle: "dashed", bg: "#0d1a2e", opacity: "1.0", filter: "", grayscale: false },
     };
 
-    const shape = shapeMap[emoji] || shapeMap["📦"];
+    const s = styles[state];
+    // Player factories use tier color for the border
+    const borderColor = isPlayer ? tierColor : s.border;
 
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 36 36">
-      <circle cx="18" cy="18" r="16" fill="${bgColor}" stroke="#ffffff" stroke-width="2"/>
-      ${shape}
-    </svg>`;
-  }
+    // Empty state: show "?" text
+    if (state === "empty" || !productSvgRaw) {
+      const dashArray = s.borderStyle === "dashed" ? ` stroke-dasharray="4 3"` : "";
+      return `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36">
+        <rect x="2" y="2" width="32" height="32" rx="6" fill="${s.bg}" stroke="${borderColor}" stroke-width="2"${dashArray}/>
+        <text x="18" y="23" text-anchor="middle" font-size="16" font-weight="bold" fill="${borderColor}">?</text>
+      </svg>`;
+    }
 
-  /**
-   * Build factory marker SVG with embedded product icon
-   */
-  private getFactoryProductSvg(productSvgRaw: string, bgColor: string, isActive: boolean): string {
+    // Process product SVG
     try {
-      // Strip XML declaration and trim whitespace
       let innerSvg = productSvgRaw
         .replace(/<\?xml[^?]*\?>\s*/g, "")
         .trim();
 
-      // Replace the entire <svg ...> opening tag with a clean positioned/sized one
-      // All icons use viewBox 0 0 64 64 — we scale to 26x26 centered in the 36x36 marker
+      // Replace <svg ...> tag with positioned/sized version
       innerSvg = innerSvg.replace(
         /<svg[^>]*>/,
         `<svg x="5" y="5" width="26" height="26" viewBox="0 0 64 64">`
       );
 
-      const opacity = isActive ? "1.0" : "0.4";
-      const borderColor = isActive ? "#22c55e" : "#64748b";
+      const filterDef = s.filter ? `<defs>${s.filter}</defs>` : "";
+      const rectFilterRef = s.filter && !s.grayscale ? ` filter="url(#glow)"` : "";
+      const iconFilterRef = s.grayscale ? ` filter="url(#gray)"` : "";
 
-      return `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 36 36">
-        <circle cx="18" cy="18" r="16" fill="${bgColor}" stroke="${borderColor}" stroke-width="2.5"/>
-        <g opacity="${opacity}">${innerSvg}</g>
+      return `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36">
+        ${filterDef}
+        <rect x="2" y="2" width="32" height="32" rx="6" fill="${s.bg}" stroke="${borderColor}" stroke-width="2"${rectFilterRef}/>
+        <g opacity="${s.opacity}"${iconFilterRef}>${innerSvg}</g>
       </svg>`;
     } catch (e) {
-      // Fallback to generic shape if SVG processing fails
-      return this.getFactoryShapeSvg("", bgColor);
+      // Fallback to empty state
+      return this.getFactoryIconSvg(null, "empty", tier);
     }
   }
 

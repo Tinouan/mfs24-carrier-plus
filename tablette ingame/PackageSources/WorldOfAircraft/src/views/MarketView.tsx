@@ -326,6 +326,20 @@ export function renderMarketTab(props: MarketViewProps): VNode {
                   T3
                 </div>
               </Button>
+              <Button callback={(): void => { marketInvTierFilter.set(4); onFetchMarketInventory(); }}>
+                <div style={marketInvTierFilter.map(t => t === 4
+                  ? "padding: 6px 10px; background: #f59e0b; color: white; border-radius: 6px; font-size: 10px; font-weight: 600;"
+                  : "padding: 6px 10px; background: #252532; color: #f59e0b; border-radius: 6px; font-size: 10px;")}>
+                  T4
+                </div>
+              </Button>
+              <Button callback={(): void => { marketInvTierFilter.set(5); onFetchMarketInventory(); }}>
+                <div style={marketInvTierFilter.map(t => t === 5
+                  ? "padding: 6px 10px; background: #ef4444; color: white; border-radius: 6px; font-size: 10px; font-weight: 600;"
+                  : "padding: 6px 10px; background: #252532; color: #ef4444; border-radius: 6px; font-size: 10px;")}>
+                  T5
+                </div>
+              </Button>
             </div>
 
             {/* Inventory list (dynamic via ref) */}
@@ -442,6 +456,20 @@ export function renderMarketTab(props: MarketViewProps): VNode {
                   ? "padding: 6px 10px; background: #a855f7; color: white; border-radius: 6px; font-size: 10px; font-weight: 600;"
                   : "padding: 6px 10px; background: #252532; color: #a855f7; border-radius: 6px; font-size: 10px;")}>
                   T3
+                </div>
+              </Button>
+              <Button callback={(): void => { marketTierFilter.set(4); onFetchMarketData(); }}>
+                <div style={marketTierFilter.map(t => t === 4
+                  ? "padding: 6px 10px; background: #f59e0b; color: white; border-radius: 6px; font-size: 10px; font-weight: 600;"
+                  : "padding: 6px 10px; background: #252532; color: #f59e0b; border-radius: 6px; font-size: 10px;")}>
+                  T4
+                </div>
+              </Button>
+              <Button callback={(): void => { marketTierFilter.set(5); onFetchMarketData(); }}>
+                <div style={marketTierFilter.map(t => t === 5
+                  ? "padding: 6px 10px; background: #ef4444; color: white; border-radius: 6px; font-size: 10px; font-weight: 600;"
+                  : "padding: 6px 10px; background: #252532; color: #ef4444; border-radius: 6px; font-size: 10px;")}>
+                  T5
                 </div>
               </Button>
             </div>

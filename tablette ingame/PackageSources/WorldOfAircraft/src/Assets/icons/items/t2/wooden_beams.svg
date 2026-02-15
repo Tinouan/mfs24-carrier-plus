@@ -1,0 +1,9 @@
+<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- Wooden Beams - large timber beams -->
+        <rect x="6" y="14" width="36" height="8" rx="1" fill="#a16207" transform="rotate(-5,24,18)"/>
+        <rect x="6" y="26" width="36" height="8" rx="1" fill="#92400e" transform="rotate(3,24,30)"/>
+        <line x1="10" y1="16" x2="38" y2="15" stroke="#78350f" stroke-width="0.5"/>
+        <line x1="10" y1="28" x2="38" y2="29" stroke="#78350f" stroke-width="0.5"/>
+        <circle cx="12" cy="18" r="2" fill="#78350f" opacity="0.4"/>
+        <circle cx="34" cy="30" r="2" fill="#78350f" opacity="0.4"/>
+      </svg>

@@ -596,6 +596,20 @@ export function renderCompanyTab(props: CompanyViewProps): VNode {
                 T3
               </div>
             </Button>
+            <Button callback={(): void => { onSetCompanyTierFilter(4); }}>
+              <div style={companyTierFilter.map(t => t === 4
+                ? "padding: 6px 10px; background: #f59e0b; color: white; border-radius: 6px; font-size: 10px; font-weight: 600;"
+                : "padding: 6px 10px; background: #252532; color: #f59e0b; border-radius: 6px; font-size: 10px;")}>
+                T4
+              </div>
+            </Button>
+            <Button callback={(): void => { onSetCompanyTierFilter(5); }}>
+              <div style={companyTierFilter.map(t => t === 5
+                ? "padding: 6px 10px; background: #ef4444; color: white; border-radius: 6px; font-size: 10px; font-weight: 600;"
+                : "padding: 6px 10px; background: #252532; color: #ef4444; border-radius: 6px; font-size: 10px;")}>
+                T5
+              </div>
+            </Button>
           </div>
 
           {/* Header */}

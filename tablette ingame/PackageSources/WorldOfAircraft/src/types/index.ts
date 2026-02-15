@@ -347,6 +347,7 @@ export interface AirportInventoryResponse {
       item_name: string;
       qty: number;
       weight_kg: number | string;
+      owner_type?: "player" | "company";
       source?: string;
       contract_id?: string;
     }>;

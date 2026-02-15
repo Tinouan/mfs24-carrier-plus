@@ -1,0 +1,9 @@
+<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- Premium Biofuel - green eco fuel -->
+        <rect x="14" y="10" width="20" height="28" rx="4" fill="#166534"/>
+        <rect x="14" y="10" width="20" height="28" rx="4" stroke="#15803d" stroke-width="1.5"/>
+        <ellipse cx="24" cy="12" rx="10" ry="3" fill="#22c55e"/>
+        <circle cx="24" cy="26" r="6" fill="#14532d"/>
+        <path d="M22 24 Q24 20, 26 24 L24 30 Z" fill="#22c55e"/>
+        <path d="M20 28 Q24 26, 28 28" stroke="#22c55e" stroke-width="1" fill="none"/>
+      </svg>

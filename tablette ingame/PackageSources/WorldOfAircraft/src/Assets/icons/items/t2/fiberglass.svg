@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+<defs><linearGradient id="fg_g" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" style="stop-color:#dbeafe;stop-opacity:0.9"/><stop offset="100%" style="stop-color:#93c5fd;stop-opacity:0.7"/></linearGradient></defs>
+<ellipse cx="24" cy="42" rx="16" ry="2.5" fill="#000" opacity=".15"/>
+<rect x="6" y="8" width="36" height="32" rx="2" fill="url(#fg_g)" stroke="#60a5fa" stroke-width="2"/>
+<rect x="6" y="14" width="36" height="8" fill="#bfdbfe" opacity=".5"/>
+<rect x="6" y="28" width="36" height="8" fill="#bfdbfe" opacity=".5"/>
+<line x1="6" y1="14" x2="42" y2="14" stroke="#93c5fd" stroke-width="1" opacity=".6"/>
+<line x1="6" y1="22" x2="42" y2="22" stroke="#93c5fd" stroke-width="1" opacity=".6"/>
+<line x1="6" y1="28" x2="42" y2="28" stroke="#93c5fd" stroke-width="1" opacity=".6"/>
+<line x1="6" y1="36" x2="42" y2="36" stroke="#93c5fd" stroke-width="1" opacity=".6"/>
+<path d="M8 10 L14 16 L8 22" stroke="#fff" stroke-width="1.5" fill="none" opacity=".5" stroke-linecap="round"/>
+<ellipse cx="14" cy="12" rx="4" ry="2" fill="#fff" opacity=".4"/>
+</svg>

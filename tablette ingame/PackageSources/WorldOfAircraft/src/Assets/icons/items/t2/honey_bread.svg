@@ -1,0 +1,8 @@
+<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- Honey Bread - bread with honey drizzle -->
+        <ellipse cx="24" cy="30" rx="14" ry="8" fill="#92400e"/>
+        <ellipse cx="24" cy="28" rx="14" ry="8" fill="#ca8a04"/>
+        <path d="M14 28 Q20 20, 24 22 Q28 20, 34 28" fill="#eab308"/>
+        <path d="M18 22 Q22 26, 26 22 Q30 26, 34 24" stroke="#f59e0b" stroke-width="2" fill="none"/>
+        <path d="M16 26 Q20 30, 24 26 Q28 30, 32 28" stroke="#f59e0b" stroke-width="1.5" fill="none" opacity="0.6"/>
+      </svg>

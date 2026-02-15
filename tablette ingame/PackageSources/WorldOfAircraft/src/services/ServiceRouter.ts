@@ -299,6 +299,17 @@ export const WorldRouter = {
     return Services.world.getAirportsInBounds(minLat, maxLat, minLon, maxLon, type, limit);
   },
 
+  getAirportsInBoundsByTypes(
+    minLat: number,
+    maxLat: number,
+    minLon: number,
+    maxLon: number,
+    types: string[],
+    limit?: number
+  ): { ident: string; name: string; type: string; latitude_deg: number; longitude_deg: number }[] {
+    return Services.world.getAirportsInBoundsByTypes(minLat, maxLat, minLon, maxLon, types, limit);
+  },
+
   async getAircraftCatalog(): Promise<any[]> {
     return Services.world.getAircraftCatalog();
   },

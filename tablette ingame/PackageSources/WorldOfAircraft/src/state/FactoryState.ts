@@ -9,7 +9,7 @@ import { Subject } from "@microsoft/msfs-sdk";
 // TYPES (local to state — full interfaces in types/index.ts)
 // ═══════════════════════════════════════════════════════════
 
-export type FactoryStatus = "idle" | "producing" | "maintenance" | "offline";
+export type FactoryStatus = "idle" | "producing" | "upgrading" | "maintenance" | "offline";
 export type WorkerStatus = "available" | "working" | "injured" | "dead";
 
 export interface FactoryData {
@@ -21,6 +21,8 @@ export interface FactoryData {
   factory_type: string;
   status: FactoryStatus;
   current_recipe_id: string | null;
+  last_recipe_id?: string | null;
+  last_result_item_id?: string | null;
   is_active: boolean;
   max_workers: number;
   max_engineers: number;
@@ -29,6 +31,15 @@ export interface FactoryData {
   food_capacity: number;
   food_tier_min: number;
   food_consumption_per_hour: number;
+  // Upgrade fields (set when status === "upgrading")
+  upgrade_started_at?: string | null;
+  upgrade_completion?: string | null;
+  upgrade_target_tier?: number | null;
+  // NPC fields (tier 0 only)
+  item_id?: string;
+  stock_current?: number;
+  stock_max?: number;
+  production_rate?: number;
   created_at: string;
 }
 

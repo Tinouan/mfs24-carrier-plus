@@ -1,0 +1,11 @@
+<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- Vegetable Soup - bowl with vegetables -->
+        <ellipse cx="24" cy="32" rx="16" ry="6" fill="#78716c"/>
+        <path d="M8 26 Q8 36, 24 38 Q40 36, 40 26" fill="#94a3b8"/>
+        <ellipse cx="24" cy="26" rx="16" ry="6" fill="#f97316" opacity="0.8"/>
+        <circle cx="18" cy="26" r="2" fill="#22c55e"/>
+        <circle cx="28" cy="25" r="2" fill="#ef4444"/>
+        <rect x="22" y="24" width="3" height="4" rx="1" fill="#f59e0b"/>
+        <path d="M16 20 Q20 16, 24 20" stroke="#94a3b8" stroke-width="0.8" fill="none" opacity="0.5"/>
+        <path d="M24 18 Q28 14, 32 18" stroke="#94a3b8" stroke-width="0.8" fill="none" opacity="0.5"/>
+      </svg>

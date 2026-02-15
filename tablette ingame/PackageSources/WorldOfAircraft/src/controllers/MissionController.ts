@@ -1158,6 +1158,7 @@ export class MissionController {
                 weight_kg: parseFloat(String(item.weight_kg)) || 0,
                 location_id: container.id,
                 location_name: container.name || container.type,
+                owner_type: (item as any).owner_type || undefined,
                 source: item.source,
                 contract_id: item.contract_id,
                 contract_route: item.contract_id ? contractRouteMap.get(item.contract_id) : undefined,

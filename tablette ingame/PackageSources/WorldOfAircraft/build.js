@@ -126,6 +126,10 @@ const baseConfig = {
   sourcemap: env.sourcemaps,
   minify: env.minify,
   logLevel: "debug",
+  // Polyfill ResizeObserver for Coherent GT (used by OpenLayers Map)
+  banner: {
+    js: `if(typeof ResizeObserver==="undefined"){window.ResizeObserver=function(){};window.ResizeObserver.prototype.observe=function(){};window.ResizeObserver.prototype.unobserve=function(){};window.ResizeObserver.prototype.disconnect=function(){};}`,
+  },
   loader: {
     ".html": "copy",
     ".png": "dataurl",
