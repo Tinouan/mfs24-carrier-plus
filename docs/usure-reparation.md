@@ -1,4 +1,4 @@
-# MFS World of Aircraft - Systeme Usure, Reparation & Carburant
+# AeroCorp Online - Systeme Usure, Reparation & Carburant
 
 **Version**: 1.6
 **Date**: 2026-02-01
@@ -513,10 +513,10 @@ class FleetServiceClass {
 
 | Fichier | Modifications |
 |---------|---------------|
-| `WorldOfAircraft.tsx` | Background tracker variables |
-| `WorldOfAircraft.tsx` | startBackgroundTracking(), stopBackgroundTracking() |
-| `WorldOfAircraft.tsx` | backgroundTrackerTick() |
-| `WorldOfAircraft.tsx` | applyBackgroundWear() |
-| `WorldOfAircraft.tsx` | syncBackgroundFuelToDb() |
-| `WorldOfAircraft.tsx` | resetBackgroundTracking() appele dans create/cancel/complete |
-| `WorldOfAircraft.tsx` | setSimulatorFuel() met a jour bgLastFuelGallons |
+| `AeroCorpOnline.tsx` | Background tracker variables |
+| `AeroCorpOnline.tsx` | startBackgroundTracking(), stopBackgroundTracking() |
+| `AeroCorpOnline.tsx` | backgroundTrackerTick() |
+| `AeroCorpOnline.tsx` | applyBackgroundWear() |
+| `AeroCorpOnline.tsx` | syncBackgroundFuelToDb() |
+| `AeroCorpOnline.tsx` | resetBackgroundTracking() appele dans create/cancel/complete |
+| `AeroCorpOnline.tsx` | setSimulatorFuel() met a jour bgLastFuelGallons |

@@ -1,4 +1,4 @@
-# MFS World of Aircraft - Systeme Anti-Triche
+# AeroCorp Online - Systeme Anti-Triche
 
 **Version**: 2.0 (Architecture P2P)
 **Date**: 2026-02-03
@@ -9,7 +9,7 @@
 
 ## Vue d'ensemble
 
-Le systeme anti-triche de MFS World of Aircraft protege l'integrite des donnees de jeu en utilisant **SQLite local comme source de verite**. En mode multi, le HOST valide toutes les actions.
+Le systeme anti-triche de AeroCorp Online protege l'integrite des donnees de jeu en utilisant **SQLite local comme source de verite**. En mode multi, le HOST valide toutes les actions.
 
 ### Principe fondamental
 
@@ -79,7 +79,7 @@ Les joueurs peuvent utiliser le panneau carburant natif de MSFS pour:
 ```typescript
 // Si carburant simulateur > carburant BDD = tentative de triche
 if (simFuelCurrent > dbFuelGallons + 1) {
-  console.warn(`[WorldOfAircraft] ANTI-CHEAT: Sim fuel (${simFuelCurrent}) > DB fuel (${dbFuelGallons}). Resetting.`);
+  console.warn(`[AeroCorpOnline] ANTI-CHEAT: Sim fuel (${simFuelCurrent}) > DB fuel (${dbFuelGallons}). Resetting.`);
 }
 ```
 
@@ -421,8 +421,8 @@ Le client ne peut pas specifier le montant a deduire.
 ### 7.1 Logs anti-triche actuels
 
 ```
-[WorldOfAircraft] ANTI-CHEAT: Sim fuel (XX.X) > DB fuel (YY.Y). Resetting.
-[WorldOfAircraft] ANTI-CHEAT Hangar: Sim fuel (XX.X) > DB fuel (YY.Y). Resetting.
+[AeroCorpOnline] ANTI-CHEAT: Sim fuel (XX.X) > DB fuel (YY.Y). Resetting.
+[AeroCorpOnline] ANTI-CHEAT Hangar: Sim fuel (XX.X) > DB fuel (YY.Y). Resetting.
 ```
 
 ### 7.2 Ameliorations futures
@@ -496,7 +496,7 @@ Ces protections necessiteraient un client lourd signe, ce qui n'est pas compatib
 
 | Fichier | Role |
 |---------|------|
-| `WorldOfAircraft.tsx` | setSimulatorFuel(), anti-cheat, background tracking |
+| `AeroCorpOnline.tsx` | setSimulatorFuel(), anti-cheat, background tracking |
 | `services/FleetService.ts` | applyBackgroundWear(), fuel management |
 | `services/MissionService.ts` | cancelMission(), completeMission() |
 | `services/WearService.ts` | calculateWear() |
@@ -546,7 +546,7 @@ LocalScheduler.checkMissionTimeouts(): void  // Toutes les 15min
 
 1. Joueur se connecte avec avion a 20% fuel
 2. Utilise panneau MFS pour mettre 100% fuel
-3. Ouvre l'app World of Aircraft ou charge une mission
+3. Ouvre l'app AeroCorp Online ou charge une mission
 4. **Resultat attendu**: Fuel remis a 20%
 
 ### 10.2 Scenario: Bouton SYNC apres triche

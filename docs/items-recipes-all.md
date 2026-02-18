@@ -18,7 +18,7 @@
 
 ## Vue d'ensemble
 
-Le système d'items et recettes forme la base de l'économie de World of Aircraft :
+Le système d'items et recettes forme la base de l'économie d'AeroCorp Online :
 - **93 items** répartis sur 3 tiers (T0, T1, T2) — extensible vers T3-T5 à terme
 - **60 recettes** de production (30 T1, 30 T2)
 - Chaîne de transformation : matières premières T0 → produits transformés T1 → produits avancés T2

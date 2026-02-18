@@ -1,5 +1,5 @@
 /**
- * WOA-SEED - World of Aircraft SEED Server
+ * AEROCORP-SEED - AeroCorp Online SEED Server
  * Cloudflare Worker with R2 storage
  *
  * Features:
@@ -158,7 +158,7 @@ const FUEL_PRICE_PER_GALLON = 5.5;
 const XP_PER_NM = 2;
 const MONEY_PER_NM = 10;
 const WEAR_PER_HOUR = 0.5;
-const API_KEY = "woa-seed-2024-worldofaircraft";
+const API_KEY = "8d90c0a2f60ff15017f3040c061030ce0cf4356795e5925e419ed2f73fa060a3";
 
 // Free Flight (reduced rewards compared to missions)
 const FREE_FLIGHT_XP_PER_NM = 0.5;

@@ -33,7 +33,7 @@ async function deleteKey(bucket, key) {
   await bucket.delete(key);
 }
 __name(deleteKey, "deleteKey");
-var API_KEY = "woa-seed-2024-worldofaircraft";
+var API_KEY = "8d90c0a2f60ff15017f3040c061030ce0cf4356795e5925e419ed2f73fa060a3";
 function validateRequest(request) {
   const apiKey = request.headers.get("X-API-Key");
   const playerId = request.headers.get("X-Player-ID");

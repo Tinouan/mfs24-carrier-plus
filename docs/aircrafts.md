@@ -1,4 +1,4 @@
-# MFS World of Aircraft - Systeme Fleet (Avions)
+# AeroCorp Online - Systeme Fleet (Avions)
 
 **Version**: 2.3
 **Date**: 2026-01-30
@@ -335,7 +335,7 @@ Cartes cliquables avec:
 
 ## Stockage localStorage (Architecture P2P)
 
-Les donnees sont stockees dans localStorage avec le prefixe `carrier_plus_`.
+Les donnees sont stockees dans localStorage avec le prefixe `aerocorp_`.
 
 ### Collection `aircraft_catalog`
 Catalogue des types d'avions disponibles (charge depuis `data/aircraft.json`).
@@ -461,7 +461,7 @@ Retourne tous les avions que le joueur peut utiliser:
 
 ### Implementation Frontend
 
-Fichier: `tablette ingame/PackageSources/WorldOfAircraft/src/WorldOfAircraft.tsx`
+Fichier: `tablette ingame/PackageSources/AeroCorpOnline/src/AeroCorpOnline.tsx`
 
 ```tsx
 // State

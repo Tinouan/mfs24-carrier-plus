@@ -1,4 +1,4 @@
-# MFS World of Aircraft - EFB Tablet Documentation
+# AeroCorp Online - EFB Tablet Documentation
 
 Documentation de l'app EFB (Electronic Flight Bag) pour Microsoft Flight Simulator 2024.
 
@@ -13,12 +13,12 @@ Il faut copier manuellement apres chaque build:
 
 ```bash
 # 1. Build
-cd "tablette ingame/PackageSources/WorldOfAircraft"
+cd "tablette ingame/PackageSources/AeroCorpOnline"
 npm run build
 
 # 2. Copier vers Community (PowerShell/Git Bash)
-cp dist/WorldOfAircraft.js "C:/Users/tinou/AppData/Local/Packages/Microsoft.Limitless_8wekyb3d8bbwe/LocalCache/Packages/Community2024/mfs-carrierplus-efb/html_ui/efb_ui/efb_apps/WorldOfAircraft/"
-cp dist/WorldOfAircraft.js.map "C:/Users/tinou/AppData/Local/Packages/Microsoft.Limitless_8wekyb3d8bbwe/LocalCache/Packages/Community2024/mfs-carrierplus-efb/html_ui/efb_ui/efb_apps/WorldOfAircraft/"
+cp dist/AeroCorpOnline.js "C:/Users/tinou/AppData/Local/Packages/Microsoft.Limitless_8wekyb3d8bbwe/LocalCache/Packages/Community2024/aerocorp-online-efb/html_ui/efb_ui/efb_apps/AeroCorpOnline/"
+cp dist/AeroCorpOnline.js.map "C:/Users/tinou/AppData/Local/Packages/Microsoft.Limitless_8wekyb3d8bbwe/LocalCache/Packages/Community2024/aerocorp-online-efb/html_ui/efb_ui/efb_apps/AeroCorpOnline/"
 
 # 3. Recharger dans MSFS: Ctrl+Shift+R dans le debugger (http://localhost:19999)
 ```
@@ -27,8 +27,8 @@ cp dist/WorldOfAircraft.js.map "C:/Users/tinou/AppData/Local/Packages/Microsoft.
 
 ```bash
 # Comparer les timestamps
-ls -la "tablette ingame/PackageSources/WorldOfAircraft/dist/WorldOfAircraft.js"
-ls -la "C:/Users/tinou/AppData/Local/Packages/Microsoft.Limitless_8wekyb3d8bbwe/LocalCache/Packages/Community2024/mfs-carrierplus-efb/html_ui/efb_ui/efb_apps/WorldOfAircraft/WorldOfAircraft.js"
+ls -la "tablette ingame/PackageSources/AeroCorpOnline/dist/AeroCorpOnline.js"
+ls -la "C:/Users/tinou/AppData/Local/Packages/Microsoft.Limitless_8wekyb3d8bbwe/LocalCache/Packages/Community2024/aerocorp-online-efb/html_ui/efb_ui/efb_apps/AeroCorpOnline/AeroCorpOnline.js"
 ```
 
 ---
@@ -37,10 +37,10 @@ ls -la "C:/Users/tinou/AppData/Local/Packages/Microsoft.Limitless_8wekyb3d8bbwe/
 
 ### Source code
 ```
-tablette ingame/PackageSources/WorldOfAircraft/
+tablette ingame/PackageSources/AeroCorpOnline/
 ├── src/
-│   ├── WorldOfAircraft.tsx     # Code principal
-│   ├── WorldOfAircraft.scss    # Styles (note: CSS classes ne fonctionnent pas, utiliser inline styles)
+│   ├── AeroCorpOnline.tsx     # Code principal
+│   ├── AeroCorpOnline.scss    # Styles (note: CSS classes ne fonctionnent pas, utiliser inline styles)
 │   └── Assets/
 │       └── app-icon.svg    # Icone de l'app
 ├── dist/                   # Fichiers compiles (generes)
@@ -53,10 +53,10 @@ tablette ingame/PackageSources/WorldOfAircraft/
 
 ### Dossier deploye (Community)
 ```
-C:\Users\tinou\AppData\Local\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\Packages\Community2024\mfs-carrierplus-efb\
-├── html_ui/efb_ui/efb_apps/WorldOfAircraft/
-│   ├── WorldOfAircraft.js      # Bundle compile
-│   ├── WorldOfAircraft.css     # Styles
+C:\Users\tinou\AppData\Local\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\Packages\Community2024\aerocorp-online-efb\
+├── html_ui/efb_ui/efb_apps/AeroCorpOnline/
+│   ├── AeroCorpOnline.js      # Bundle compile
+│   ├── AeroCorpOnline.css     # Styles
 │   └── Assets/
 │       └── app-icon.svg
 ├── layout.json
@@ -71,7 +71,7 @@ C:\Users\tinou\AppData\Local\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCac
 
 ```bash
 # Build une fois
-cd "tablette ingame/PackageSources/WorldOfAircraft"
+cd "tablette ingame/PackageSources/AeroCorpOnline"
 npm run build
 
 # Watch mode (auto-rebuild + auto-deploy)
@@ -127,7 +127,7 @@ Utiliser le composant `Button` officiel avec `callback`:
 
 ### Styles - IMPORTANT
 
-**Les classes CSS ne fonctionnent pas** dans l'EFB malgre le prefix `.efb-view.WorldOfAircraft`.
+**Les classes CSS ne fonctionnent pas** dans l'EFB malgre le prefix `.efb-view.AeroCorpOnline`.
 
 **Utiliser les styles inline:**
 
@@ -415,7 +415,7 @@ private async fetchAvailableSlotsAtAirport(icaoCode: string): Promise<void> {
     // data = { airport_ident, airport_type, max_slots, occupied_slots, available_slots }
     this.availableSlotsAtAirport.set(data.available_slots ?? 0);
   } catch (error) {
-    console.error("[WorldOfAircraft] Failed to fetch available slots:", error);
+    console.error("[AeroCorpOnline] Failed to fetch available slots:", error);
     this.availableSlotsAtAirport.set(null);
   }
 }
@@ -448,7 +448,7 @@ Les erreurs 404 pour les fichiers `.map` sont normales (Asobo n'a pas inclus les
 
 ---
 
-## Structure de l'App WorldOfAircraft (V0.8)
+## Structure de l'App AeroCorpOnline (V0.8)
 
 ### Onglets (dans l'ordre sidebar)
 
@@ -466,7 +466,7 @@ Les erreurs 404 pour les fichiers `.map` sont normales (Asobo n'a pas inclus les
 ### Cycle de vie
 
 ```tsx
-class WorldOfAircraftView extends AppView {
+class AeroCorpOnlineView extends AppView {
   public onOpen(): void {
     // App ouverte - demarrer les updates
   }
@@ -493,14 +493,14 @@ class WorldOfAircraftView extends AppView {
 # Build
 npm run build
 
-# Watch (dans le dossier WorldOfAircraft)
+# Watch (dans le dossier AeroCorpOnline)
 npm run watch
 
 # Watch + Deploy automatique
 watch.bat
 
 # Deployer manuellement
-cp dist/WorldOfAircraft.js "C:/Users/tinou/AppData/Local/Packages/Microsoft.Limitless_8wekyb3d8bbwe/LocalCache/Packages/Community2024/mfs-carrierplus-efb/html_ui/efb_ui/efb_apps/WorldOfAircraft/"
+cp dist/AeroCorpOnline.js "C:/Users/tinou/AppData/Local/Packages/Microsoft.Limitless_8wekyb3d8bbwe/LocalCache/Packages/Community2024/aerocorp-online-efb/html_ui/efb_ui/efb_apps/AeroCorpOnline/"
 ```
 
 ---
@@ -512,8 +512,8 @@ cp dist/WorldOfAircraft.js "C:/Users/tinou/AppData/Local/Packages/Microsoft.Limi
 1. Verifier que le build a reussi
 2. Verifier que les fichiers sont copies vers Community:
    ```bash
-   ls -la "tablette ingame/PackageSources/WorldOfAircraft/dist/WorldOfAircraft.js"
-   ls -la "C:/Users/tinou/AppData/.../WorldOfAircraft/WorldOfAircraft.js"
+   ls -la "tablette ingame/PackageSources/AeroCorpOnline/dist/AeroCorpOnline.js"
+   ls -la "C:/Users/tinou/AppData/.../AeroCorpOnline/AeroCorpOnline.js"
    ```
 3. Les timestamps doivent correspondre
 4. Recharger l'EFB: **Ctrl+Shift+R** dans le debugger
@@ -657,7 +657,7 @@ private setupInputEventBlocker(input: HTMLInputElement | null): void {
   if (!input) return;
 
   // UUID unique pour ce champ
-  const uuid = `carrierplus-input-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const uuid = `aerocorp-input-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
   input.addEventListener("focus", () => {
     // Capture le clavier - le simulateur ignore les touches
@@ -715,7 +715,7 @@ private disposeMap(): void {
       this.olMap.setTarget(undefined); // Detache du DOM
       this.olMap.dispose();            // Libere les ressources
     } catch (e) {
-      console.log("[WorldOfAircraft] Map dispose error (normal after refresh)");
+      console.log("[AeroCorpOnline] Map dispose error (normal after refresh)");
     }
     this.olMap = null;
   }
@@ -935,7 +935,7 @@ export const FleetRouter = {
 ### Stockage P2P (localStorage)
 
 ```
-carrierplus_
+aerocorp_
 ├── player           # Profil joueur (id, name, money, xp)
 ├── company          # Company (si achetée)
 ├── aircraft         # Flotte (personal + company)
@@ -1106,7 +1106,7 @@ export { navigationState } from "./NavigationState";
 export { settingsState } from "./SettingsState";
 // ... etc
 
-// Usage dans WorldOfAircraft.tsx
+// Usage dans AeroCorpOnline.tsx
 import {
   authState,
   navigationState,

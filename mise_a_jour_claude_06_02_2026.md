@@ -1,7 +1,7 @@
-# Mise à jour Claude — World of Aircraft EFB
+# Mise à jour Claude — AeroCorp Online EFB
 **Date** : 6 février 2026
 **Version EFB** : v3.0 post-audit
-**Fichier principal** : WorldOfAircraft.tsx (5911 lignes, réduit de 5972)
+**Fichier principal** : AeroCorpOnline.tsx (5911 lignes, réduit de 5972)
 
 ---
 
@@ -18,7 +18,7 @@ Correction des 5 problèmes critiques et 7 hauts identifiés par l'audit fonctio
 **Fichiers modifiés :**
 - `helpers/index.ts`, `types/index.ts`
 - `views/ProfileView.tsx` — niveau dynamique, XP bar réelle, career stats affichées, nationalité + aéroport de base
-- `WorldOfAircraft.tsx` — refresh stats après mission, fuel sync bidirectionnel (Sim→DB après vol), XP estimate
+- `AeroCorpOnline.tsx` — refresh stats après mission, fuel sync bidirectionnel (Sim→DB après vol), XP estimate
 - `PersistenceManager.ts` — sauvegarde career_stats
 - `LocalMissionService.ts` — calcul xp_estimate avec base XP, cargo multiplier, modifiers, grades
 - `DatabaseManager.ts` — `getActiveMissionForAircraft()` pour empêcher double mission
@@ -40,7 +40,7 @@ Correction des 5 problèmes critiques et 7 hauts identifiés par l'audit fonctio
 Correction critique : 7 fonctions étaient silencieusement mortes en mode Solo car elles vérifiaient `authToken` (toujours null en P2P).
 
 **Changements :**
-- Import et utilisation de `isGameReady()` depuis `state/GameModeState.ts` dans WorldOfAircraft.tsx
+- Import et utilisation de `isGameReady()` depuis `state/GameModeState.ts` dans AeroCorpOnline.tsx
 - **22 occurrences** de `const token = authState.authToken.get()` → supprimées et remplacées par `isGameReady()`
 - **12 occurrences** de `authState.isLoggedIn.get() || authState.isP2PMode.get()` → remplacées par `isGameReady()`
 - Suppression de `getAuthHeaders()` (code mort, plus aucun appel direct fetch)
@@ -103,7 +103,7 @@ Persistence settings : NativePersistence (plus de localStorage pour les données
 
 ### Fichiers clés modifiés cette session
 ```
-WorldOfAircraft.tsx          — fichier principal (5911 lignes)
+AeroCorpOnline.tsx          — fichier principal (5911 lignes)
 helpers/PlayerHelpers.ts     — CRÉÉ (calculateLevel, formatFlightTime, formatDistance)
 helpers/index.ts             — exports mis à jour
 types/index.ts               — types mis à jour

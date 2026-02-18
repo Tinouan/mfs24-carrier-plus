@@ -1,4 +1,4 @@
-# LEGAL — Mfs World of Aircraft
+# LEGAL — AeroCorp Online
 
 ## Licence
 

@@ -1,4 +1,4 @@
-# Roadmap complète — World of Aircraft EFB v4.4
+# Roadmap complète — AeroCorp Online EFB v4.4
 
 **Date** : 13 février 2026
 **Mise à jour** : Phase 9 terminée — usines, items T0/T1, icônes SVG, map intégrée
@@ -74,7 +74,7 @@
 ✅ MarketController (~800 lignes) extrait
 ✅ HangarController (~800 lignes) extrait
 ✅ MissionController (~700 lignes) extrait
-✅ WorldOfAircraft.tsx : 7900 → 2378 lignes (orchestrateur pur)
+✅ AeroCorpOnline.tsx : 7900 → 2378 lignes (orchestrateur pur)
 ✅ msfs-globals.d.ts créé (déclarations SimVar, Coherent, etc.)
 ✅ 122 erreurs TypeScript → 0 erreurs
 ✅ Build OK (2.6MB bundle)
@@ -107,7 +107,7 @@
 ✅ Fallback coordonnées quand SimVar échoue (WorldRouter.getClosestAirport)
 ✅ Suppression check ATC ID (garder 3 checks : position joueur DB, SimVar, avion DB)
 ✅ Cacher étapes 2/3 et bouton "Créer" quand step1 invalide
-✅ Renommage label "position (jeu)" → "position (World of Aircraft)" (5 locales)
+✅ Renommage label "position (jeu)" → "position (AeroCorp Online)" (5 locales)
 ```
 
 ### Hangar — Notes avion ✅
@@ -150,7 +150,7 @@
 
 ### Fixes transversaux ✅
 ```
-✅ Persistence unifiée (DatabaseManager → WorldOfAircraftData)
+✅ Persistence unifiée (DatabaseManager → AeroCorpOnlineData)
 ✅ Fix solde initial 100,000 CR
 ✅ Fix refresh EFB → pilote conservé
 ✅ Fix systèmes avion stables (read-only)
@@ -214,7 +214,7 @@ SIDEBAR (9 onglets)
 ## Architecture après Phase 9
 
 ```
-WorldOfAircraft.tsx (~2500 lignes)
+AeroCorpOnline.tsx (~2500 lignes)
   = Orchestrateur : init, render, routing, event wiring
   = Instancie 8 controllers
 
@@ -333,7 +333,7 @@ Sem 11+  : Phase 13 — Bâtiments
 
 ---
 
-## Évolution WorldOfAircraft.tsx
+## Évolution AeroCorpOnline.tsx
 
 ```
 Phase 5  (avant)  : 7900 lignes  ████████████████████ 100%

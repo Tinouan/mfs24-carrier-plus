@@ -12,7 +12,7 @@ Le système de profils gère les données du joueur en mode P2P (local-first).
 
 ### `player`
 
-Profil joueur (stocké dans localStorage avec préfixe `carrier_plus_`).
+Profil joueur (stocké dans localStorage avec préfixe `aerocorp_`).
 
 | Champ | Type | Description |
 |-------|------|-------------|

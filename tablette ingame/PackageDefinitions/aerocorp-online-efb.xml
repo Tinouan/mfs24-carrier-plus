@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AssetPackage Version="1.0.0">
+	<ItemSettings>
+		<ContentType>MISC</ContentType>
+		<Title>AeroCorp Online EFB</Title>
+		<Manufacturer>AeroCorp Online</Manufacturer>
+		<Creator>Tinouan</Creator>
+	</ItemSettings>
+	<Flags>
+		<VisibleInStore>false</VisibleInStore>
+		<CanBeReferenced>true</CanBeReferenced>
+	</Flags>
+	<PackageOrderHint>MISC</PackageOrderHint>
+	<AssetGroups>
+		<AssetGroup Name="ContentInfo">
+			<Type Version="0">ContentInfo</Type>
+			<Flags>
+				<FSXCompatibility>false</FSXCompatibility>
+			</Flags>
+			<AssetDir>PackageDefinitions\aerocorp-online-efb\ContentInfo</AssetDir>
+			<OutputDir>ContentInfo\aerocorp-online-efb</OutputDir>
+		</AssetGroup>
+		<AssetGroup Name="efb_aerocorponline">
+			<Type Version="0">Copy</Type>
+			<Flags>
+				<FSXCompatibility>false</FSXCompatibility>
+			</Flags>
+			<AssetDir>PackageSources\AeroCorpOnline\dist\</AssetDir>
+			<OutputDir>.\html_ui\efb_ui\efb_apps\AeroCorpOnline\</OutputDir>
+		</AssetGroup>
+	</AssetGroups>
+</AssetPackage>

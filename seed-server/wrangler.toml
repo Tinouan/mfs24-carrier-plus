@@ -1,10 +1,10 @@
-name = "woa-seed"
+name = "aerocorp-online-seed"
 main = "src/index.ts"
 compatibility_date = "2024-01-01"
 
 [[r2_buckets]]
 binding = "BUCKET"
-bucket_name = "woa-seed-storage"
+bucket_name = "aerocorp-online-data"
 
 [vars]
 ENVIRONMENT = "production"

@@ -88,7 +88,10 @@
       "Bash(node extract-icons.js:*)",
       "Bash(node update-items.js:*)",
       "Bash(node extract-svgs.js:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(cmd.exe /c \"dir \"\"C:\\\\Users\\\\tinou\\\\AppData\\\\Local\\\\Packages\\\\Microsoft.Limitless_8wekyb3d8bbwe\\\\LocalCache\\\\Packages\\\\Community2024\"\" /b\")",
+      "Bash(Select-Object -First 20)",
+      "Bash(\"@)"
     ]
   }
 }

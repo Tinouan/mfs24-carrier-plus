@@ -1,4 +1,4 @@
-# MFS World of Aircraft - Système Anti-Triche
+# AeroCorp Online - Système Anti-Triche
 
 **Version**: 3.2 (MODE ONLINE UNIQUEMENT)
 **Date**: 2026-02-04
@@ -74,7 +74,7 @@ Le mode Online est le monde partagé :
 
 ## Vue d'ensemble (Mode Online)
 
-Le système anti-triche de MFS World of Aircraft protège l'intégrité des données de jeu en utilisant le **SEED Central comme source de vérité unique**. Tous les joueurs **en mode Online** sont connectés au même monde partagé.
+Le système anti-triche de AeroCorp Online protège l'intégrité des données de jeu en utilisant le **SEED Central comme source de vérité unique**. Tous les joueurs **en mode Online** sont connectés au même monde partagé.
 
 ### Principe fondamental
 
@@ -147,7 +147,7 @@ Ces fichiers ne sont plus utilisés avec l'architecture "deux carrières" :
 ```typescript
 // Chaque requête EFB → SEED contient :
 Headers: {
-  "X-API-Key": "carrierplus-seed-secret",  // Clé partagée
+  "X-API-Key": "aerocorp-seed-secret",  // Clé partagée
   "X-Player-ID": "uuid-du-joueur"          // ID unique
 }
 ```

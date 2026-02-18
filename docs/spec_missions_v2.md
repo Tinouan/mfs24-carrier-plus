@@ -9,7 +9,7 @@
 ## RESUME
 
 ### Principe cle
-Le joueur cree son plan de vol dans MSFS (EFB natif, LittleNavMap, SimBrief, etc.), puis World of Aircraft track la progression **sans dependre des SimVars specifiques** qui ne fonctionnent pas avec certains avioniques (Garmin WT notamment).
+Le joueur cree son plan de vol dans MSFS (EFB natif, LittleNavMap, SimBrief, etc.), puis AeroCorp Online track la progression **sans dependre des SimVars specifiques** qui ne fonctionnent pas avec certains avioniques (Garmin WT notamment).
 
 ### Ce qui a change depuis V1
 | Element | V1 (Checkpoints) | V2 (Universal GPS) |
@@ -229,7 +229,7 @@ function trackingLoop() {
         );
         if (wpChange > 1.0) {  // Plus de 1nm de difference = nouveau waypoint
             this.waypointChangeCount++;
-            console.log(`[WorldOfAircraft] Waypoint passed! Count: ${this.waypointChangeCount}`);
+            console.log(`[AeroCorpOnline] Waypoint passed! Count: ${this.waypointChangeCount}`);
         }
     }
     this.lastNextWpLat = nextWpLat;
@@ -741,7 +741,7 @@ private autopilotEverUsed: boolean;
 - `managers/DatabaseManager.ts` - Operations SQLite missions
 - `managers/LocalScheduler.ts` - Timeout missions
 
-### EFB (WorldOfAircraft.tsx)
+### EFB (AeroCorpOnline.tsx)
 - Tracking universel (sans dependance WP COUNT/ID)
 - Detection phase par distance
 - UI progression

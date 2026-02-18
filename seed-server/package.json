@@ -1,14 +1,14 @@
 {
-  "name": "woa-seed",
+  "name": "aerocorp-online-seed",
   "version": "2.1.0",
-  "description": "World of Aircraft SEED Server - Cloudflare Worker",
+  "description": "AeroCorp Online SEED Server - Cloudflare Worker",
   "main": "src/index.ts",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "tail": "wrangler tail"
   },
-  "keywords": ["cloudflare", "worker", "msfs", "world-of-aircraft"],
+  "keywords": ["cloudflare", "worker", "msfs", "aerocorp-online"],
   "author": "",
   "license": "ISC",
   "type": "module",

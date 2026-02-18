@@ -1,4 +1,4 @@
-# MFS World of Aircraft (MSFS 2024) — Architecture v3.0
+# AeroCorp Online (MSFS 2024) — Architecture v3.0
 
 > **Version**: 3.0 (Deux Carrières Distinctes : Solo / Online)
 > **Repo**: https://github.com/Tinouan/mfs24-carrier-plus
@@ -8,7 +8,7 @@
 
 ## Vue d'ensemble
 
-MFS World of Aircraft est un mod de gestion de compagnie cargo pour **Microsoft Flight Simulator 2024**. L'architecture v3.0 propose **deux carrières complètement séparées** : Solo et Online.
+AeroCorp Online est un mod de gestion de compagnie cargo pour **Microsoft Flight Simulator 2024**. L'architecture v3.0 propose **deux carrières complètement séparées** : Solo et Online.
 
 ### Changement majeur v3.0
 
@@ -50,7 +50,7 @@ MFS World of Aircraft est un mod de gestion de compagnie cargo pour **Microsoft 
 | **Persistance Online** | SEED (Cloudflare Workers + R2) |
 | **UI** | EFB intégré MSFS 2024 |
 | **Multijoueur** | Mode Online uniquement via SEED |
-| **Anti-triche** | Mode Online uniquement |
+| **Anti-triche** | Mode Online/offline  |
 
 ---
 
@@ -90,7 +90,7 @@ SOLO      ONLINE
                             CLOUD (Cloudflare)
 ┌────────────────────────────────────────────────────────────────────┐
 │                           SEED SERVER v2.0                          │
-│                  https://woa-seed.seedworldofaircraft.workers.dev  │
+│                  https://aerocorp-online-seed.aerocorponline.workers.dev  │
 │                         (MODE ONLINE UNIQUEMENT)                    │
 │                                                                     │
 │   ┌─────────────┐    ┌──────────────┐    ┌─────────────┐          │
@@ -102,7 +102,7 @@ SOLO      ONLINE
                                  │ HTTPS (si mode Online)
                                  │
 ┌────────────────────────────────┴───────────────────────────────────┐
-│                         EFB CARRIER+ v3.0                           │
+│                         AeroCorp Online EFB v3.0                           │
 │                                                                     │
 │   ┌─────────────┐    ┌──────────────┐    ┌─────────────┐          │
 │   │GameModeState│◄──►│ModeSelection │◄──►│ AuthState   │          │
@@ -247,7 +247,7 @@ class GameModeStateClass {
   currentMode = new Subject<GameMode>(null);
   hasChosenMode = new Subject<boolean>(false);
 
-  private STORAGE_KEY = "WorldOfAircraft_GameMode";
+  private STORAGE_KEY = "AeroCorpOnline_GameMode";
 
   init(): void {
     // Charger le mode sauvegardé
@@ -315,7 +315,7 @@ interface SoloSaveData {
 
 ```typescript
 class SoloSaveServiceClass {
-  private STORAGE_KEY = "WorldOfAircraft_SoloSave";
+  private STORAGE_KEY = "AeroCorpOnline_SoloSave";
   private VERSION = 1;
 
   async save(): Promise<boolean> {
@@ -527,7 +527,7 @@ export const ServiceAdapter = new ServiceAdapterClass();
 |-----------|-------------|
 | **Compute** | Cloudflare Workers (edge computing) |
 | **Storage** | Cloudflare R2 (S3-compatible) |
-| **URL** | `https://woa-seed.seedworldofaircraft.workers.dev` |
+| **URL** | `https://aerocorp-online-seed.aerocorponline.workers.dev` |
 | **Latence** | < 50ms (edge mondial) |
 | **Version** | 2.0.0-anticheat |
 
@@ -588,8 +588,8 @@ export const ServiceAdapter = new ServiceAdapterClass();
 ## Structure des fichiers (v3.0)
 
 ```
-tablette ingame/PackageSources/WorldOfAircraft/src/
-├── WorldOfAircraft.tsx              # Point d'entrée principal
+tablette ingame/PackageSources/AeroCorpOnline/src/
+├── AeroCorpOnline.tsx              # Point d'entrée principal
 │
 ├── types/
 │   └── index.ts                 # Interfaces TypeScript
@@ -737,7 +737,7 @@ SyncService.useDevMode();
 ```bash
 cd seed-server
 npx wrangler deploy
-# → https://woa-seed.seedworldofaircraft.workers.dev
+# → https://aerocorp-online-seed.aerocorponline.workers.dev
 ```
 
 ---
