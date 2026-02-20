@@ -979,7 +979,11 @@ export class MarketController {
       const { localMarketService } = await import("../services/LocalMarketService");
 
       // Aircraft placed at player's DB position (single source of truth)
-      const currentIcao = positionState.dbAirport.get() || "LFPG";
+      const currentIcao = positionState.dbAirport.get();
+      if (!currentIcao) {
+        console.warn("[ACO] Cannot purchase aircraft — no position in DB");
+        return;
+      }
 
       const newAircraft = await localMarketService.purchaseAircraft({
         catalog_id: catalogId,

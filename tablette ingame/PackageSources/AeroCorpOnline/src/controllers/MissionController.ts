@@ -417,7 +417,12 @@ export class MissionController {
     // SimVar airport — use detected airport (GPS or lat/lon fallback) for display
     const rawSimAirport = (positionState.simVarAirport.get() || "").toUpperCase();
     const detectedAirport = PositionService.getDetectedSimAirport().toUpperCase();
-    const simAirport = detectedAirport || rawSimAirport;
+    // If PositionService confirms correct airport (via lat/lon) but GPS = "----", show DB airport
+    const isCorrect = PositionService.isAtCorrectAirport();
+    let simAirport = detectedAirport || rawSimAirport;
+    if (isCorrect && (!simAirport || simAirport === "----")) {
+      simAirport = refAirport;
+    }
 
     // Aircraft DB location
     let acAirport = refAirport; // default = assume match
@@ -426,7 +431,7 @@ export class MissionController {
     }
 
     // Check mismatches — use PositionService which handles GPS "----" via lat/lon fallback
-    const simMatch = !refAirport || PositionService.isAtCorrectAirport();
+    const simMatch = !refAirport || isCorrect;
     const acMatch = !refAirport || acAirport === refAirport;
 
     if (hasAircraft && (!simMatch || !acMatch)) {
@@ -836,10 +841,9 @@ export class MissionController {
     }
 
     // ── Anti-cheat: verify player is physically at the right airport ──
-    const simAirport = (positionState.simVarAirport.get() || "").trim().toUpperCase();
-    if (simAirport && simAirport !== "----" && /^[A-Z0-9]{3,4}$/.test(simAirport) && simAirport !== origin) {
-      console.log(`[ACO] Anti-cheat: SimVar airport=${simAirport}, expected=${origin}`);
-      missionState.missionError.set(`${this.t("missions", "mustBeAtAirport")} ${origin}`);
+    if (!PositionService.isAtCorrectAirport()) {
+      console.log("[ACO] Anti-cheat: PositionService says not at correct airport, expected=" + origin);
+      missionState.missionError.set(this.t("missions", "mustBeAtAirport") + " " + origin);
       missionState.missionStatus.set("error");
       return;
     }
@@ -1589,13 +1593,10 @@ export class MissionController {
       const playerAirport = currentAirport?.toUpperCase() || "";
       const acDbLocation = apiData.current_airport_ident?.toUpperCase() || "";
 
-      // Warning: SimVar airport ≠ DB airport
-      {
-        const simAirport = (positionState.simVarAirport.get() || "").trim().toUpperCase();
-        if (simAirport && simAirport !== "----" && /^[A-Z0-9]{3,4}$/.test(simAirport) && playerAirport && simAirport !== playerAirport) {
-          warnings.push(this.t("missions", "mustBeAtAirport") + " " + playerAirport);
-          console.warn(`[ACO] Warning: SimVar airport=${simAirport}, DB airport=${playerAirport}`);
-        }
+      // Warning: player not at correct airport (uses PositionService with GPS + lat/lon fallback)
+      if (playerAirport && !PositionService.isAtCorrectAirport()) {
+        warnings.push(this.t("missions", "mustBeAtAirport") + " " + playerAirport);
+        console.warn("[ACO] Warning: PositionService says not at correct airport, DB=" + playerAirport);
       }
 
       // Warning: aircraft DB location ≠ player airport

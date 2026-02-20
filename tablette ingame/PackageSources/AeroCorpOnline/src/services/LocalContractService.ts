@@ -290,8 +290,12 @@ class LocalContractServiceClass {
     const player = await DatabaseManager.getPlayer();
     if (!player) return;
 
-    // Regenerate AI contracts at player's DB position
-    const airport = player.current_airport || positionState.dbAirport.get() || "LFPG";
+    // Regenerate AI contracts at player's DB position — never default to LFPG
+    const airport = positionState.dbAirport.get() || player.current_airport || "";
+    if (!airport) {
+      console.warn("[LocalContractService] No position — skipping contract refresh");
+      return;
+    }
     await this.generateAIContracts(airport);
   }
 

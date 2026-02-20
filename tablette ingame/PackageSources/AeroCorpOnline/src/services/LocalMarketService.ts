@@ -929,8 +929,9 @@ class LocalMarketServiceClass {
     const catEntry = catalog.find(c => c.id === params.catalog_id);
     if (!catEntry) throw new Error(`Aircraft ${params.catalog_id} not found in catalog`);
 
-    // Determine location (player's current airport or specified)
-    const location = params.location_icao || player.current_airport || "LFPG";
+    // Determine location — never default to LFPG
+    const location = params.location_icao || player.current_airport || "";
+    if (!location) throw new Error("No airport position — cannot place aircraft");
 
     // Check and deduct funds
     const price = catEntry.basePrice;

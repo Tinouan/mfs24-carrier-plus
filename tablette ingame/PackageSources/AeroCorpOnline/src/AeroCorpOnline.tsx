@@ -443,8 +443,9 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
     // V7.1: Transfer ICAO input popup
     this.initializeTransferPopup();
 
-    // V3.0: Load position from DB
-    void PositionService.loadFromDb();
+    // NOTE: PositionService.loadFromDb() is NOT called here — it must wait
+    // for DatabaseManager.initialize() + restoreFromDataStore() to complete.
+    // It is called in onComplete callback of InitService instead.
 
     // V2.5: Initialize popup manager for centralized popup logic
     this.initializePopupManager();
@@ -825,6 +826,8 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
       onComplete: () => {
         console.log("[ACO] SEED connection and initialization complete");
         authState.seedConnectionStatus.set("connected");
+        // Load position AFTER DatabaseManager is initialized + data restored
+        void PositionService.loadFromDb();
         this.initializePersistenceAndEconomy();
         // Airports are now loaded — trigger map reload + centering
         if (this.mapController.isMapInitialized()) {
@@ -862,6 +865,7 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
     InitService.continueWithMode("solo")
       .then(() => {
         gameModeState.modeSwitchLoading.set(false);
+        void PositionService.loadFromDb();
         this.initializePersistenceAndEconomy();
         if (this.mapController.isMapInitialized()) {
           this.mapController.refreshMapSize();
@@ -917,6 +921,7 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
     InitService.continueWithMode(mode)
       .then(() => {
         gameModeState.modeSwitchLoading.set(false);
+        void PositionService.loadFromDb();
         this.initializePersistenceAndEconomy();
         // Airports are now loaded — trigger map reload + centering
         if (this.mapController.isMapInitialized()) {

@@ -1061,14 +1061,24 @@ class DatabaseManagerClass {
       console.log(`[DatabaseManager] Player count in localStorage: ${playerCount}`);
 
       if (playerCount === 0) {
-        console.log("[DatabaseManager] No player found, trying to restore from backup sources...");
+        console.log("[DatabaseManager] ⚠ No player in localStorage — trying to restore from SetStoredData...");
         await this.restoreFromDataStore();
 
         // Check again after restore attempt
         const restoredPlayerCount = this.loadStore<Player>("player").length;
-        console.log(`[DatabaseManager] Player count after restore attempt: ${restoredPlayerCount}`);
+        if (restoredPlayerCount > 0) {
+          console.log(`[DatabaseManager] ✅ Restore SUCCESS — ${restoredPlayerCount} player(s) recovered from SetStoredData`);
+          // Log player position for debugging
+          const players = this.loadStore<Player>("player");
+          if (players[0]) {
+            console.log(`[DatabaseManager] Restored player: airport=${players[0].current_airport || "(none)"}, preferred=${players[0].preferred_airport || "(none)"}`);
+          }
+        } else {
+          console.error(`[DatabaseManager] ❌ Restore FAILED — no player found in any backup source. Data was lost between MSFS sessions.`);
+        }
       } else {
-        console.log("[DatabaseManager] Player found in localStorage, no restore needed");
+        const players = this.loadStore<Player>("player");
+        console.log(`[DatabaseManager] Player found in localStorage: airport=${players[0]?.current_airport || "(none)"}`);
       }
 
       // Load sync counter
@@ -1111,20 +1121,35 @@ class DatabaseManagerClass {
         data[store] = this.loadStore(store);
       }
 
+      // DIAGNOSTIC: check player.current_airport at serialization time
+      const playerRecords = data["player"] as Player[] | undefined;
+      const savedAirport = playerRecords && playerRecords[0] ? playerRecords[0].current_airport : "(no player)";
+      console.log("[DatabaseManager] SAVE CHECK — player.current_airport = " + savedAirport);
+
       const jsonData = JSON.stringify(data);
-      console.log(`[DatabaseManager] Saving data (${(jsonData.length / 1024).toFixed(1)} KB)...`);
+      console.log("[DatabaseManager] Saving data (" + (jsonData.length / 1024).toFixed(1) + " KB)...");
 
       // Strategy 1: Use native MSFS SetStoredData (global function)
       if (typeof SetStoredData === "function") {
         try {
           SetStoredData(DATASTORE_KEY, jsonData);
-          console.log(`[DatabaseManager] Saved via native SetStoredData ✅`);
+          // Verify write-back: read immediately to confirm persistence
+          if (typeof GetStoredData === "function") {
+            const verify = GetStoredData(DATASTORE_KEY);
+            if (verify && verify.length > 0) {
+              console.log(`[DatabaseManager] Saved via SetStoredData ✅ (${(jsonData.length / 1024).toFixed(1)} KB written, ${(verify.length / 1024).toFixed(1)} KB verified)`);
+            } else {
+              console.error(`[DatabaseManager] ⚠ SetStoredData SILENT FAILURE — wrote ${jsonData.length} bytes but GetStoredData returned empty!`);
+            }
+          } else {
+            console.log(`[DatabaseManager] Saved via SetStoredData ✅ (cannot verify — GetStoredData unavailable)`);
+          }
           return; // Success
         } catch (e) {
           console.warn("[DatabaseManager] SetStoredData failed:", e);
         }
       } else {
-        console.log("[DatabaseManager] SetStoredData not available");
+        console.log("[DatabaseManager] SetStoredData not available (typeof=" + typeof SetStoredData + ")");
       }
 
       // Strategy 2: Try saving to sessionStorage as fallback
@@ -1153,15 +1178,18 @@ class DatabaseManagerClass {
       if (typeof GetStoredData === "function") {
         try {
           const result = GetStoredData(DATASTORE_KEY);
+          console.log(`[DatabaseManager] GetStoredData("${DATASTORE_KEY}") returned: type=${typeof result}, length=${result ? result.length : 0}, preview="${result ? result.substring(0, 100) : "(null)"}"`);
           if (result && result !== "" && result !== "null" && result !== "undefined") {
             jsonData = result;
-            console.log(`[DatabaseManager] Restored via native GetStoredData ✅`);
+            console.log(`[DatabaseManager] Restored via native GetStoredData ✅ (${(result.length / 1024).toFixed(1)} KB)`);
+          } else {
+            console.warn(`[DatabaseManager] GetStoredData returned empty/null — data was NOT persisted between sessions`);
           }
         } catch (e) {
           console.warn("[DatabaseManager] GetStoredData failed:", e);
         }
       } else {
-        console.log("[DatabaseManager] GetStoredData not available");
+        console.log("[DatabaseManager] GetStoredData not available (typeof=" + typeof GetStoredData + ")");
       }
 
       // Strategy 2: Try sessionStorage as fallback
@@ -1209,6 +1237,16 @@ class DatabaseManagerClass {
       if (restoredCount > 0) {
         console.log(`[DatabaseManager] Successfully restored ${restoredCount} total records`);
       }
+
+      // DIAGNOSTIC: check player.current_airport after restore
+      const restoredPlayers = data["player"] as Player[] | undefined;
+      const restoredPlayer = restoredPlayers && restoredPlayers[0] ? restoredPlayers[0] : null;
+      console.log("[DatabaseManager] RESTORE CHECK — from GetStoredData: player.current_airport = " + (restoredPlayer ? restoredPlayer.current_airport : "(no player in backup)"));
+
+      // Also check what's now in localStorage after writeStore
+      const lsPlayers = this.loadStore<Player>("player");
+      const lsPlayer = lsPlayers[0];
+      console.log("[DatabaseManager] RESTORE CHECK — in localStorage after restore: player.current_airport = " + (lsPlayer ? lsPlayer.current_airport : "(no player in localStorage)"));
     } catch (error) {
       console.warn("[DatabaseManager] Failed to restore data:", error);
     }
@@ -1465,6 +1503,14 @@ class DatabaseManagerClass {
   }
 
   async savePlayer(player: Player): Promise<void> {
+    // DIAGNOSTIC: track every write to player.current_airport
+    const airport = player.current_airport;
+    if (!airport) {
+      console.warn("[DatabaseManager] savePlayer: current_airport is NULL/EMPTY — stack trace:");
+      console.warn(new Error("savePlayer with null current_airport").stack);
+    } else {
+      console.log("[DatabaseManager] savePlayer: current_airport=" + airport);
+    }
     player.updated_at = new Date().toISOString();
     await this.put("player", player);
   }

@@ -5,6 +5,7 @@
 
 import { DatabaseManager } from "../managers/DatabaseManager";
 import type { Aircraft, AircraftCatalog, InventoryItem, Item } from "../managers/DatabaseManager";
+import { positionState } from "../state/positionState";
 import type {
   AircraftDetails,
   AircraftListItem,
@@ -100,8 +101,8 @@ class LocalFleetServiceClass {
   private async repairOrphanedAircraft(playerId: string): Promise<void> {
     const allAircraft = await DatabaseManager.getAll<Aircraft>("aircraft");
     const player = await DatabaseManager.getPlayer();
-    // FIX 1: Use player's current location, not hardcoded nationality-based default
-    const defaultLocation = player?.current_airport || player?.preferred_airport || "LFPG";
+    // Use DB position (single source of truth) — never default to LFPG
+    const defaultLocation = positionState.dbAirport.get() || player?.current_airport || "";
 
     for (const ac of allAircraft) {
       let needsRepair = false;
@@ -131,8 +132,8 @@ class LocalFleetServiceClass {
         needsRepair = true;
       }
 
-      // 3. Fix location_icao if missing
-      if (!ac.location_icao || ac.location_icao === "undefined" || ac.location_icao === "N/A") {
+      // 3. Fix location_icao if missing (only if we have a valid position)
+      if ((!ac.location_icao || ac.location_icao === "undefined" || ac.location_icao === "N/A") && defaultLocation) {
         ac.location_icao = defaultLocation;
         needsRepair = true;
       }

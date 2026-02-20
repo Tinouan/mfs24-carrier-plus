@@ -1138,8 +1138,8 @@ export class MapController {
     try {
       const result = await TransferRouter.transferPilot(String(user.id), destIcao);
       if (result.success) {
-        // Sync PositionService (single source of truth for position)
-        await PositionService.loadFromDb();
+        // Update position via PositionService (single source of truth — pilot-only, no aircraft move)
+        await PositionService.onPaidTransfer(destIcao);
 
         // Reload full player profile from DB (money, airport, etc.)
         const player = await DatabaseManager.getPlayer();

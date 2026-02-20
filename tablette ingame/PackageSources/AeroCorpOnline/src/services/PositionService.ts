@@ -48,10 +48,10 @@ class PositionServiceClass {
    * Is the sim player at the same airport as the BDD?
    * 1. If GPS SimVar reports a valid airport → trust it (exact ICAO match)
    * 2. If GPS unavailable ("----") → fallback to lat/lon distance check
-   * 3. If no data at all → benefit of the doubt (true)
+   * 3. If no data at all → block (no benefit of the doubt)
    */
   isAtCorrectAirport(): boolean {
-    // No sim data yet → block (no benefit of the doubt)
+    // No sim data yet → block
     if (!this.hasReceivedSimData) {
       return false;
     }
@@ -59,20 +59,20 @@ class PositionServiceClass {
     if (this.simVarAirport !== "----" && this.simVarAirport !== "") {
       const result = this.simVarAirport === this.dbAirport;
       if (!result) {
-        console.log(`[Position] isAtCorrectAirport: GPS match failed — sim=${this.simVarAirport} db=${this.dbAirport}`);
+        console.log("[Position] isAtCorrectAirport: GPS match failed — sim=" + this.simVarAirport + " db=" + this.dbAirport);
       }
       return result;
     }
     // GPS unavailable → check lat/lon distance from DB airport
     const result = this.simDistanceFromDbNm <= this.POSITION_MISMATCH_NM;
     if (!result) {
-      console.log(`[Position] isAtCorrectAirport: distance check failed — dist=${this.simDistanceFromDbNm.toFixed(1)}nm > ${this.POSITION_MISMATCH_NM}nm (sim=${this.simVarAirport} db=${this.dbAirport})`);
+      console.log("[Position] isAtCorrectAirport: distance check failed — dist=" + this.simDistanceFromDbNm.toFixed(1) + "nm > " + this.POSITION_MISMATCH_NM + "nm");
     }
     return result;
   }
 
   getPositionMismatchMessage(): string {
-    return `Votre pilote est à ${this.dbAirport}, mais vous êtes à ${this.simVarAirport}. Déplacez-vous ou payez un transfert.`;
+    return "Votre pilote est a " + this.dbAirport + ", mais vous etes a " + this.simVarAirport + ". Deplacez-vous ou payez un transfert.";
   }
 
   /**
@@ -126,10 +126,11 @@ class PositionServiceClass {
     this.simVarAirport = rawClosestAirport || "----";
     this.hasReceivedSimData = true;
     positionState.simVarAirport.set(this.simVarAirport);
+
     const correct = this.isAtCorrectAirport();
     positionState.isAtCorrectAirport.set(correct);
     if (!correct) {
-      console.log(`[Position] MISMATCH: sim=${this.simVarAirport} db=${this.dbAirport} dist=${this.simDistanceFromDbNm.toFixed(1)}nm`);
+      console.log("[Position] MISMATCH: sim=" + this.simVarAirport + " db=" + this.dbAirport + " dist=" + this.simDistanceFromDbNm.toFixed(1) + "nm");
     }
   }
 
@@ -145,7 +146,7 @@ class PositionServiceClass {
     await FleetRouter.updateLocation(aircraftId, icao);
     this.dbAirport = icao;
     positionState.dbAirport.set(icao);
-    console.log(`[Position] Initial position set: ${icao}`);
+    console.log("[Position] Initial position set: " + icao);
   }
 
   /**
@@ -155,25 +156,29 @@ class PositionServiceClass {
    */
   async onSuccessfulLanding(aircraftId: string, icao: string): Promise<void> {
     if (!icao || icao === "----" || icao === "ZZZZ") {
-      console.warn(`[Position] Landing ignored — invalid ICAO: ${icao}`);
+      console.warn("[Position] Landing ignored — invalid ICAO: " + icao);
       return;
     }
     await this.updatePlayerAirport(icao);
     await FleetRouter.updateLocation(aircraftId, icao);
     this.dbAirport = icao;
     positionState.dbAirport.set(icao);
-    console.log(`[Position] Landing recorded: ${icao}`);
+    console.log("[Position] Landing recorded: " + icao);
   }
 
   /**
    * Case 3: Paid pilot transfer.
+   * aircraftId is optional — pilot-only transfers don't move any aircraft.
    */
-  async onPaidTransfer(aircraftId: string, destinationIcao: string): Promise<void> {
+  async onPaidTransfer(destinationIcao: string, aircraftId?: string): Promise<void> {
     await this.updatePlayerAirport(destinationIcao);
-    await FleetRouter.updateLocation(aircraftId, destinationIcao);
+    if (aircraftId) {
+      await FleetRouter.updateLocation(aircraftId, destinationIcao);
+    }
     this.dbAirport = destinationIcao;
     positionState.dbAirport.set(destinationIcao);
-    console.log(`[Position] Paid transfer to: ${destinationIcao}`);
+    positionState.isAtCorrectAirport.set(this.isAtCorrectAirport());
+    console.log("[Position] Paid transfer to: " + destinationIcao);
   }
 
   // ═══════════════════════════════════════
@@ -182,13 +187,20 @@ class PositionServiceClass {
 
   async loadFromDb(): Promise<string> {
     const player = await DatabaseManager.getPlayer();
-    const airport = player?.current_airport || player?.preferred_airport || "";
-    this.dbAirport = airport;
-    positionState.dbAirport.set(airport);
+    console.log("[Position] loadFromDb — raw player.current_airport = " + (player ? String(player.current_airport) : "(no player)"));
+    const currentAirport = player?.current_airport || "";
+    const preferredAirport = player?.preferred_airport || "";
+
+    console.log("[Position] loadFromDb: current_airport=" + (currentAirport || "(null)") + ", preferred_airport=" + (preferredAirport || "(null)"));
+
+    // Use current_airport as position. preferred_airport is NOT a position fallback.
+    this.dbAirport = currentAirport;
+    positionState.dbAirport.set(currentAirport);
+
     // Re-evaluate after DB load (simVar might already be set)
     positionState.isAtCorrectAirport.set(this.isAtCorrectAirport());
-    console.log(`[Position] Loaded from DB: ${airport}, simVar=${this.simVarAirport}, dist=${this.simDistanceFromDbNm.toFixed(1)}nm, correct=${this.isAtCorrectAirport()}`);
-    return airport;
+    console.log("[Position] Loaded: pos=" + (currentAirport || "(empty)") + ", simVar=" + this.simVarAirport + ", correct=" + this.isAtCorrectAirport());
+    return currentAirport;
   }
 
   // ═══════════════════════════════════════
@@ -198,9 +210,13 @@ class PositionServiceClass {
   private async updatePlayerAirport(icao: string): Promise<void> {
     const player = await DatabaseManager.getPlayer();
     if (player) {
+      const oldAirport = player.current_airport;
       player.current_airport = icao;
       await DatabaseManager.savePlayer(player);
       DatabaseManager.forceSaveSync();
+      console.log("[Position] updatePlayerAirport: " + (oldAirport || "(null)") + " -> " + icao + " — saved + forceSaveSync");
+    } else {
+      console.error("[Position] updatePlayerAirport: NO PLAYER FOUND — cannot save position " + icao);
     }
   }
 }

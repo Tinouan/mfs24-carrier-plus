@@ -96,11 +96,9 @@ export class LocalTransferService {
       return { success: false, error: "Insufficient funds" };
     }
 
-    // Deduct cost
+    // Deduct cost (position update is handled by caller via PositionService.onPaidTransfer)
     player.money = Math.round(player.money - cost_cr);
-    player.current_airport = destIcao;
     await db.savePlayer(player);
-    db.forceSaveSync(); // Force immediate DataStore backup for critical position data
 
     // Log transaction
     await db.saveTransaction({
@@ -189,7 +187,7 @@ export class LocalTransferService {
       });
     }
 
-    // Move aircraft
+    // Move aircraft (OK — PositionService manages PILOT position, not aircraft location)
     await db.updateAircraftLocation(aircraftId, destIcao);
 
     console.log(`[LocalTransferService] Aircraft ${aircraft.registration} transferred: ${originIcao} → ${destIcao}, cost: ${cost_cr} CR`);
