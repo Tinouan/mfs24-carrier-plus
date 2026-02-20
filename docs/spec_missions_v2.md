@@ -760,3 +760,27 @@ private autopilotEverUsed: boolean;
 | **Phases** | Basees sur progression % + vertical speed |
 | **Compatibilite** | **Tous GPS** (Garmin WT, standards, etc.) |
 | **Scoring** | 5 categories, grade S-F, XP calcule |
+
+---
+
+## RECOMPENSE ARGENT (Solo uniquement)
+
+Les missions en mode solo donnent de l'argent en plus de l'XP :
+
+```
+reward = (distance_nm × 5) + (cargo_kg × 0.3)
+reward = reward × grade_multiplier
+reward = max(reward, 50)  // Minimum 50 CR
+
+Exemple : 200nm, 500kg cargo, Grade A
+  base = 200×5 + 500×0.3 = 1150
+  grade = 1150 × 1.5 = 1725 CR
+```
+
+---
+
+## NOTE TECHNIQUE — maxGForce
+
+Le maxGForce pour le scoring mission est capturé par le `TrackingManager`
+(`trackingManager.getMaxGForce()`) et transmis à `MissionController.maxGForce`
+via le callback `onTrackingStateUpdate`. Le champ est public.

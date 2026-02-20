@@ -221,6 +221,43 @@ SOLO      ONLINE
 
 ---
 
+## Position System — Source de vérité
+
+La position joueur/avion est gérée exclusivement par `PositionService.ts`.
+
+3 cas d'écriture autorisés :
+- `PositionService.setInitialPosition()` — première connexion
+- `PositionService.onSuccessfulLanding()` — atterrissage réussi
+- `PositionService.onPaidTransfer()` — transfert payant
+
+INTERDIT :
+- Écrire directement `player.current_airport`
+- Écrire directement `authState.currentUser.current_airport`
+- Appeler `FleetRouter.updateLocation()` hors PositionService
+- Utiliser SimVar GPS pour déterminer la position (sauf lecture informative)
+
+Quand SimVar GPS retourne `"----"` (bug MSFS certains aéroports),
+le fallback lat/lon distance (< 5nm) est utilisé.
+
+---
+
+## Free Flight System
+
+`FreeFlightController.ts` orchestre le free flight :
+- `initialize()` : callbacks FlightTracker + subscriptions states
+- `tick()` : appelé chaque cycle `readSimVars()`
+- `destroy()` : cleanup
+
+`FlightTracker.ts` contient la logique métier :
+- Détection décollage (engine start + position correcte)
+- Tracking en vol (distance, G-force, fuel)
+- Détection atterrissage (onGround + groundSpeed < 5 + hasBeenAirborne)
+- `finishSession()` : position, wear, fuel, XP, career stats, history, recap
+
+Flow : `FreeFlightController → FlightTracker → PositionService + DatabaseManager`
+
+---
+
 ## GameModeState (NOUVEAU)
 
 ### Structure
@@ -610,13 +647,25 @@ tablette ingame/PackageSources/AeroCorpOnline/src/
 │   ├── InventoryState.ts        # Inventaire joueur
 │   └── MarketState.ts           # Ordres marché
 │
+├── controllers/
+│   ├── FreeFlightController.ts  # Free flight orchestration (extrait du TSX)
+│   ├── HangarController.ts      # Hangar logic
+│   ├── MissionController.ts     # Mission creation/tracking/completion
+│   ├── MapController.ts         # Map interactions
+│   ├── MarketController.ts      # Market buy/sell
+│   ├── ContractController.ts    # Contracts logic
+│   ├── CompanyController.ts     # Company management
+│   ├── SocialController.ts      # Friends/social (Online)
+│   └── FactoryController.ts     # Factory production
+│
 ├── managers/
 │   ├── TrackingManager.ts       # Tracking missions
 │   ├── MapManager.ts            # OpenLayers
-│   ├── DatabaseManager.ts       # localStorage persistence
-│   └── FreeFlightManager.ts     # Tracking vol libre
+│   └── DatabaseManager.ts       # localStorage persistence
 │
 ├── services/
+│   ├── PositionService.ts       # Source de vérité position (3 cas d'écriture)
+│   ├── FlightTracker.ts         # Tracking vol libre (décollage/vol/atterrissage)
 │   ├── SoloSaveService.ts       # ** NOUVEAU ** Sauvegarde mode Solo
 │   ├── SyncService.ts           # Connexion SEED (mode Online)
 │   ├── ServiceAdapter.ts        # Facade unifiée (route selon mode)

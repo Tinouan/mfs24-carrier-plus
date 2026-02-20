@@ -148,6 +148,16 @@
 ✅ Build OK (2.9MB bundle)
 ```
 
+### Phase Stabilisation Position + FreeFlight (20 février 2026) ✅
+```
+✅ PositionService : 5 bypass corrigés, source de vérité unique
+✅ FreeFlightController extrait du TSX (~127 lignes retirées)
+✅ FlightTracker : XP, career stats, FPM touchdown, fallback GPS
+✅ Missions : maxGForce, distance, money reward solo
+✅ Historique vols : free flights affichés + clic → recap
+✅ UI : position:fixed → absolute, messages erreur améliorés
+```
+
 ### Fixes transversaux ✅
 ```
 ✅ Persistence unifiée (DatabaseManager → AeroCorpOnlineData)

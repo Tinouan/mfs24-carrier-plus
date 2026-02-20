@@ -191,12 +191,24 @@ export const authState = {
 
 ---
 
+## Career Stats — Free Flight
+
+Les free flights mettent à jour les career stats du pilote :
+- `total_flight_time_minutes` += durée du vol
+- `total_landings` += 1
+- `total_distance_nm` += distance parcourue
+
+Ces stats sont aussi rafraîchies dans `authState` après chaque vol
+pour affichage immédiat dans le profil (sans recharger).
+
+---
+
 ## Évolutions futures
 
 ### Statistiques pilote
-- [ ] `total_flight_hours` - Heures de vol
-- [ ] `total_flights` - Nombre de vols
-- [ ] `total_distance_nm` - Distance parcourue
+- [x] `total_flight_time_minutes` - Minutes de vol (free flight)
+- [x] `total_landings` - Nombre d'atterrissages (free flight)
+- [x] `total_distance_nm` - Distance parcourue (free flight)
 - [ ] `total_cargo_kg` - Cargo transporté
 
 ### Progression
