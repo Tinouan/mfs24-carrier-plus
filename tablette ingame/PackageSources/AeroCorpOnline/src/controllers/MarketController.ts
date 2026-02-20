@@ -8,6 +8,7 @@ import {
   type SellableItem, type SellAircraftData,
 } from "../state";
 import { isGameReady } from "../state/GameModeState";
+import { positionState } from "../state/positionState";
 import { renderMarketListingsHtml, renderItemIcon, formatMoney } from "../helpers";
 import { ItemService } from "../services/ItemService";
 
@@ -977,12 +978,8 @@ export class MarketController {
     try {
       const { localMarketService } = await import("../services/LocalMarketService");
 
-      // Get current location - prefer closest airport from SimVar, fallback to user's location
-      const closestAirport = simVarState.closestAirport.get();
-      const user = authState.currentUser.get();
-      const currentIcao = (closestAirport && closestAirport !== "----")
-        ? closestAirport
-        : (user?.current_airport || user?.preferred_airport || "LFPG");
+      // Aircraft placed at player's DB position (single source of truth)
+      const currentIcao = positionState.dbAirport.get() || "LFPG";
 
       const newAircraft = await localMarketService.purchaseAircraft({
         catalog_id: catalogId,

@@ -1,16 +1,17 @@
 import { NodeReference } from "@microsoft/msfs-sdk";
-import { FleetRouter, WorldRouter, TransferRouter } from "../services";
+import { FleetRouter, TransferRouter } from "../services";
 import { popupManager, DatabaseManager } from "../managers";
 import { hangarState, navigationState, simVarState, settingsState, transferState, marketState } from "../state";
 import { showNotification } from "../state/PopupState";
 import { isGameReady } from "../state/GameModeState";
 import {
-  setSimulatorFuel,
+  setSimulatorFuel, lastFuelInjectionTime,
   renderHangarCargoHtml, renderHangarSystemsHtml, renderHangarListHtml,
   type HangarCargoItem, type HangarSystemsData, type HangarAircraftItem,
   type HangarListTranslations, type HangarSystemsTranslations,
 } from "../helpers";
 import type { AircraftDetails } from "../types";
+import { PositionService } from "../services/PositionService";
 
 // ═══════════════════════════════════════════════════════════
 // TYPES
@@ -50,6 +51,7 @@ export class HangarController {
 
   // Internal state
   private hangarFilterInitialized = false;
+  private lastAutoSyncTime = 0;
 
   // Translation
   private t: (section: string, key: string) => string;
@@ -134,11 +136,11 @@ export class HangarController {
         condition: apiData.condition || 1.0,
         hours: apiData.hours || 0,
         // Systems status (will be populated by fetchAircraftSystems)
+        system_statuses: {},
         landing_gear: "OK",
         engine_status: "OK",
         propeller_status: "OK",
         electrical_status: "OK",
-        pitot_status: "OK",
         avionics_status: "OK",
       };
 
@@ -153,8 +155,8 @@ export class HangarController {
         const simFuelCapacity = SimVar.GetSimVarValue("FUEL TOTAL CAPACITY", "gallons") as number || 0;
         const simFuelCurrent = SimVar.GetSimVarValue("FUEL TOTAL QUANTITY", "gallons") as number || 0;
 
-        // Check for cheat attempt
-        if (simFuelCurrent > fuelGallons + 1) {
+        // V3.0: Anti-cheat with tolerance + post-injection cooldown
+        if (this.isFuelCheatDetected(simFuelCurrent, fuelGallons, simFuelCapacity)) {
           console.warn(`[ACO] ANTI-CHEAT Hangar: Sim fuel (${simFuelCurrent.toFixed(1)}) > DB fuel (${fuelGallons.toFixed(1)}). Resetting.`);
         }
 
@@ -242,6 +244,11 @@ export class HangarController {
    * V1.3: Open refuel popup - V2.5: Delegated to PopupManager
    */
   public openRefuelPopup(): void {
+    // V3.0: Refuel on ground only
+    if (!simVarState.onGround.get()) {
+      showNotification("Ravitaillement au sol uniquement");
+      return;
+    }
     popupManager.openRefuel();
   }
 
@@ -274,9 +281,13 @@ export class HangarController {
       failure: this.t("hangar", "failure"),
       engine: this.t("hangar", "engine"),
       landingGear: this.t("hangar", "landingGear"),
+      tires: this.t("hangar", "tires"),
+      brakes: this.t("hangar", "brakes"),
       propeller: this.t("hangar", "propeller"),
+      oil: this.t("hangar", "oil"),
+      flightSurfaces: this.t("hangar", "flightSurfaces"),
       electrical: this.t("hangar", "electrical"),
-      pitot: this.t("hangar", "pitot"),
+      fuelSystem: this.t("hangar", "fuelSystem"),
       avionics: this.t("hangar", "avionics"),
     };
 
@@ -338,6 +349,17 @@ export class HangarController {
   }
 
   /**
+   * V3.0: Anti-cheat fuel check with tolerance and post-injection cooldown
+   * Returns true if sim fuel exceeds DB fuel beyond tolerance (= cheat detected)
+   */
+  private isFuelCheatDetected(simFuel: number, dbFuel: number, capacity: number): boolean {
+    // 5s cooldown after any fuel injection (refuel, sync, etc.)
+    if (Date.now() - lastFuelInjectionTime < 5000) return false;
+    const tolerance = Math.max(3.0, capacity * 0.05);
+    return simFuel > dbFuel + tolerance;
+  }
+
+  /**
    * V1.2: Check if selected hangar aircraft is the current one in simulator
    */
   private isSelectedAircraftActive(): boolean {
@@ -374,8 +396,8 @@ export class HangarController {
 
     console.log(`[ACO] SYNC: DB fuel=${dbFuelGallons}, Sim fuel=${simFuelCurrent.toFixed(1)}`);
 
-    // Anti-cheat check
-    if (simFuelCurrent > dbFuelGallons + 1) {
+    // V3.0: Anti-cheat with tolerance + post-injection cooldown
+    if (this.isFuelCheatDetected(simFuelCurrent, dbFuelGallons, simFuelCapacity)) {
       console.warn(`[ACO] ANTI-CHEAT: Sim fuel (${simFuelCurrent.toFixed(1)}) > DB fuel (${dbFuelGallons}). Enforcing DB value.`);
     }
 
@@ -441,6 +463,10 @@ export class HangarController {
   public async autoSyncCurrentAircraft(): Promise<void> {
     if (!isGameReady()) return;
 
+    // V3.0: Debounce — prevent duplicate calls within 5 seconds
+    if (Date.now() - this.lastAutoSyncTime < 5000) return;
+    this.lastAutoSyncTime = Date.now();
+
     // Check if database is initialized before proceeding
     if (!DatabaseManager.isInitialized()) {
       console.log("[ACO] Auto-sync skipped: Database not yet initialized");
@@ -470,35 +496,11 @@ export class HangarController {
       // V1.4: Get ICAO type from simulator for better matching
       const rawAtcModel = SimVar.GetSimVarValue("ATC MODEL", "string") as string;
       const simIcaoType = this.callbacks.extractIcaoType(rawAtcModel);
-      let currentAirport = simVarState.closestAirport.get() !== "----" ? simVarState.closestAirport.get() : null;
-
-      // V1.6: Wait for airport detection if not yet available (max 5 retries, silent)
-      if (!currentAirport) {
-        for (let retry = 0; retry < 5 && !currentAirport; retry++) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-          currentAirport = simVarState.closestAirport.get() !== "----" ? simVarState.closestAirport.get() : null;
-        }
-      }
-
-      // V4.3: Coordinate fallback if GPS CLOSEST AIRPORT ID fails
-      if (!currentAirport) {
-        let lat = SimVar.GetSimVarValue("PLANE LATITUDE", "degrees") as number || 0;
-        let lon = SimVar.GetSimVarValue("PLANE LONGITUDE", "degrees") as number || 0;
-        if (lat === 0 && lon === 0) {
-          lat = simVarState.latitude.get();
-          lon = simVarState.longitude.get();
-        }
-        if (lat !== 0 || lon !== 0) {
-          const airport = await WorldRouter.getClosestAirport(lat, lon);
-          if (airport) {
-            currentAirport = airport.ident;
-            simVarState.closestAirport.set(currentAirport);
-            console.log(`[ACO] Auto-sync: coordinate fallback detected airport ${currentAirport}`);
-          }
-        }
-        if (!currentAirport) {
-          return;
-        }
+      // BDD is the single source of truth for position
+      const currentAirport = PositionService.getDbPosition();
+      if (!currentAirport || currentAirport === "" || currentAirport === "----") {
+        console.log("[ACO] Auto-sync skipped: no position in DB");
+        return;
       }
 
       console.log(`[ACO] Auto-sync: Type=${simIcaoType}, Airport=${currentAirport}`);
@@ -541,10 +543,9 @@ export class HangarController {
 
       console.log(`[ACO] Using aircraft: ${matchingAircraft.registration} (${matchingAircraft.aircraft_type})`);
 
-      // Update aircraft location in DB if different from current airport
-      if (matchingAircraft.current_airport_ident?.toUpperCase() !== currentAirport.toUpperCase()) {
-        await FleetRouter.updateLocation(matchingAircraft.id, currentAirport);
-        console.log(`[ACO] Auto-sync: updated aircraft ${matchingAircraft.registration} location to ${currentAirport}`);
+      // Position check only (no write) — position is managed by PositionService
+      if (matchingAircraft.current_airport_ident?.toUpperCase() !== currentAirport?.toUpperCase()) {
+        console.log(`[ACO] Auto-sync: aircraft ${matchingAircraft.registration} DB=${matchingAircraft.current_airport_ident} SIM=${currentAirport} (no position update — managed by PositionService)`);
       }
 
       // FIX: getFleet() returns HangarAircraftItem which does NOT include fuel_gallons.
@@ -556,8 +557,8 @@ export class HangarController {
 
       console.log(`[ACO] DB fuel: ${dbFuelGallons}/${dbFuelCapacity} gal, Sim fuel: ${simFuelCurrent} gal`);
 
-      // Anti-cheat check (sim fuel higher than DB fuel)
-      if (simFuelCurrent > dbFuelGallons + 1) {
+      // V3.0: Anti-cheat with tolerance + post-injection cooldown
+      if (this.isFuelCheatDetected(simFuelCurrent, dbFuelGallons, simFuelCapacity)) {
         console.warn(`[ACO] ANTI-CHEAT: Sim fuel (${simFuelCurrent.toFixed(1)}) > DB fuel (${dbFuelGallons.toFixed(1)}). Resetting to DB value.`);
       }
 

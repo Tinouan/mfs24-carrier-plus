@@ -11,7 +11,7 @@
  */
 
 import { Subject } from "@microsoft/msfs-sdk";
-import { FLIGHT_TRACKING_INTERVAL_MS, BACKGROUND_TRACKING_INTERVAL_MS } from "../constants";
+import { FLIGHT_TRACKING_INTERVAL_MS } from "../constants";
 import { MissionRouter } from "../services";
 import { isGameReady } from "../state/GameModeState";
 import type { ActiveMission, MissionCheckpoint, MissionAircraftInfo, LandingRating } from "../types";
@@ -63,17 +63,7 @@ export interface TrackingState {
   flightPhaseColor: string;
 }
 
-export interface BackgroundTrackingState {
-  flightStartTime: Date | null;
-  flightMinutes: number;
-  maxGForce: number;
-  landingFpm: number;
-  hadOverspeed: boolean;
-  wasFlying: boolean;
-  lastFuelGallons: number;
-  currentAircraftId: string | null;
-  lastSyncTime: number;
-}
+// BackgroundTrackingState removed — background tracking now handled by FlightTracker
 
 export interface TrackingCallbacks {
   getActiveMission: () => ActiveMission | null;
@@ -98,10 +88,6 @@ export interface TrackingCallbacks {
   // V2.0: Mission completion trigger
   onMissionCompleteTrigger: () => void;
   onTouchdown: (fpm: number) => void;
-
-  // Background tracking
-  onBackgroundWearApply: (aircraftId: string, flightMinutes: number, avgAltitude: number, avgSpeed: number) => Promise<void>;
-  onBackgroundFuelSync: (aircraftId: string, fuelGallons: number, fuelCapacity: number) => Promise<void>;
 
   // UI landing detection (separate from mission touchdown)
   onLandingRatingDetected: (fpm: number, rating: LandingRating) => void;
@@ -162,23 +148,6 @@ class TrackingManager {
 
   // UI landing detection state (separate from mission tracking)
   private uiWasOnGround = true;
-
-  // Background tracking state
-  private bgTrackerInterval: number | null = null;
-  private bgFlightStartTime: Date | null = null;
-  private bgFlightMinutes = 0;
-  private bgMaxGForce = 1.0;
-  private bgLandingFpm = 0;
-  private bgHadOverspeed = false;
-  private bgWasFlying = false;
-  private bgLastFuelGallons = 0;
-  private bgCurrentAircraftId: string | null = null;
-  private bgLastSyncTime = 0;
-  private bgAvgAltitude = 0;
-  private bgAvgSpeed = 0;
-  private bgAltitudeSum = 0;
-  private bgSpeedSum = 0;
-  private bgSampleCount = 0;
 
   // Callbacks
   private callbacks: TrackingCallbacks | null = null;
@@ -882,172 +851,7 @@ class TrackingManager {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // BACKGROUND TRACKING (Anti-cheat V1.6)
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  /**
-   * Start background tracking - runs even without active mission
-   */
-  startBackgroundTracking(): void {
-    if (this.bgTrackerInterval) return; // Already running
-
-    console.log("[TrackingManager] Starting background flight tracking");
-
-    // Reset background tracking state
-    this.bgFlightStartTime = null;
-    this.bgFlightMinutes = 0;
-    this.bgMaxGForce = 1.0;
-    this.bgLandingFpm = 0;
-    this.bgHadOverspeed = false;
-    this.bgWasFlying = false;
-    this.bgLastSyncTime = Date.now();
-    this.bgAltitudeSum = 0;
-    this.bgSpeedSum = 0;
-    this.bgSampleCount = 0;
-
-    // Get current aircraft ID
-    if (this.callbacks) {
-      const aircraft = this.callbacks.getMissionAircraft();
-      this.bgCurrentAircraftId = aircraft?.id || null;
-    }
-
-    // Get initial fuel
-    try {
-      this.bgLastFuelGallons = SimVar.GetSimVarValue("FUEL TOTAL QUANTITY", "gallons") as number || 0;
-    } catch (e) {
-      this.bgLastFuelGallons = 0;
-    }
-
-    // Run at configured interval
-    this.bgTrackerInterval = window.setInterval(() => {
-      this.backgroundTrackerTick();
-    }, BACKGROUND_TRACKING_INTERVAL_MS);
-
-    // Also run immediately
-    this.backgroundTrackerTick();
-  }
-
-  /**
-   * Stop background tracking
-   */
-  stopBackgroundTracking(): void {
-    if (this.bgTrackerInterval) {
-      window.clearInterval(this.bgTrackerInterval);
-      this.bgTrackerInterval = null;
-    }
-    console.log("[TrackingManager] Background tracking stopped");
-  }
-
-  /**
-   * Reset background tracking state
-   */
-  resetBackgroundTracking(): void {
-    this.bgFlightStartTime = null;
-    this.bgFlightMinutes = 0;
-    this.bgMaxGForce = 1.0;
-    this.bgLandingFpm = 0;
-    this.bgHadOverspeed = false;
-    this.bgWasFlying = false;
-  }
-
-  /**
-   * Background tracker tick - called at regular intervals
-   */
-  private backgroundTrackerTick(): void {
-    // Don't track if there's an active mission (mission tracker handles it)
-    if (!this.callbacks) return;
-
-    const mission = this.callbacks.getActiveMission();
-    if (mission) return;
-    if (!isGameReady()) return;
-
-    try {
-      // Read SimVars
-      const engineRunning = SimVar.GetSimVarValue("ENG COMBUSTION:1", "boolean") as boolean;
-      const onGround = SimVar.GetSimVarValue("SIM ON GROUND", "boolean") as boolean;
-      const altitude = SimVar.GetSimVarValue("PLANE ALTITUDE", "feet") as number || 0;
-      const gForce = SimVar.GetSimVarValue("G FORCE", "GForce") as number || 1;
-      const ias = SimVar.GetSimVarValue("AIRSPEED INDICATED", "knots") as number || 0;
-      const touchdownVelocity = SimVar.GetSimVarValue("PLANE TOUCHDOWN NORMAL VELOCITY", "feet per second") as number || 0;
-
-      // Get current aircraft
-      const aircraft = this.callbacks.getMissionAircraft();
-      if (aircraft) {
-        this.bgCurrentAircraftId = aircraft.id;
-      }
-
-      // Only track G-force/overspeed when engine is running
-      if (engineRunning) {
-        if (Math.abs(gForce) > this.bgMaxGForce) {
-          this.bgMaxGForce = Math.abs(gForce);
-        }
-
-        // Detect overspeed
-        if ((altitude < 10000 && ias > 250) || (altitude >= 10000 && ias > 400)) {
-          this.bgHadOverspeed = true;
-        }
-      }
-
-      // Detect flight start
-      if (engineRunning && !onGround && !this.bgWasFlying) {
-        console.log("[TrackingManager] Background - Flight detected");
-        this.bgFlightStartTime = new Date();
-        this.bgWasFlying = true;
-      }
-
-      // Accumulate flight time and stats
-      if (this.bgWasFlying && !onGround) {
-        this.bgFlightMinutes += 0.5; // 30 seconds = 0.5 minutes
-        this.bgAltitudeSum += altitude;
-        this.bgSpeedSum += ias;
-        this.bgSampleCount++;
-      }
-
-      // Detect landing
-      if (this.bgWasFlying && onGround && altitude < 500) {
-        const landingFpm = Math.abs(touchdownVelocity * 60);
-        if (landingFpm > 50 && this.bgLandingFpm === 0) {
-          this.bgLandingFpm = landingFpm;
-          console.log("[TrackingManager] Background - Landing detected, FPM:", this.bgLandingFpm);
-        }
-
-        // Apply wear if we've flown enough
-        if (this.bgFlightMinutes >= 1 && this.bgCurrentAircraftId) {
-          const avgAlt = this.bgSampleCount > 0 ? this.bgAltitudeSum / this.bgSampleCount : 0;
-          const avgSpd = this.bgSampleCount > 0 ? this.bgSpeedSum / this.bgSampleCount : 0;
-
-          void this.callbacks.onBackgroundWearApply(
-            this.bgCurrentAircraftId,
-            this.bgFlightMinutes,
-            avgAlt,
-            avgSpd
-          );
-
-          // Reset after applying
-          this.resetBackgroundTracking();
-        }
-      }
-    } catch (error) {
-      console.error("[TrackingManager] Error in background tracking:", error);
-    }
-  }
-
-  /**
-   * Get background tracking state
-   */
-  getBackgroundTrackingState(): BackgroundTrackingState {
-    return {
-      flightStartTime: this.bgFlightStartTime,
-      flightMinutes: this.bgFlightMinutes,
-      maxGForce: this.bgMaxGForce,
-      landingFpm: this.bgLandingFpm,
-      hadOverspeed: this.bgHadOverspeed,
-      wasFlying: this.bgWasFlying,
-      lastFuelGallons: this.bgLastFuelGallons,
-      currentAircraftId: this.bgCurrentAircraftId,
-      lastSyncTime: this.bgLastSyncTime,
-    };
-  }
+  // Background tracking removed — now handled by FlightTracker
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -4,9 +4,11 @@ import { popupManager, trackingManager, missionCreationManager } from "../manage
 import { DatabaseManager } from "../managers/DatabaseManager";
 import { ItemService } from "../services/ItemService";
 import { InitService } from "../services/InitService";
+import { PositionService } from "../services/PositionService";
+import { positionState } from "../state/positionState";
 import {
   missionState, missionCreationState, trackingState, checkpointState, cargoState,
-  authState, simVarState, popupState, hangarState, settingsState, navigationState,
+  authState, simVarState, popupState, hangarState, settingsState, navigationState, marketState,
 } from "../state";
 import { isGameReady } from "../state/GameModeState";
 import {
@@ -104,7 +106,7 @@ export class MissionController {
   public payloadStartLbs = 0;
   public payloadVerifiedLbs = 0;
   public payloadVerificationDone = false;
-  private maxGForce = 1.0;
+  public maxGForce = 1.0;
   public landingFpm = 0;
   public flightStartTime: Date | null = null;
   public fuelStartPercent = 0;
@@ -380,52 +382,16 @@ export class MissionController {
     missionState.missionStatus.set("idle");
     missionState.missionWarnings.set([]);
 
-    // DB is the source of truth for display, fallback to GPS SimVar
-    const user = authState.currentUser.get();
-    let airport = user?.current_airport || user?.preferred_airport;
+    // BDD is the ONLY source of truth — use PositionService
+    const dbAirport = PositionService.getDbPosition();
 
-    // Phase 6b: Fallback to GPS closest airport if DB has no position
-    if (!airport || airport === "----") {
-      const gpsAirport = simVarState.closestAirport.get();
-      if (gpsAirport && gpsAirport !== "----") {
-        airport = gpsAirport;
-        console.log(`[ACO] refreshMissionOrigin: DB empty, using GPS closest = ${airport}`);
-        if (user) {
-          authState.currentUser.set({ ...user, current_airport: airport });
-        }
-      }
-    }
-
-    // Coordinate fallback if closestAirport is also "----"
-    if (!airport || airport === "----") {
-      try {
-        let lat = SimVar.GetSimVarValue("PLANE LATITUDE", "degrees") as number || 0;
-        let lon = SimVar.GetSimVarValue("PLANE LONGITUDE", "degrees") as number || 0;
-        if (lat === 0 && lon === 0) {
-          lat = simVarState.latitude.get();
-          lon = simVarState.longitude.get();
-        }
-        if (lat !== 0 || lon !== 0) {
-          const ap = await WorldRouter.getClosestAirport(lat, lon);
-          if (ap) {
-            airport = ap.ident;
-            simVarState.closestAirport.set(airport);
-            console.log(`[ACO] refreshMissionOrigin: coordinate fallback = ${airport}`);
-            if (user) {
-              authState.currentUser.set({ ...user, current_airport: airport });
-            }
-          }
-        }
-      } catch (e) { console.warn("[ACO] refreshMissionOrigin: coordinate fallback error:", e); }
-    }
-
-    if (airport && airport !== "----") {
-      console.log(`[ACO] refreshMissionOrigin: origin = ${airport}`);
-      missionState.missionOriginIcao.set(airport);
+    if (dbAirport && dbAirport !== "----" && dbAirport !== "") {
+      console.log(`[ACO] refreshMissionOrigin: origin from DB = ${dbAirport}`);
+      missionState.missionOriginIcao.set(dbAirport);
       void this.loadCurrentAircraftForMission();
       this.fetchActiveMission();
     } else {
-      console.warn("[ACO] refreshMissionOrigin: no airport found (DB or GPS)");
+      console.warn("[ACO] refreshMissionOrigin: no airport in DB — player must set initial position");
       missionState.missionOriginIcao.set(null);
     }
   }
@@ -448,36 +414,10 @@ export class MissionController {
     const user = authState.currentUser.get();
     const refAirport = user?.current_airport?.toUpperCase() || user?.preferred_airport?.toUpperCase() || "";
 
-    // SimVar GPS closest airport (always read from SimVar, never default to DB)
-    let simAirport = "";
-    if (hasAircraft && typeof SimVar !== "undefined") {
-      try {
-        const rawVal = SimVar.GetSimVarValue("GPS CLOSEST AIRPORT ID", "string");
-        console.log("[AntiCheat] SimVar GPS CLOSEST AIRPORT ID:", rawVal, "type:", typeof rawVal);
-        const raw = (rawVal as string || "").replace(/[\r\n\t"' ]/g, "").toUpperCase();
-        if (raw && /^[A-Z0-9]{3,4}$/.test(raw)) simAirport = raw;
-        else console.log("[AntiCheat] Rejected by regex, raw:", JSON.stringify(raw));
-      } catch (e) { console.log("[AntiCheat] SimVar error:", e); }
-
-      // V4.3: Coordinate fallback if SimVar is empty/invalid
-      if (!simAirport) {
-        try {
-          let lat = SimVar.GetSimVarValue("PLANE LATITUDE", "degrees") as number || 0;
-          let lon = SimVar.GetSimVarValue("PLANE LONGITUDE", "degrees") as number || 0;
-          if (lat === 0 && lon === 0) {
-            lat = simVarState.latitude.get();
-            lon = simVarState.longitude.get();
-          }
-          if (lat !== 0 || lon !== 0) {
-            const airport = await WorldRouter.getClosestAirport(lat, lon);
-            if (airport) {
-              simAirport = airport.ident.toUpperCase();
-              console.log(`[AntiCheat] Coordinate fallback detected airport ${simAirport}`);
-            }
-          }
-        } catch (e) { console.log("[AntiCheat] Coordinate fallback error:", e); }
-      }
-    }
+    // SimVar airport — use detected airport (GPS or lat/lon fallback) for display
+    const rawSimAirport = (positionState.simVarAirport.get() || "").toUpperCase();
+    const detectedAirport = PositionService.getDetectedSimAirport().toUpperCase();
+    const simAirport = detectedAirport || rawSimAirport;
 
     // Aircraft DB location
     let acAirport = refAirport; // default = assume match
@@ -485,8 +425,8 @@ export class MissionController {
       acAirport = aircraft!.current_airport_ident.toUpperCase();
     }
 
-    // Check mismatches (empty simAirport = not detected = mismatch)
-    const simMatch = !refAirport || (simAirport !== "" && simAirport === refAirport);
+    // Check mismatches — use PositionService which handles GPS "----" via lat/lon fallback
+    const simMatch = !refAirport || PositionService.isAtCorrectAirport();
     const acMatch = !refAirport || acAirport === refAirport;
 
     if (hasAircraft && (!simMatch || !acMatch)) {
@@ -505,7 +445,12 @@ export class MissionController {
     if (hasAircraft && !locationValid) {
       let helpMsg = this.t("missions", "allMustMatch");
       if (!simMatch && !acMatch) {
-        helpMsg = this.t("missions", "loadOrTransfer").replace("{airport}", refAirport).replace("{sim}", simAirport);
+        // If GPS returns "----", don't suggest transferring to "----"
+        if (simAirport === "----" || simAirport === "") {
+          helpMsg = this.t("missions", "loadFlightAt").replace("{airport}", refAirport);
+        } else {
+          helpMsg = this.t("missions", "loadOrTransfer").replace("{airport}", refAirport).replace("{sim}", simAirport);
+        }
       } else if (!simMatch) {
         helpMsg = this.t("missions", "loadFlightAt").replace("{airport}", refAirport);
       } else if (!acMatch) {
@@ -891,18 +836,12 @@ export class MissionController {
     }
 
     // ── Anti-cheat: verify player is physically at the right airport ──
-    if (typeof SimVar !== "undefined") {
-      try {
-        const simAirport = (SimVar.GetSimVarValue("GPS CLOSEST AIRPORT ID", "string") as string || "").trim().toUpperCase();
-        if (simAirport && /^[A-Z]{3,4}$/.test(simAirport) && simAirport !== origin) {
-          console.log(`[ACO] Anti-cheat: SimVar airport=${simAirport}, expected=${origin}`);
-          missionState.missionError.set(`${this.t("missions", "mustBeAtAirport")} ${origin}`);
-          missionState.missionStatus.set("error");
-          return;
-        }
-      } catch {
-        console.log("[ACO] Could not read GPS CLOSEST AIRPORT ID SimVar");
-      }
+    const simAirport = (positionState.simVarAirport.get() || "").trim().toUpperCase();
+    if (simAirport && simAirport !== "----" && /^[A-Z0-9]{3,4}$/.test(simAirport) && simAirport !== origin) {
+      console.log(`[ACO] Anti-cheat: SimVar airport=${simAirport}, expected=${origin}`);
+      missionState.missionError.set(`${this.t("missions", "mustBeAtAirport")} ${origin}`);
+      missionState.missionStatus.set("error");
+      return;
     }
 
     const selectedAircraft = this.availableAircraftList.find(a => a.id === aircraftId);
@@ -1107,7 +1046,7 @@ export class MissionController {
     console.log("[ACO] Cancelling mission:", mission.id);
     missionState.missionStatus.set("loading");
 
-    const currentAirport = simVarState.closestAirport.get();
+    const currentAirport = positionState.simVarAirport.get();
     const currentLat = SimVar.GetSimVarValue("PLANE LATITUDE", "degrees");
     const currentLon = SimVar.GetSimVarValue("PLANE LONGITUDE", "degrees");
     const currentAlt = SimVar.GetSimVarValue("PLANE ALTITUDE", "feet");
@@ -1651,14 +1590,12 @@ export class MissionController {
       const acDbLocation = apiData.current_airport_ident?.toUpperCase() || "";
 
       // Warning: SimVar airport ≠ DB airport
-      if (typeof SimVar !== "undefined") {
-        try {
-          const simAirport = (SimVar.GetSimVarValue("GPS CLOSEST AIRPORT ID", "string") as string || "").trim().toUpperCase();
-          if (simAirport && /^[A-Z]{3,4}$/.test(simAirport) && playerAirport && simAirport !== playerAirport) {
-            warnings.push(this.t("missions", "mustBeAtAirport") + " " + playerAirport);
-            console.warn(`[ACO] Warning: SimVar airport=${simAirport}, DB airport=${playerAirport}`);
-          }
-        } catch { /* SimVar not available */ }
+      {
+        const simAirport = (positionState.simVarAirport.get() || "").trim().toUpperCase();
+        if (simAirport && simAirport !== "----" && /^[A-Z0-9]{3,4}$/.test(simAirport) && playerAirport && simAirport !== playerAirport) {
+          warnings.push(this.t("missions", "mustBeAtAirport") + " " + playerAirport);
+          console.warn(`[ACO] Warning: SimVar airport=${simAirport}, DB airport=${playerAirport}`);
+        }
       }
 
       // Warning: aircraft DB location ≠ player airport
@@ -1692,11 +1629,14 @@ export class MissionController {
         status: apiData.status || "parked",
         current_airport_ident: apiData.current_airport_ident,
         owner_type: apiData.owner_type || "player",
+        system_statuses: Object.keys(systemsData.systems).reduce<Record<string, string>>((acc, s) => {
+          acc[s] = systemsData.critical.includes(s) ? "CRIT" : systemsData.warnings.includes(s) ? "WARN" : "OK";
+          return acc;
+        }, {}),
         engine_status: systemsData.critical.includes("engine") ? "CRIT" : systemsData.warnings.includes("engine") ? "WARN" : "OK",
         landing_gear: systemsData.critical.includes("landing_gear") ? "CRIT" : systemsData.warnings.includes("landing_gear") ? "WARN" : "OK",
         propeller_status: systemsData.critical.includes("propeller") ? "CRIT" : systemsData.warnings.includes("propeller") ? "WARN" : "OK",
         electrical_status: systemsData.critical.includes("electrical") ? "CRIT" : systemsData.warnings.includes("electrical") ? "WARN" : "OK",
-        pitot_status: systemsData.critical.includes("pitot") ? "CRIT" : systemsData.warnings.includes("pitot") ? "WARN" : "OK",
         avionics_status: systemsData.critical.includes("avionics") ? "CRIT" : systemsData.warnings.includes("avionics") ? "WARN" : "OK",
       };
 
@@ -2222,14 +2162,11 @@ export class MissionController {
 
       const lat = simVarState.latitude.get();
       const lon = simVarState.longitude.get();
-      let finalIcao = mission.destination_icao;
-
-      try {
-        const closest = await WorldRouter.getClosestAirport(lat, lon);
-        if (closest) finalIcao = closest.ident;
-      } catch (e) {
-        console.log("[ACO] Could not get closest airport");
-      }
+      // Use SimVar airport from PositionService, fallback to mission destination
+      const simApt = positionState.simVarAirport.get();
+      const finalIcao = (simApt && simApt !== "----")
+        ? simApt
+        : mission.destination_icao;
 
       const cheated = this.payloadVerificationDone &&
         this.payloadStartLbs > 0 &&
@@ -2244,7 +2181,7 @@ export class MissionController {
         final_icao: finalIcao,
         flight_time_seconds: flightTimeMinutes * 60,
         fuel_used_kg: 100 - fuelCurrentPercent,
-        distance_flown_nm: 0,
+        distance_flown_nm: trackingState.trackingDistanceFlown.get(),
         real_time_ratio: realTimeSeconds > 0 ? simTimeSeconds / realTimeSeconds : 1,
         cargo_actual_kg: trackingState.trackingCargoActual.get(),
         cargo_expected_kg: trackingState.trackingCargoExpected.get(),
@@ -2266,7 +2203,7 @@ export class MissionController {
         origin_icao: mission.origin_icao,
         destination_icao: mission.destination_icao,
         final_icao: finalIcao,
-        distance_nm: 0,
+        distance_nm: mission.distance_nm || trackingState.trackingDistanceFlown.get(),
         score_landing: result.scores?.landing || 0,
         score_gforce: result.scores?.gforce || 0,
         score_destination: result.scores?.destination || 0,
@@ -2275,6 +2212,7 @@ export class MissionController {
         score_total: result.score_total || 0,
         grade: result.grade || "F",
         xp_earned: result.xp_breakdown?.total_xp || 0,
+        money_earned: result.money_earned || 0,
         cheated: cheated,
         cheat_penalty_percent: cheated ? 50 : 0,
         landing_fpm: this.landingFpm,
@@ -2304,17 +2242,15 @@ export class MissionController {
         console.warn("[ACO] Could not sync fuel after mission:", e);
       }
 
+      // Update position via PositionService (single source of truth)
       try {
-        const player = await InitService.getPlayerInfo();
-        if (player && finalIcao) {
-          player.current_airport = finalIcao;
-          player.updated_at = new Date().toISOString();
-          await DatabaseManager.put("player", player, false);
-          DatabaseManager.forceSaveSync();
-          console.log(`[ACO] Player current_airport updated to ${finalIcao}`);
+        const aircraftId = mission.aircraft_id || missionState.selectedAircraftId.get();
+        if (aircraftId && finalIcao) {
+          await PositionService.onSuccessfulLanding(aircraftId, finalIcao);
+          console.log(`[ACO] Position updated via PositionService: ${finalIcao}`);
         }
       } catch (e) {
-        console.warn("[ACO] Could not update player current_airport:", e);
+        console.warn("[ACO] Could not update position after mission:", e);
       }
 
       try {
@@ -2337,7 +2273,8 @@ export class MissionController {
               average_grade: careerStats.average_grade,
             },
           });
-          console.log(`[ACO] Player stats refreshed after mission: XP=${player.xp}, Missions=${careerStats.total_missions}, Current=${player.current_airport}`);
+          marketState.walletPersonal.set(player.money);
+          console.log(`[ACO] Player stats refreshed after mission: XP=${player.xp}, Money=${player.money}, Missions=${careerStats.total_missions}, Current=${player.current_airport}`);
         }
       } catch (e) {
         console.warn("[ACO] Could not refresh player stats after mission:", e);

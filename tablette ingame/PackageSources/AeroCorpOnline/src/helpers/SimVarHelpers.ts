@@ -3,14 +3,19 @@
  * Extracted from AeroCorpOnline.tsx for reusability
  */
 
+import { FlightTracker } from "../services/FlightTracker";
+
 // Global MSFS declarations in src/types/msfs-globals.d.ts
 
 // ═══════════════════════════════════════════════════════════════════════════
 // FUEL MANAGEMENT
 // ═══════════════════════════════════════════════════════════════════════════
 
+/** Timestamp of last fuel injection — used by anti-cheat cooldown */
+export let lastFuelInjectionTime = 0;
+
 /**
- * Set fuel in simulator by writing to all fuel tanks
+ * Set fuel in simulator by writing to the 3 main fuel tanks
  * FUEL TOTAL QUANTITY is read-only, so we need to set individual tank levels
  *
  * @param targetGallons - Target fuel amount in gallons
@@ -21,23 +26,13 @@ export function setSimulatorFuel(targetGallons: number, capacityGallons: number)
   const targetLevel = Math.min(1.0, Math.max(0.0, targetGallons / capacityGallons));
   console.log(`[SimVarHelpers] Setting fuel level to ${(targetLevel * 100).toFixed(1)}%`);
 
-  // List of all possible fuel tanks in MSFS
-  // We set ALL tanks to the same level percentage
+  // V3.0: Only write to the 3 main tanks (was 11 — many don't exist on most aircraft)
   const fuelTanks = [
-    "FUEL TANK CENTER LEVEL",
     "FUEL TANK LEFT MAIN LEVEL",
     "FUEL TANK RIGHT MAIN LEVEL",
-    "FUEL TANK LEFT AUX LEVEL",
-    "FUEL TANK RIGHT AUX LEVEL",
-    "FUEL TANK LEFT TIP LEVEL",
-    "FUEL TANK RIGHT TIP LEVEL",
-    "FUEL TANK EXTERNAL1 LEVEL",
-    "FUEL TANK EXTERNAL2 LEVEL",
-    "FUEL TANK CENTER2 LEVEL",
-    "FUEL TANK CENTER3 LEVEL",
+    "FUEL TANK CENTER LEVEL",
   ];
 
-  // Set each tank to the target level
   for (const tank of fuelTanks) {
     try {
       SimVar.SetSimVarValue(tank, "percent over 100", targetLevel);
@@ -46,7 +41,9 @@ export function setSimulatorFuel(targetGallons: number, capacityGallons: number)
     }
   }
 
-  console.log("[SimVarHelpers] Fuel written to simulator tanks");
+  // Notify FlightTracker so it doesn't see this as fuel consumption
+  FlightTracker.updateFuelBaseline(targetGallons);
+  lastFuelInjectionTime = Date.now();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

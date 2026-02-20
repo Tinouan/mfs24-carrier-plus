@@ -137,7 +137,7 @@ export function renderFreeFlightRecapHtml(
   }).join("");
 
   return `
-    <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; z-index: 1000;">
+    <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; z-index: 1000;">
       <div style="background: #1a1a24; border: 2px solid #3b82f6; border-radius: 16px; padding: 20px; max-width: 380px; width: 90%; max-height: 90vh; overflow-y: auto;">
         <!-- Title -->
         <div style="text-align: center; margin-bottom: 16px;">
@@ -190,13 +190,13 @@ export function renderFreeFlightRecapHtml(
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
               <span style="font-size: 11px; color: #9ca3af;">${translations.landing}:</span>
               <span style="font-size: 11px; color: ${landingColor}; font-weight: 600;">
-                ${data.landing_fpm} fpm - ${landingQualityText}
+                ${Math.round(data.landing_fpm)} fpm - ${landingQualityText}
               </span>
             </div>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
               <span style="font-size: 11px; color: #9ca3af;">${translations.gforceMax}:</span>
               <span style="font-size: 11px; color: ${gforceColor}; font-weight: 600;">
-                ${data.max_gforce}g - ${gforceText}
+                ${data.max_gforce.toFixed(2)}g - ${gforceText}
               </span>
             </div>
             <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -726,7 +726,7 @@ export function renderFlightsHistoryHtml(
       const durationStr = hours > 0 ? `${hours}h${String(mins).padStart(2, "0")}` : `${mins}min`;
 
       return `
-        <div style="display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid #1a1a24;">
+        <div class="history-flight-row" data-flight-id="${entry.id}" style="display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid #1a1a24; cursor: pointer;">
           <div style="width: 40px; color: #6b7280; font-size: 10px;">${timeStr}</div>
           <div style="width: 8px; height: 8px; border-radius: 50%; background: ${typeColor}; margin-top: 4px; flex-shrink: 0;"></div>
           <div style="flex: 1;">

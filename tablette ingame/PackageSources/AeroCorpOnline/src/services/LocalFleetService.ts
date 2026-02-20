@@ -15,6 +15,10 @@ import type {
   AircraftDetailsResponse,
   AircraftCargoResponse,
 } from "../types";
+import {
+  ALL_SYSTEMS_V2, WEAR_PER_HOUR, LANDING_WEAR, GFORCE_WEAR,
+  REPAIR_COST_RATE, CRITICAL_SYSTEMS, CRITICAL_THRESHOLD,
+} from "../constants/WearConstants";
 
 // ═══════════════════════════════════════════════════════════
 // LOCAL FLEET SERVICE CLASS
@@ -202,19 +206,10 @@ class LocalFleetServiceClass {
     if (!systems) return true;
 
     // Check if any condition is missing or zero
-    const conditions = [
-      systems.engine_condition,
-      systems.propeller_condition,
-      systems.landing_gear_condition,
-      systems.electrical_condition,
-      systems.avionics_condition,
-      systems.pitot_condition,
-    ];
+    const conditions = ALL_SYSTEMS_V2.map(s => systems[`${s}_condition`]);
 
     const allZeroOrMissing = conditions.every(c => c === undefined || c === null || c === 0);
-    const anyFailed = systems.engine_failed || systems.propeller_failed ||
-                      systems.landing_gear_failed || systems.electrical_failed ||
-                      systems.avionics_failed || systems.pitot_failed;
+    const anyFailed = ALL_SYSTEMS_V2.some(s => systems[`${s}_failed`]);
 
     return allZeroOrMissing || (anyFailed && conditions.every(c => c === 0));
   }
@@ -223,21 +218,40 @@ class LocalFleetServiceClass {
    * Create default healthy systems for an aircraft
    */
   private createDefaultSystems(): Aircraft["systems"] {
-    return {
-      engine_condition: 100,
-      propeller_condition: 100,
-      landing_gear_condition: 100,
-      electrical_condition: 100,
-      avionics_condition: 100,
-      pitot_condition: 100,
-      engine_failed: false,
-      propeller_failed: false,
-      landing_gear_failed: false,
-      electrical_failed: false,
-      avionics_failed: false,
-      pitot_failed: false,
-      last_maintenance_at: new Date().toISOString(),
-    };
+    const systems: any = { last_maintenance_at: new Date().toISOString() };
+    for (const s of ALL_SYSTEMS_V2) {
+      systems[`${s}_condition`] = 100;
+      systems[`${s}_failed`] = false;
+    }
+    return systems;
+  }
+
+  /**
+   * V2 Migration: Convert V1.6 (6 systems with pitot) to V2 (10 systems).
+   * Called on-read — migrates in place and saves.
+   */
+  private async migrateSystemsV2(ac: Aircraft): Promise<void> {
+    const sys = (ac as any).systems;
+    if (!sys || typeof sys.engine_condition !== "number") return;
+    if (sys.tires_condition !== undefined) return; // already V2
+
+    // Migrate pitot → avionics (take the worst)
+    if (sys.pitot_condition !== undefined) {
+      sys.avionics_condition = Math.min(sys.avionics_condition ?? 100, sys.pitot_condition);
+      delete sys.pitot_condition;
+      delete sys.pitot_failed;
+    }
+
+    // Add new systems at 100%
+    const newSystems = ["tires", "brakes", "oil", "flight_surfaces", "fuel_system"];
+    for (const s of newSystems) {
+      sys[`${s}_condition`] = 100;
+      sys[`${s}_failed`] = false;
+    }
+
+    (ac as any).systems = sys;
+    await DatabaseManager.put("aircraft", ac);
+    console.log(`[LocalFleetService] Migrated aircraft ${ac.id} systems to V2 (10 systems)`);
   }
 
   /**
@@ -297,15 +311,14 @@ class LocalFleetServiceClass {
     let systemStatuses: Record<string, string>;
 
     if (storedSystems && typeof storedSystems.engine_condition === "number") {
+      // V2 migration if needed
+      await this.migrateSystemsV2(ac);
+
       // NEW format: convert condition numbers to status strings
-      systemStatuses = {
-        engine: this.conditionToStatus(storedSystems.engine_condition, storedSystems.engine_failed),
-        propeller: this.conditionToStatus(storedSystems.propeller_condition, storedSystems.propeller_failed),
-        landing_gear: this.conditionToStatus(storedSystems.landing_gear_condition, storedSystems.landing_gear_failed),
-        electrical: this.conditionToStatus(storedSystems.electrical_condition, storedSystems.electrical_failed),
-        avionics: this.conditionToStatus(storedSystems.avionics_condition, storedSystems.avionics_failed),
-        pitot: this.conditionToStatus(storedSystems.pitot_condition, storedSystems.pitot_failed),
-      };
+      systemStatuses = {};
+      for (const s of ALL_SYSTEMS_V2) {
+        systemStatuses[s] = this.conditionToStatus(storedSystems[`${s}_condition`] ?? 100, storedSystems[`${s}_failed`] ?? false);
+      }
     } else {
       // OLD format or default
       systemStatuses = storedSystems || this.getDefaultSystems(ac.condition);
@@ -333,12 +346,12 @@ class LocalFleetServiceClass {
       passenger_capacity: ac.passenger_seats || catEntry?.passengerSeats || 4,
       condition: ac.condition / 100,
       hours: ac.flight_hours,
-      landing_gear: systemStatuses.landing_gear,
-      engine_status: systemStatuses.engine,
-      propeller_status: systemStatuses.propeller,
-      electrical_status: systemStatuses.electrical,
-      pitot_status: systemStatuses.pitot,
-      avionics_status: systemStatuses.avionics,
+      system_statuses: systemStatuses,
+      landing_gear: systemStatuses.landing_gear || "ok",
+      engine_status: systemStatuses.engine || "ok",
+      propeller_status: systemStatuses.propeller || "ok",
+      electrical_status: systemStatuses.electrical || "ok",
+      avionics_status: systemStatuses.avionics || "ok",
     };
   }
 
@@ -400,10 +413,11 @@ class LocalFleetServiceClass {
 
     // Check if NEW format (has engine_condition) or OLD format (has engine)
     if (storedSystems && typeof storedSystems.engine_condition === "number") {
-      // NEW format: engine_condition: 0-100, engine_failed: boolean
-      const systemNames = ["engine", "propeller", "landing_gear", "electrical", "avionics", "pitot"];
+      // V2 migration if needed
+      await this.migrateSystemsV2(ac);
 
-      for (const name of systemNames) {
+      // V2 format: iterate 10 systems
+      for (const name of ALL_SYSTEMS_V2) {
         const conditionKey = `${name}_condition`;
         const failedKey = `${name}_failed`;
 
@@ -450,11 +464,14 @@ class LocalFleetServiceClass {
 
     console.log(`[LocalFleetService] getAircraftSystems(${aircraftId}):`, systemsRecord);
 
+    // V2: Only critical systems block takeoff
+    const criticalBlocksTakeoff = critical.some(s => CRITICAL_SYSTEMS.includes(s));
+
     return {
       systems: systemsRecord,
       warnings,
       critical,
-      can_takeoff: critical.length === 0,
+      can_takeoff: !criticalBlocksTakeoff,
     };
   }
 
@@ -619,21 +636,17 @@ class LocalFleetServiceClass {
     const quotes: Record<string, { current_condition: number; target_condition: number; cost: number }> = {};
     let totalCost = 0;
 
-    // Base repair cost per system
-    const baseCosts: Record<string, number> = {
-      engine: 5000,
-      propeller: 2000,
-      landing_gear: 3000,
-      electrical: 1500,
-      avionics: 4000,
-      pitot: 500,
-    };
-
-    const systemNames = ["engine", "propeller", "landing_gear", "electrical", "avionics", "pitot"];
+    // V2: Get aircraft price for repair cost calculation
+    const catalog = await DatabaseManager.getAll<AircraftCatalog>("aircraft_catalog");
+    const catEntry = catalog.find((c) => c.icaoType === ac.type_code || c.id === ac.type_code);
+    const aircraftPrice = ac.purchase_price || catEntry?.basePrice || 100000;
 
     if (storedSystems && typeof storedSystems.engine_condition === "number") {
-      // NEW format: engine_condition: 0-100
-      for (const name of systemNames) {
+      // V2 migration if needed
+      await this.migrateSystemsV2(ac);
+
+      // V2 format: use REPAIR_COST_RATE × aircraft_price × (100 - condition)
+      for (const name of ALL_SYSTEMS_V2) {
         const conditionKey = `${name}_condition`;
         const failedKey = `${name}_failed`;
 
@@ -643,7 +656,8 @@ class LocalFleetServiceClass {
 
         // Only quote if not at 100% or failed
         if (currentCondition < 1 || failed) {
-          const cost = Math.round((1 - currentCondition) * (baseCosts[name] || 1000));
+          const rate = REPAIR_COST_RATE[name] || 0.0005;
+          const cost = Math.round(rate * aircraftPrice * (100 - conditionPercent));
           quotes[name] = {
             current_condition: currentCondition,
             target_condition: 1,
@@ -660,7 +674,8 @@ class LocalFleetServiceClass {
         const statusStr = status as string;
         if (statusStr !== "ok") {
           const currentCondition = statusStr === "degraded" ? 0.6 : 0.2;
-          const cost = Math.round((1 - currentCondition) * (baseCosts[name] || 1000));
+          const rate = REPAIR_COST_RATE[name] || 0.0005;
+          const cost = Math.round(rate * aircraftPrice * (1 - currentCondition) * 100);
           quotes[name] = {
             current_condition: currentCondition,
             target_condition: 1,
@@ -730,12 +745,11 @@ class LocalFleetServiceClass {
       storedSystems.last_maintenance_at = new Date().toISOString();
       (ac as any).systems = storedSystems;
 
-      // Recalculate overall condition from all systems
-      const systemNames = ["engine", "propeller", "landing_gear", "electrical", "avionics", "pitot"];
-      const totalCondition = systemNames.reduce((sum, name) => {
+      // Recalculate overall condition from all 10 systems
+      const totalCondition = ALL_SYSTEMS_V2.reduce((sum, name) => {
         return sum + (storedSystems[`${name}_condition`] ?? 100);
       }, 0);
-      ac.condition = Math.round(totalCondition / systemNames.length);
+      ac.condition = Math.round(totalCondition / ALL_SYSTEMS_V2.length);
     } else {
       // OLD format
       const systems = storedSystems || this.getDefaultSystems(ac.condition);
@@ -780,13 +794,7 @@ class LocalFleetServiceClass {
     const ac = await DatabaseManager.get<Aircraft>("aircraft", aircraftId);
     if (!ac) throw new Error("Aircraft not found");
 
-    // Calculate wear factors based on flight conditions
-    const baseWearPerHour = 0.1; // 0.1% base wear per hour
-    const altitudeFactor = Math.max(1, avgAltitude / 10000); // More wear at higher altitude
-    const speedFactor = Math.max(1, avgSpeed / 200); // More wear at higher speed
-
     const flightHours = flightTimeMinutes / 60;
-    const wearPercent = flightHours * baseWearPerHour * altitudeFactor * speedFactor;
 
     // Update flight hours
     ac.flight_hours += flightHours;
@@ -794,37 +802,44 @@ class LocalFleetServiceClass {
     // Update systems if using NEW format
     const storedSystems = (ac as any).systems;
     if (storedSystems && typeof storedSystems.engine_condition === "number") {
-      // Apply varying wear to each system (some degrade faster than others)
-      const systemWearRates: Record<string, number> = {
-        engine: 1.2,        // Engine wears faster
-        propeller: 1.0,
-        landing_gear: 0.3,  // Landing gear wears less during flight
-        electrical: 0.8,
-        avionics: 0.5,      // Avionics are more protected
-        pitot: 0.6,
-      };
+      // V2 migration if needed
+      await this.migrateSystemsV2(ac);
 
-      const systemNames = ["engine", "propeller", "landing_gear", "electrical", "avionics", "pitot"];
-
-      for (const name of systemNames) {
+      // V2: Apply per-system wear from WEAR_PER_HOUR constants
+      for (const name of ALL_SYSTEMS_V2) {
         const conditionKey = `${name}_condition`;
         const currentCondition = storedSystems[conditionKey] ?? 100;
-        const wearRate = systemWearRates[name] || 1.0;
-        const systemWear = wearPercent * wearRate;
+        const wearRate = WEAR_PER_HOUR[name] || 1.0;
+        const systemWear = flightHours * wearRate;
 
         storedSystems[conditionKey] = Math.max(0, currentCondition - systemWear);
       }
 
+      // V2: Apply G-force wear (avgSpeed param is actually maxGForce from FlightTracker)
+      const maxGForce = avgSpeed;
+      if (maxGForce > 0) {
+        for (const [threshold, wearMap] of GFORCE_WEAR) {
+          if (maxGForce >= threshold) {
+            for (const [sys, wear] of Object.entries(wearMap)) {
+              const key = `${sys}_condition`;
+              storedSystems[key] = Math.max(0, (storedSystems[key] ?? 100) - wear);
+            }
+            break; // Only apply the highest matched threshold
+          }
+        }
+      }
+
       (ac as any).systems = storedSystems;
 
-      // Recalculate overall condition from systems average
-      const totalCondition = systemNames.reduce((sum, name) => {
+      // Recalculate overall condition from all 10 systems
+      const totalCondition = ALL_SYSTEMS_V2.reduce((sum, name) => {
         return sum + (storedSystems[`${name}_condition`] ?? 100);
       }, 0);
-      ac.condition = Math.round(totalCondition / systemNames.length);
+      ac.condition = Math.round(totalCondition / ALL_SYSTEMS_V2.length);
     } else {
       // OLD format: just update overall condition
-      ac.condition = Math.max(0, ac.condition - wearPercent);
+      const baseWearPerHour = 0.1;
+      ac.condition = Math.max(0, ac.condition - flightHours * baseWearPerHour);
     }
 
     await DatabaseManager.put("aircraft", ac);
@@ -860,67 +875,46 @@ class LocalFleetServiceClass {
     const storedSystems = (ac as any).systems;
 
     if (storedSystems && typeof storedSystems.engine_condition === "number") {
-      // NEW format: apply damage to specific systems
+      // V2 migration if needed
+      await this.migrateSystemsV2(ac);
 
-      // Firm landing (200-400 FPM): Minor landing gear wear
-      if (fpm >= 200 && fpm < 400) {
-        const damage = (fpm - 200) * 0.05; // 0-10% damage
-        storedSystems.landing_gear_condition = Math.max(0, storedSystems.landing_gear_condition - damage);
-        systemsAffected.push("landing_gear");
-        damaged = true;
+      // V2: Use LANDING_WEAR table from spec A5
+      for (const [minFpm, maxFpm, wearMap] of LANDING_WEAR) {
+        if (fpm >= minFpm && fpm < maxFpm) {
+          for (const [sys, wear] of Object.entries(wearMap)) {
+            const key = `${sys}_condition`;
+            const before = storedSystems[key] ?? 100;
+            storedSystems[key] = Math.max(0, before - wear);
+            if (!systemsAffected.includes(sys)) systemsAffected.push(sys);
+          }
+          damaged = true;
 
-        await this.logDamage(aircraftId, missionId, "hard_landing", "landing_gear", "minor", damage);
-      }
-
-      // Hard landing (400-600 FPM): Significant landing gear damage + minor propeller
-      if (fpm >= 400 && fpm < 600) {
-        const gearDamage = 10 + (fpm - 400) * 0.1; // 10-30% damage
-        const propDamage = (fpm - 400) * 0.025; // 0-5% damage
-
-        storedSystems.landing_gear_condition = Math.max(0, storedSystems.landing_gear_condition - gearDamage);
-        storedSystems.propeller_condition = Math.max(0, storedSystems.propeller_condition - propDamage);
-        systemsAffected.push("landing_gear", "propeller");
-        damaged = true;
-
-        await this.logDamage(aircraftId, missionId, "hard_landing", "landing_gear", "moderate", gearDamage);
-        if (propDamage > 0) {
-          await this.logDamage(aircraftId, missionId, "hard_landing", "propeller", "minor", propDamage);
+          // Determine severity for logging
+          const severity = fpm >= 1000 ? "critical" : fpm >= 700 ? "severe" : fpm >= 400 ? "moderate" : "minor";
+          for (const sys of systemsAffected) {
+            const wear = wearMap[sys] || 0;
+            if (wear > 0) {
+              await this.logDamage(aircraftId, missionId, "hard_landing", sys, severity, wear);
+            }
+          }
+          break;
         }
       }
 
-      // Very hard landing (>600 FPM): Major damage to multiple systems
-      if (fpm >= 600) {
-        const severity = fpm >= 800 ? "critical" : "severe";
-        const gearDamage = 30 + (fpm - 600) * 0.15; // 30-60%+ damage
-        const propDamage = 10 + (fpm - 600) * 0.05; // 10-20%+ damage
-        const engineDamage = (fpm - 600) * 0.05; // 0-10%+ damage
-        const avionicsDamage = (fpm - 600) * 0.025; // 0-5%+ damage
-
-        storedSystems.landing_gear_condition = Math.max(0, storedSystems.landing_gear_condition - gearDamage);
-        storedSystems.propeller_condition = Math.max(0, storedSystems.propeller_condition - propDamage);
-        storedSystems.engine_condition = Math.max(0, storedSystems.engine_condition - engineDamage);
-        storedSystems.avionics_condition = Math.max(0, storedSystems.avionics_condition - avionicsDamage);
-        systemsAffected.push("landing_gear", "propeller", "engine", "avionics");
-        damaged = true;
-
-        // Check for system failures on very hard landings
-        if (storedSystems.landing_gear_condition < 20) {
-          storedSystems.landing_gear_failed = true;
+      // Check for system failures (condition < CRITICAL_THRESHOLD)
+      for (const sys of CRITICAL_SYSTEMS) {
+        if ((storedSystems[`${sys}_condition`] ?? 100) < CRITICAL_THRESHOLD) {
+          storedSystems[`${sys}_failed`] = true;
         }
-
-        await this.logDamage(aircraftId, missionId, "hard_landing", "landing_gear", severity, gearDamage);
-        await this.logDamage(aircraftId, missionId, "hard_landing", "propeller", "moderate", propDamage);
-        await this.logDamage(aircraftId, missionId, "hard_landing", "engine", "minor", engineDamage);
       }
 
       (ac as any).systems = storedSystems;
 
-      // Recalculate overall condition
-      const systemNames = ["engine", "propeller", "landing_gear", "electrical", "avionics", "pitot"];
-      const totalCondition = systemNames.reduce((sum, name) => {
+      // Recalculate overall condition from all 10 systems
+      const totalCondition = ALL_SYSTEMS_V2.reduce((sum, name) => {
         return sum + (storedSystems[`${name}_condition`] ?? 100);
       }, 0);
-      ac.condition = Math.round(totalCondition / systemNames.length);
+      ac.condition = Math.round(totalCondition / ALL_SYSTEMS_V2.length);
     } else {
       // OLD format: just reduce overall condition
       if (fpm >= 400) {
@@ -1012,14 +1006,11 @@ class LocalFleetServiceClass {
       return "failed";
     };
 
-    return {
-      engine: getStatus(0.3),
-      propeller: getStatus(0.2),
-      landing_gear: getStatus(0.25),
-      electrical: getStatus(0.15),
-      avionics: getStatus(0.2),
-      pitot: getStatus(0.1),
-    };
+    const result: Record<string, string> = {};
+    for (const s of ALL_SYSTEMS_V2) {
+      result[s] = getStatus(s === "engine" ? 0.3 : s === "landing_gear" ? 0.25 : 0.2);
+    }
+    return result;
   }
 
   private generateUUID(): string {

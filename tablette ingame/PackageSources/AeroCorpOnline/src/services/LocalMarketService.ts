@@ -973,20 +973,28 @@ class LocalMarketServiceClass {
     const registration = this.generateRegistration(player.nationality || "FR");
     const now = new Date().toISOString();
 
-    // Create systems with all conditions at 100% (new aircraft)
+    // Create systems with all conditions at 100% (new aircraft) — V2: 10 systems
     const systems: AircraftSystemsInline = {
       engine_condition: 100,
       propeller_condition: 100,
       landing_gear_condition: 100,
       electrical_condition: 100,
       avionics_condition: 100,
-      pitot_condition: 100,
+      tires_condition: 100,
+      brakes_condition: 100,
+      oil_condition: 100,
+      flight_surfaces_condition: 100,
+      fuel_system_condition: 100,
       engine_failed: false,
       propeller_failed: false,
       landing_gear_failed: false,
       electrical_failed: false,
       avionics_failed: false,
-      pitot_failed: false,
+      tires_failed: false,
+      brakes_failed: false,
+      oil_failed: false,
+      flight_surfaces_failed: false,
+      fuel_system_failed: false,
       last_maintenance_at: now,
     };
 

@@ -34,7 +34,7 @@ import {
 import { FleetRouter, ContractRouter } from "./services";
 
 // V2.0: Managers for business logic
-import { trackingManager, missionCreationManager, freeFlightManager, PersistenceManager, popupManager } from "./managers";
+import { trackingManager, missionCreationManager, PersistenceManager, popupManager } from "./managers";
 import type { FlightPlanData, PayloadState } from "./managers";
 
 // P2P: Local database initialization and AI economy
@@ -45,15 +45,16 @@ import { DatabaseManager } from "./managers/DatabaseManager";
 import { SyncService } from "./services/SyncService";
 import { SyncManager } from "./services/SyncManager";
 import { NetworkState } from "./state/NetworkState";
-import { isGameReady } from "./state/GameModeState";
+import { isGameReady, setGameMode, resetModeSelection, isSoloMode } from "./state/GameModeState";
 import { factoryState } from "./state/FactoryState";
+import { PositionService } from "./services/PositionService";
+import { FreeFlightController } from "./controllers/FreeFlightController";
+import { positionState } from "./state/positionState";
 import { NativePersistence } from "./services/NativePersistence";
 
 // Render helpers for DOM updates
 import {
-  // V2.4: Free flight render helpers
-  renderFreeFlightRecapHtml,
-  type FreeFlightRecapTranslations,
+  // V2.4: Free flight render helpers (recap extracted to freeFlightRecapHelper)
   // V4.1: Specialized history renderers
   renderTransactionsHistoryHtml,
   renderFlightsHistoryHtml,
@@ -106,10 +107,10 @@ import {
   freeFlightState,
   transferState,
   type FlightPhaseId,
-  type FreeFlightRecapData,
   closeSellItemPopup,
   closeSellAircraftPopup,
 } from "./state";
+import type { FreeFlightRecapData } from "./state/FreeFlightState";
 
 // Global MSFS declarations in src/types/msfs-globals.d.ts
 
@@ -272,14 +273,17 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
 
   // V2.4: Free flight recap popup ref
   private freeFlightRecapRef = FSComponent.createRef<HTMLDivElement>();
+  private freeFlightController = new FreeFlightController({
+    recapPopupRef: this.freeFlightRecapRef,
+    translations: translations as any,
+  });
 
   // Company inventory refs
   private companyIcaoFilterRef = FSComponent.createRef<HTMLInputElement>();
   private companyItemFilterRef = FSComponent.createRef<HTMLInputElement>();
   private companyInventoryListRef = FSComponent.createRef<HTMLDivElement>();
 
-  // V7: Pilot transfer state
-  private currentUserAirport = Subject.create<string>("");
+  // V7: Pilot transfer state — uses positionState.dbAirport (single source of truth)
 
   // V6: Social refs
   private socialFriendsListRef = FSComponent.createRef<HTMLDivElement>();
@@ -433,14 +437,17 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
     // V2.2: Initialize mission creation manager with callbacks
     this.initializeMissionCreationManager();
 
-    // V2.4: Initialize free flight manager for career mode
-    this.initializeFreeFlightManager();
+    // V3.0: Initialize free flight controller (FlightTracker + subscriptions + recap)
+    this.freeFlightController.initialize();
+
+    // V7.1: Transfer ICAO input popup
+    this.initializeTransferPopup();
+
+    // V3.0: Load position from DB
+    void PositionService.loadFromDb();
 
     // V2.5: Initialize popup manager for centralized popup logic
     this.initializePopupManager();
-
-    // V1.6: Start background flight tracking (anti-cheat)
-    trackingManager.startBackgroundTracking();
 
     // Force map re-initialization on app open (handles GT debugger refresh)
     // The DOM might have been recreated but JS state persisted with stale references
@@ -843,6 +850,32 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
   };
 
   /**
+   * Switch to Solo mode when SEED connection fails
+   */
+  private handleSwitchToSolo = (): void => {
+    console.log("[ACO] Switching to Solo mode (SEED unavailable)...");
+    resetModeSelection();
+    setGameMode("solo");
+    authState.seedConnectionStatus.set("connected");
+    authState.seedConnectionError.set(null);
+
+    InitService.continueWithMode("solo")
+      .then(() => {
+        gameModeState.modeSwitchLoading.set(false);
+        this.initializePersistenceAndEconomy();
+        if (this.mapController.isMapInitialized()) {
+          this.mapController.refreshMapSize();
+          void this.mapController.centerMapOnPlayerAirport();
+        }
+      })
+      .catch((e) => {
+        console.error("[ACO] Solo fallback initialization error:", e);
+        gameModeState.modeSwitchError.set(e instanceof Error ? e.message : "Unknown error");
+        gameModeState.modeSwitchLoading.set(false);
+      });
+  };
+
+  /**
    * V3.0: Handle game mode selection (Solo or Online)
    */
   private handleSelectGameMode = (mode: "solo" | "online"): void => {
@@ -1016,8 +1049,10 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
               },
             });
             authState.isLoggedIn.set(true);
-            this.currentUserAirport.set(player.current_airport || player.preferred_airport || "");
             this.socialController.setPlayerId(player.id);
+
+            // V3.0: Initialize position state from fresh player data
+            PositionService.loadFromDb();
 
             // V4.1 FIX: Center map on player's starting airport after first launch
             console.log(`[ACO] Centering map on new pilot's airport: ${player.current_airport || player.preferred_airport}`);
@@ -1073,7 +1108,7 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
       getMissionDistanceNm: () => missionState.missionDistanceNm.get(),
       // V2.0: Additional getters
       getWaypointsPassed: () => missionState.waypointsPassed.get(),
-      getClosestAirport: () => simVarState.closestAirport.get(),
+      getClosestAirport: () => positionState.simVarAirport.get(),
       getTotalPayload: () => this.missionController.getTotalPayload(),
       // V2.0: Full state update from manager
       onTrackingStateUpdate: (state) => {
@@ -1104,6 +1139,8 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
         // Update max G-force
         const maxG = trackingManager.getMaxGForce();
         simVarState.gForce.set(maxG);
+        // Also update MissionController.maxGForce for mission completion scoring
+        this.missionController.maxGForce = maxG;
       },
       onCheckpointValidated: (seq) => {
         missionState.checkpointsValidated.set(missionState.checkpointsValidated.get() + 1);
@@ -1128,12 +1165,6 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
       onTouchdown: (fpm) => {
         this.missionController.landingFpm = fpm;
         console.log("[ACO] Touchdown callback - FPM:", fpm);
-      },
-      onBackgroundWearApply: async (aircraftId, flightMinutes) => {
-        await FleetRouter.applyBackgroundWear(aircraftId, flightMinutes, 0, 0);
-      },
-      onBackgroundFuelSync: async (aircraftId, fuelGallons, fuelCapacity) => {
-        await FleetRouter.syncFuel(aircraftId, fuelGallons, fuelCapacity);
       },
       onLandingRatingDetected: (fpm, rating) => {
         simVarState.lastLandingRate.set(fpm);
@@ -1189,72 +1220,9 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
   }
 
   /**
-   * V2.4: Initialize free flight manager for career mode background tracking
+   * V7.1: Setup transfer ICAO input when popup opens
    */
-  private initializeFreeFlightManager(): void {
-    freeFlightManager.initialize({
-      onLandingDetected: (airport: string, totalLandings: number) => {
-        console.log(`[FreeFlight] Landing at ${airport}, total: ${totalLandings}`);
-      },
-      onStatsUpdated: (_flightTime: number, _distance: number, _xp: number) => {
-        // Stats are already in freeFlightState, no need to update here
-      },
-      onSessionComplete: (recapData: FreeFlightRecapData) => {
-        console.log(`[FreeFlight] Session complete - XP: ${recapData.xp_earned}, Grade: ${recapData.grade}`);
-
-        // Save to flight history
-        void this.saveFreeFlightToHistory(recapData);
-
-        // XP is already awarded by FreeFlightManager.endLocalSession()
-
-        // Store recap data and show popup
-        freeFlightState.ffRecapData.set(recapData);
-        freeFlightState.ffShowRecap.set(true);
-      },
-      onError: (error: string) => {
-        console.warn("[FreeFlight] Error:", error);
-      },
-    });
-
-    // Subscribe to recap popup state
-    this.stateSubscriptions.push(freeFlightState.ffShowRecap.sub((show) => {
-      if (show) {
-        this.renderFreeFlightRecapPopup();
-      } else {
-        const el = this.freeFlightRecapRef.getOrDefault();
-        if (el) el.innerHTML = "";
-      }
-    }));
-
-    // Subscribe to changes that trigger free flight start/stop
-    // Start when: logged in + aircraft detected + no active mission
-    this.stateSubscriptions.push(authState.isLoggedIn.sub((loggedIn) => {
-      if (loggedIn) {
-        this.checkAndStartFreeFlight();
-      } else {
-        freeFlightManager.stopBackgroundTracking();
-      }
-    }));
-
-    // When aircraft changes
-    this.stateSubscriptions.push(missionState.selectedAircraftId.sub(() => {
-      if (isGameReady()) {
-        this.checkAndStartFreeFlight();
-      }
-    }));
-
-    // When mission state changes
-    this.stateSubscriptions.push(missionState.activeMission.sub((mission) => {
-      if (mission) {
-        // Mission started - pause free flight
-        freeFlightManager.pauseForMission();
-      } else {
-        // Mission ended - resume free flight
-        this.checkAndStartFreeFlight();
-      }
-    }));
-
-    // V7.1: Setup transfer ICAO input when popup opens
+  private initializeTransferPopup(): void {
     this.stateSubscriptions.push(transferState.showAircraftTransferPopup.sub((show) => {
       if (show) {
         setTimeout(() => {
@@ -1272,7 +1240,6 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
         }, 100);
       }
     }));
-
   }
 
   /**
@@ -1310,25 +1277,6 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
       },
       setupInputCapture: (el) => this.setupInputEventBlocker(el),
     });
-  }
-
-  /**
-   * Check conditions and start free flight tracking if appropriate
-   */
-  private checkAndStartFreeFlight(): void {
-    const isLoggedIn = isGameReady();
-    const aircraftId = missionState.selectedAircraftId.get();
-    const aircraftReg = simVarState.currentSimAircraftReg.get();
-    const activeMission = missionState.activeMission.get();
-    const closestAirport = simVarState.closestAirport.get();
-
-    if (isLoggedIn && aircraftId && !activeMission) {
-      freeFlightManager.startBackgroundTracking(
-        aircraftId,
-        aircraftReg || "Unknown",
-        closestAirport || "ZZZZ"
-      );
-    }
   }
 
   private loadAuthFromStorage(): void {
@@ -1414,19 +1362,8 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
     // Subscribe to FlightPlanner events (EFB flight plan detection)
     this.missionController.subscribeToFlightPlannerEvents(this.props.bus);
 
-    // Check if player position was lost and try to restore from DB
-    const user = authState.currentUser.get();
-    if (user && !user.current_airport) {
-      DatabaseManager.getPlayer().then(player => {
-        if (player?.current_airport) {
-          console.log(`[ACO] Restoring lost current_airport from DB: ${player.current_airport}`);
-          authState.currentUser.set({ ...user, current_airport: player.current_airport });
-        } else if (player?.preferred_airport) {
-          console.log(`[ACO] Fallback to preferred_airport: ${player.preferred_airport}`);
-          authState.currentUser.set({ ...user, current_airport: player.preferred_airport });
-        }
-      });
-    }
+    // V3.0: Reload position from DB (PositionService is single source of truth)
+    void PositionService.loadFromDb();
 
     // V1.4: Auto-sync aircraft fuel when app resumes (anti-cheat)
     // This ensures fuel is enforced when returning from main menu
@@ -1491,17 +1428,25 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
         simVarState.currentSimAircraftReg.set(atcId?.toUpperCase() || "");
 
         // Closest airport (might not be available)
+        let airport = "----";
         try {
-          const airport = SimVar.GetSimVarValue("GPS CLOSEST AIRPORT ID", "string") as string;
-          simVarState.closestAirport.set(airport || "----");
+          airport = SimVar.GetSimVarValue("GPS CLOSEST AIRPORT ID", "string") as string || "----";
+          simVarState.closestAirport.set(airport);
         } catch {
           simVarState.closestAirport.set("----");
         }
+
+        // Position tracking (strict BDD-based)
+        PositionService.updateSimPosition(simVarState.latitude.get(), simVarState.longitude.get());
+        PositionService.updateSimVar(airport);
 
         // Landing detection (delegated to TrackingManager for UI feedback)
         const currentOnGround = SimVar.GetSimVarValue("SIM ON GROUND", "bool") as boolean;
         trackingManager.processUILandingDetection(vs, currentOnGround);
         simVarState.onGround.set(currentOnGround);
+
+        // FlightTracker tick (delegated to FreeFlightController)
+        this.freeFlightController.tick();
 
         // Update map position if map is initialized
         if (this.mapController.isMapInitialized()) {
@@ -1602,6 +1547,66 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
   /**
    * Test MSFS APIs availability in Coherent GT (simplified)
    */
+  /**
+   * TEMPORARY TEST — Wear & Tear SimVars: Settable or Read-Only?
+   * Delete after test is complete.
+   */
+  private testWearAndTearSettable(): void {
+    console.log("=== TEST WEAR & TEAR SETTABLE ===");
+
+    const tests = [
+      { id: 35, name: "LANDING_GEAR", index: 1 },
+      { id: 37, name: "TIRE", index: 1 },
+      { id: 39, name: "PISTON_ENGINE", index: 1 },
+    ];
+
+    for (const test of tests) {
+      const before = SimVar.GetSimVarValue(`${test.index}:WEAR AND TEAR LEVEL:${test.id}`, "percent over 100");
+      console.log(`[${test.name}] AVANT = ${before}`);
+
+      try {
+        SimVar.SetSimVarValue(`${test.index}:WEAR AND TEAR LEVEL:${test.id}`, "percent over 100", 0.5);
+        console.log(`[${test.name}] SET 0.5 → pas d'erreur`);
+      } catch (e) {
+        console.log(`[${test.name}] SET 0.5 → ERREUR: ${e}`);
+      }
+    }
+
+    setTimeout(() => {
+      console.log("--- RELECTURE APRÈS 1s ---");
+      for (const test of tests) {
+        const after = SimVar.GetSimVarValue(`${test.index}:WEAR AND TEAR LEVEL:${test.id}`, "percent over 100");
+        console.log(`[${test.name}] APRÈS = ${after}`);
+      }
+
+      console.log("--- TEST SYNTAXE ALTERNATIVE (sans index) ---");
+      const beforeAlt = SimVar.GetSimVarValue("WEAR AND TEAR LEVEL:35", "percent over 100");
+      console.log(`[ALT LANDING_GEAR] AVANT = ${beforeAlt}`);
+
+      try {
+        SimVar.SetSimVarValue("WEAR AND TEAR LEVEL:35", "percent over 100", 0.3);
+        console.log("[ALT LANDING_GEAR] SET 0.3 → pas d'erreur");
+      } catch (e) {
+        console.log(`[ALT LANDING_GEAR] SET 0.3 → ERREUR: ${e}`);
+      }
+
+      setTimeout(() => {
+        const afterAlt = SimVar.GetSimVarValue("WEAR AND TEAR LEVEL:35", "percent over 100");
+        console.log(`[ALT LANDING_GEAR] APRÈS = ${afterAlt}`);
+
+        console.log("--- TEST GLOBAL ---");
+        const globalBefore = SimVar.GetSimVarValue("WEAR AND TEAR EXPOSED PARTS LEVEL", "percent over 100");
+        console.log(`[GLOBAL] Moyenne actuelle = ${globalBefore}`);
+
+        console.log("=== FIN DU TEST ===");
+        console.log("RÉSULTAT:");
+        console.log("- Si APRÈS ≈ 0.5 (ou 0.3) → SETTABLE ✅");
+        console.log("- Si APRÈS = même valeur que AVANT → READ-ONLY ❌");
+        console.log("- Si ERREUR au SET → READ-ONLY ❌");
+      }, 500);
+    }, 1000);
+  }
+
   private async testCommBus(): Promise<void> {
     const w = window as any;
     const apis = {
@@ -1783,10 +1788,9 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
     const lang = settingsState.currentLanguage.get();
     const tr = translations[lang];
 
-    // Build mission flights timeline only
+    // Build all flights timeline (missions + free flights)
     const timeline: UnifiedTimelineEntry[] = [];
     for (const flight of this.flightHistoryEntries) {
-      if (flight.type !== "mission") continue;
       timeline.push({
         id: flight.id,
         date: typeof flight.date === "number" ? new Date(flight.date).toISOString() : flight.date,
@@ -1813,6 +1817,71 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
     };
 
     el.innerHTML = renderFlightsHistoryHtml(timeline, historyTr);
+
+    // Bind click on each flight row → show recap popup
+    el.querySelectorAll(".history-flight-row").forEach((row) => {
+      row.addEventListener("click", () => {
+        const flightId = row.getAttribute("data-flight-id");
+        if (flightId) this.showFlightRecap(flightId);
+      });
+    });
+  }
+
+  /**
+   * Show recap popup for a flight history entry (mission or freeflight)
+   */
+  private showFlightRecap(flightId: string): void {
+    const flight = this.flightHistoryEntries.find((f: any) => f.id === flightId);
+    if (!flight) return;
+
+    // Derive landing quality from FPM
+    const fpm = flight.landing_fpm || 0;
+    let landingQuality = "normal";
+    if (fpm <= 60) landingQuality = "butter";
+    else if (fpm <= 120) landingQuality = "smooth";
+    else if (fpm <= 240) landingQuality = "normal";
+    else if (fpm <= 600) landingQuality = "hard";
+    else landingQuality = "crash";
+
+    // Convert boolean bonuses to FreeFlightBonus objects
+    const bonusMultipliers: Record<string, number> = {
+      real_time: 1.20, night: 1.15, atc: 1.15,
+      fuel_eco: 1.10, no_autopilot: 1.10, bad_weather: 1.15,
+    };
+    const bonuses: any = {};
+    let totalMultiplier = 1.0;
+    for (const key of Object.keys(bonusMultipliers)) {
+      const active = flight.bonuses?.[key] || false;
+      bonuses[key] = { active, multiplier: active ? bonusMultipliers[key] : 1.0 };
+      if (active) totalMultiplier *= bonusMultipliers[key];
+    }
+
+    const recapData: FreeFlightRecapData = {
+      departure_icao: flight.departure_icao,
+      arrival_icao: flight.arrival_icao,
+      distance_nm: flight.distance_nm || 0,
+      flight_time_minutes: flight.flight_time_minutes || 0,
+      score_landing: 0,
+      score_gforce: 0,
+      score_total: flight.score_total || 0,
+      grade: flight.grade || "C",
+      landing_fpm: fpm,
+      landing_quality: landingQuality,
+      max_gforce: flight.max_gforce || 1.0,
+      bonuses,
+      bonus_multiplier_total: totalMultiplier,
+      xp_earned: flight.xp_earned || 0,
+      money_earned: flight.money_earned || 0,
+      weather_visibility_nm: flight.weather_visibility_nm || 0,
+      weather_wind_kts: flight.weather_wind_kts || 0,
+      weather_precipitation: false,
+      fuel_remaining_percent: 0,
+      atc_compliance: flight.atc_compliance || 0,
+      atc_violations: flight.atc_violations || 0,
+    };
+
+    freeFlightState.ffRecapData.set(recapData);
+    freeFlightState.ffShowRecap.set(true);
   }
 
   /**
@@ -1857,114 +1926,6 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
     el.innerHTML = renderFlightsHistoryHtml(timeline, historyTr);
   }
 
-  /**
-   * Save free flight session to history
-   */
-  private async saveFreeFlightToHistory(recapData: FreeFlightRecapData): Promise<void> {
-    const aircraftId = missionState.selectedAircraftId.get();
-    const aircraftReg = simVarState.currentSimAircraftReg.get() || "Unknown";
-
-    const entry: FlightHistoryEntry = {
-      id: `ff_${Date.now()}`,
-      type: "freeflight",
-      date: Date.now(),
-      departure_icao: recapData.departure_icao,
-      arrival_icao: recapData.arrival_icao,
-      aircraft_id: aircraftId || "",
-      aircraft_type: "",
-      aircraft_reg: aircraftReg,
-      distance_nm: recapData.distance_nm,
-      flight_time_minutes: recapData.flight_time_minutes,
-      score_total: recapData.score_total,
-      grade: recapData.grade,
-      xp_earned: recapData.xp_earned,
-      money_earned: 0,
-      landing_fpm: recapData.landing_fpm,
-      max_gforce: recapData.max_gforce,
-      bonuses: {
-        real_time: recapData.bonuses.real_time.active,
-        night: recapData.bonuses.night.active,
-        atc: recapData.bonuses.atc.active,
-        fuel_eco: recapData.bonuses.fuel_eco.active,
-        no_autopilot: recapData.bonuses.no_autopilot.active,
-        bad_weather: recapData.bonuses.bad_weather.active,
-      },
-      weather_visibility_nm: recapData.weather_visibility_nm,
-      weather_wind_kts: recapData.weather_wind_kts,
-      atc_compliance: recapData.atc_compliance,
-      atc_violations: recapData.atc_violations,
-    };
-
-    try {
-      await DatabaseManager.saveFlightHistory(entry);
-      console.log("[ACO] Flight history entry saved:", entry.id);
-    } catch (error) {
-      console.error("[ACO] Error saving flight history:", error);
-    }
-  }
-
-  /**
-   * Render free flight recap popup
-   */
-  private renderFreeFlightRecapPopup(): void {
-    const el = this.freeFlightRecapRef.getOrDefault();
-    if (!el) return;
-
-    const recapData = freeFlightState.ffRecapData.get();
-    if (!recapData) return;
-
-    const lang = settingsState.currentLanguage.get();
-    const tr = translations[lang];
-
-    const recapTr: FreeFlightRecapTranslations = {
-      reportTitle: tr.freeFlight.reportTitle,
-      departure: tr.freeFlight.departure,
-      arrival: tr.freeFlight.arrival,
-      distance: tr.freeFlight.distance,
-      flightTime: tr.freeFlight.flightTime,
-      fuelRemaining: tr.freeFlight.fuelRemaining,
-      flightQuality: tr.freeFlight.flightQuality,
-      landing: tr.freeFlight.landing,
-      gforceMax: tr.freeFlight.gforceMax,
-      atcCompliance: tr.freeFlight.atcCompliance,
-      violations: tr.freeFlight.violations,
-      bonuses: tr.freeFlight.bonuses,
-      bonusRealTime: tr.freeFlight.bonusRealTime,
-      bonusNight: tr.freeFlight.bonusNight,
-      bonusAtc: tr.freeFlight.bonusAtc,
-      bonusFuelEco: tr.freeFlight.bonusFuelEco,
-      bonusNoAP: tr.freeFlight.bonusNoAP,
-      bonusBadWeather: tr.freeFlight.bonusBadWeather,
-      totalBonus: tr.freeFlight.totalBonus,
-      result: tr.freeFlight.result,
-      score: tr.freeFlight.score,
-      grade: tr.freeFlight.grade,
-      xpEarned: tr.freeFlight.xpEarned,
-      moneyEarned: tr.freeFlight.moneyEarned,
-      moneyDisabled: tr.freeFlight.moneyDisabled,
-      close: tr.freeFlight.close,
-      butter: tr.freeFlight.butter,
-      smooth: tr.freeFlight.smooth,
-      normal: tr.freeFlight.normal,
-      hard: tr.freeFlight.hard,
-      crash: tr.freeFlight.crash,
-      perfect: tr.freeFlight.perfect,
-      ok: tr.freeFlight.ok,
-      poor: tr.freeFlight.poor,
-    };
-
-    el.innerHTML = renderFreeFlightRecapHtml(recapData, recapTr);
-
-    // Bind close button
-    const closeBtn = el.querySelector(".ff-recap-close-btn");
-    if (closeBtn) {
-      closeBtn.addEventListener("click", () => {
-        freeFlightState.ffShowRecap.set(false);
-        freeFlightState.ffRecapData.set(null);
-      });
-    }
-  }
-
   // ═══════════════════════════════════════════════════════════
   // COMPANY INVENTORY
   // ═══════════════════════════════════════════════════════════
@@ -1990,8 +1951,8 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
 
         </div>
 
-        {/* Content Area */}
-        <div style="flex: 1; overflow: hidden; position: relative; display: flex; flex-direction: column;">
+        {/* Content Area — padding-top matches sidebar to clear native EFB header */}
+        <div style="flex: 1; overflow: hidden; position: relative; display: flex; flex-direction: column; padding-top: 50px;">
           {/* Phase 1: Rich Header Bar — player info always visible */}
           <div style="display: flex; align-items: center; justify-content: space-between; padding: 0 12px; height: 36px; background: #1a1f2e; border-bottom: 1px solid #374151; flex-shrink: 0;">
 
@@ -2137,6 +2098,7 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
             initStep: authState.seedInitStep,
             currentLanguage: settingsState.currentLanguage,
             onRetry: this.handleRetryConnection,
+            onSwitchToSolo: this.handleSwitchToSolo,
           })}
 
           {/* V3.0: Mode Selection Screen - Solo / Online */}
@@ -2156,7 +2118,7 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
             currentLanguage: settingsState.currentLanguage,
             currentUser: authState.currentUser,
             onGround: simVarState.onGround,
-            closestAirport: simVarState.closestAirport,
+            closestAirport: positionState.simVarAirport,
             // Inventory
             profileInventory: inventoryState.profileInventory,
             profileInventoryLoading: inventoryState.profileInventoryLoading,
@@ -2458,6 +2420,7 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
             onTestCommBus: () => { void this.testCommBus(); },
             onSimulateOffline: () => { void this.toggleSimulateOffline(); },
             onChangeGameMode: () => showModeSelector(),
+            onTestWearAndTear: () => { this.testWearAndTearSettable(); },
           })}
 
           {/* Map Tab Content - V1.8: Extracted to MapView.tsx */}
@@ -2498,7 +2461,7 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
             onOpenManageFactory: (factory) => this.openManageFactory(factory),
             onSetDestinationAirport: (airport) => this.setDestinationAirport(airport),
             // V7: Pilot transfer props
-            currentUserAirport: this.currentUserAirport,
+            currentUserAirport: positionState.dbAirport,
             walletPersonal: marketState.walletPersonal,
             showPilotTransferPopup: transferState.showPilotTransferPopup,
             transferEstimate: transferState.transferEstimate,
@@ -2506,11 +2469,7 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
             transferDestName: transferState.transferDestName,
             onMovePilotHere: (airport) => { void this.mapController.openPilotTransfer(airport.icao, airport.name); },
             onConfirmPilotTransfer: () => {
-              void this.mapController.confirmPilotTransfer().then(() => {
-                // Sync currentUserAirport after transfer
-                const user = authState.currentUser.get();
-                if (user) this.currentUserAirport.set(user.current_airport || "");
-              });
+              void this.mapController.confirmPilotTransfer();
             },
             onClosePilotTransferPopup: () => this.mapController.closePilotTransferPopup(),
             t: (category: string, key: string) => this.t(category as keyof TranslationKeys, key),
@@ -2529,7 +2488,7 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
 
         {/* V2.4: Free Flight Recap Popup (rendered via ref) */}
         <div ref={this.freeFlightRecapRef} style={freeFlightState.ffShowRecap.map(show => show
-          ? "position: absolute; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000;"
+          ? "position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000;"
           : "display: none;")}>
         </div>
       </div>

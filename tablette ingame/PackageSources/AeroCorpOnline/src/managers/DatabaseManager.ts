@@ -82,27 +82,39 @@ export type SystemStatus = "ok" | "degraded" | "failed";
 export interface AircraftSystems {
   id: string;
   aircraft_id: string;
-  // System conditions (0-100%)
+  // System conditions (0-100%) — V2: 10 systems
   engine_condition: number;
   propeller_condition: number;
   landing_gear_condition: number;
   electrical_condition: number;
   avionics_condition: number;
-  pitot_condition: number;
+  tires_condition: number;
+  brakes_condition: number;
+  oil_condition: number;
+  flight_surfaces_condition: number;
+  fuel_system_condition: number;
   // System status derived from condition
   engine_status: SystemStatus;
   propeller_status: SystemStatus;
   landing_gear_status: SystemStatus;
   electrical_status: SystemStatus;
   avionics_status: SystemStatus;
-  pitot_status: SystemStatus;
+  tires_status: SystemStatus;
+  brakes_status: SystemStatus;
+  oil_status: SystemStatus;
+  flight_surfaces_status: SystemStatus;
+  fuel_system_status: SystemStatus;
   // Failure flags
   engine_failed: boolean;
   propeller_failed: boolean;
   landing_gear_failed: boolean;
   electrical_failed: boolean;
   avionics_failed: boolean;
-  pitot_failed: boolean;
+  tires_failed: boolean;
+  brakes_failed: boolean;
+  oil_failed: boolean;
+  flight_surfaces_failed: boolean;
+  fuel_system_failed: boolean;
   // Maintenance
   last_maintenance_at?: string;
   next_maintenance_due_hours?: number;
@@ -139,19 +151,28 @@ export interface Aircraft {
 }
 
 // Simplified inline systems for localStorage (no separate table needed)
+// V2: 10 systems (pitot removed, tires/brakes/oil/flight_surfaces/fuel_system added)
 export interface AircraftSystemsInline {
   engine_condition: number;
   propeller_condition: number;
   landing_gear_condition: number;
   electrical_condition: number;
   avionics_condition: number;
-  pitot_condition: number;
+  tires_condition: number;
+  brakes_condition: number;
+  oil_condition: number;
+  flight_surfaces_condition: number;
+  fuel_system_condition: number;
   engine_failed: boolean;
   propeller_failed: boolean;
   landing_gear_failed: boolean;
   electrical_failed: boolean;
   avionics_failed: boolean;
-  pitot_failed: boolean;
+  tires_failed: boolean;
+  brakes_failed: boolean;
+  oil_failed: boolean;
+  flight_surfaces_failed: boolean;
+  fuel_system_failed: boolean;
   last_maintenance_at?: string;
 }
 

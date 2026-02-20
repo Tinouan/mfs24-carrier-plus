@@ -18,6 +18,7 @@ export interface ConnectionScreenProps {
   initStep: Subject<string>;
   currentLanguage: Subject<Language>;
   onRetry: () => void;
+  onSwitchToSolo: () => void;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -31,6 +32,7 @@ export function renderConnectionScreen(props: ConnectionScreenProps): VNode {
     initProgress,
     initStep,
     onRetry,
+    onSwitchToSolo,
   } = props;
 
   // Show overlay when connecting or failed (hide when connected)
@@ -129,11 +131,19 @@ export function renderConnectionScreen(props: ConnectionScreenProps): VNode {
           </div>
         </Button>
 
+        {/* Solo Mode Fallback Button */}
+        <Button callback={onSwitchToSolo}>
+          <div style="background: transparent; color: #9ca3af; border: 1px solid #374151; border-radius: 8px; padding: 10px 32px; font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 8px; margin-top: 12px;">
+            <svg style="width: 16px; height: 16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.4-.1.9.3 1.1L11 12l-2 3H6l-1 1 3 2 2 3 1-1v-3l3-2 3.7 7.3c.2.4.7.5 1.1.3l.5-.3c.4-.2.6-.6.5-1.1z" />
+            </svg>
+            Jouer en Solo
+          </div>
+        </Button>
+
         {/* Help Text */}
-        <div style="font-size: 10px; color: #6b7280; margin-top: 24px; text-align: center;">
-          Assurez-vous que le serveur SEED est en cours d'exécution
-          <br />
-          <span style="color: #60a5fa;">bun run seed-mock/server.ts</span>
+        <div style="font-size: 10px; color: #6b7280; margin-top: 20px; text-align: center;">
+          Continuez sans connexion serveur
         </div>
       </div>
 

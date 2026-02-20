@@ -44,6 +44,15 @@ export { AIEconomyService } from "./AIEconomyService";
 // Sync Service (SEED server communication for Online mode)
 export { SyncService } from "./SyncService";
 
+// Position Service (centralized pilot position management)
+export { PositionService } from "./PositionService";
+
+// Flight Tracker (unified non-mission flight tracking)
+export { FlightTracker } from "./FlightTracker";
+
+// W&T Reader Service (passive MSFS wear reading)
+export { WearTearReaderService } from "./WearTearReaderService";
+
 // ═══════════════════════════════════════════════════════════
 // TYPE RE-EXPORTS (from local services)
 // ═══════════════════════════════════════════════════════════

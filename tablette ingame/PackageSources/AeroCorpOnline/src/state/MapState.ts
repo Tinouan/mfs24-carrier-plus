@@ -65,7 +65,7 @@ export const mapState: MapStateType = {
   mapError: Subject.create<string | null>(null),
 
   // Layer visibility toggles
-  showFactoriesOnMap: Subject.create(false),
+  showFactoriesOnMap: Subject.create(true),
   showHelipadsOnMap: Subject.create(true),
   showLargeAirports: Subject.create(true),
   showMediumAirports: Subject.create(true),

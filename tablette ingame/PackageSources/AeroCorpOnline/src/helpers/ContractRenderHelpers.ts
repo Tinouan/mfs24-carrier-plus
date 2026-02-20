@@ -283,7 +283,7 @@ export function renderContractCompletionHtml(
   const timeTakenMin = Math.round((completed - accepted) / 60000);
 
   return `
-    <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.7); display: flex; align-items: center; justify-content: center; z-index: 1000;">
+    <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.7); display: flex; align-items: center; justify-content: center; z-index: 1000;">
       <div style="background: #1e1e2e; border: 1px solid #374151; border-radius: 12px; padding: 24px; width: 300px; text-align: center;">
         <svg style="width: 40px; height: 40px; margin-bottom: 12px;" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2">
           <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
@@ -320,7 +320,7 @@ export function renderCancelConfirmHtml(
   tr: ContractTranslations
 ): string {
   return `
-    <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.7); display: flex; align-items: center; justify-content: center; z-index: 1000;">
+    <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.7); display: flex; align-items: center; justify-content: center; z-index: 1000;">
       <div style="background: #1e1e2e; border: 1px solid #374151; border-radius: 12px; padding: 24px; width: 280px; text-align: center;">
         <div style="font-size: 14px; font-weight: 700; color: white; margin-bottom: 8px;">${tr.confirmCancel}</div>
         <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">${contract.origin_icao} > ${contract.destination_icao}</div>

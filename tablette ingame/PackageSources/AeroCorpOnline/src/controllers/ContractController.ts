@@ -1,6 +1,7 @@
 import { Subject, NodeReference } from "@microsoft/msfs-sdk";
 import { ContractRouter, InitService } from "../services";
 import { settingsState, simVarState, marketState } from "../state";
+import { positionState } from "../state/positionState";
 import {
   renderContractFiltersHtml,
   renderAvailableContractsHtml,
@@ -121,8 +122,7 @@ export class ContractController {
       this.availableContracts = await ContractRouter.getAvailableContracts();
 
       // If no contracts match current airport, generate new ones
-      const rawAirport = simVarState.closestAirport.get();
-      const currentAirport = rawAirport && rawAirport !== "----" ? rawAirport : "";
+      const currentAirport = positionState.dbAirport.get() || "";
       if (currentAirport) {
         const localContracts = this.availableContracts.filter(c => c.origin_icao === currentAirport);
         if (localContracts.length === 0) {
@@ -177,8 +177,7 @@ export class ContractController {
     }
 
     // Only show contracts departing from current airport
-    const rawAp = simVarState.closestAirport.get();
-    const currentAirport = rawAp && rawAp !== "----" ? rawAp : "";
+    const currentAirport = positionState.dbAirport.get() || "";
     const filtered = currentAirport
       ? this.availableContracts.filter(c => c.origin_icao === currentAirport)
       : this.availableContracts;
@@ -197,7 +196,7 @@ export class ContractController {
     const el = this.activeContractsRef.getOrDefault();
     if (!el) return;
     const tr = this.getContractTranslations();
-    const closestAirport = simVarState.closestAirport.get();
+    const closestAirport = positionState.simVarAirport.get();
     const onGround = simVarState.onGround.get();
     el.innerHTML = renderActiveContractsHtml(this.activeContracts, tr, closestAirport, onGround);
     // Event delegation: deliver buttons

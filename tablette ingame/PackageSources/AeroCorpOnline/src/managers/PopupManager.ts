@@ -250,13 +250,17 @@ class PopupManagerClass {
     const systemLabels: Record<string, string> = {
       "engine": t("hangar", "engine"),
       "landing_gear": t("hangar", "landingGearFull"),
+      "tires": t("hangar", "tires"),
+      "brakes": t("hangar", "brakes"),
       "propeller": t("hangar", "propellerRotor"),
+      "oil": t("hangar", "oil"),
+      "flight_surfaces": t("hangar", "flightSurfaces"),
       "electrical": t("hangar", "electrical"),
-      "pitot": t("hangar", "pitotStatic"),
+      "fuel_system": t("hangar", "fuelSystem"),
       "avionics": t("hangar", "avionics"),
     };
 
-    const systemKeys = ["engine", "landing_gear", "propeller", "electrical", "pitot", "avionics"];
+    const systemKeys = ["engine", "landing_gear", "tires", "brakes", "propeller", "oil", "flight_surfaces", "electrical", "fuel_system", "avionics"];
     const systems = systemKeys.map(key => {
       let value = 100;
       if (systemsApiData?.systems?.[key]) {
@@ -338,9 +342,13 @@ class PopupManagerClass {
     const systemNames: Record<string, string> = {
       "engine": t("hangar", "engine"),
       "landing_gear": t("hangar", "landingGear"),
+      "tires": t("hangar", "tires"),
+      "brakes": t("hangar", "brakes"),
       "propeller": t("hangar", "propeller"),
+      "oil": t("hangar", "oil"),
+      "flight_surfaces": t("hangar", "flightSurfaces"),
       "electrical": t("hangar", "electrical"),
-      "pitot": t("hangar", "pitot"),
+      "fuel_system": t("hangar", "fuelSystem"),
       "avionics": t("hangar", "avionics"),
     };
 
@@ -407,11 +415,11 @@ class PopupManagerClass {
         passenger_capacity: missionAircraft.passenger_capacity,
         condition: missionAircraft.condition,
         hours: missionAircraft.hours,
+        system_statuses: missionAircraft.system_statuses || {},
         landing_gear: missionAircraft.landing_gear,
         engine_status: missionAircraft.engine_status,
         propeller_status: missionAircraft.propeller_status,
         electrical_status: missionAircraft.electrical_status,
-        pitot_status: missionAircraft.pitot_status,
         avionics_status: missionAircraft.avionics_status,
       };
       hangarState.hangarSelectedAircraft.set(details);

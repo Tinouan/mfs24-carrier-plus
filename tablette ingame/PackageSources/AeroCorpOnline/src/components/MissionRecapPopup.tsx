@@ -93,7 +93,7 @@ export function renderMissionRecapPopup(props: MissionRecapPopupProps): VNode {
 
   return (
     <div style={showMissionRecap.map(show => show
-      ? "position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 1001;"
+      ? "position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 1001;"
       : "display: none;")}>
       <div style="background: #1a1a24; border-radius: 16px; padding: 24px; width: 320px; max-width: 95%; border: 2px solid #374151;">
         {/* Header with grade + landing quality */}

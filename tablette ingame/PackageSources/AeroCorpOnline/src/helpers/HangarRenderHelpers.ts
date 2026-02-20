@@ -5,6 +5,7 @@
  */
 
 import { formatMoney } from "./PlayerHelpers";
+import { SYSTEM_ICONS } from "../constants/WearConstants";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -101,9 +102,13 @@ export interface HangarSystemsTranslations {
   failure: string;
   engine: string;
   landingGear: string;
+  tires: string;
+  brakes: string;
   propeller: string;
+  oil: string;
+  flightSurfaces: string;
   electrical: string;
-  pitot: string;
+  fuelSystem: string;
   avionics: string;
 }
 
@@ -168,14 +173,18 @@ export function renderHangarSystemsHtml(
   const systemNames: Record<string, string> = {
     "engine": translations.engine,
     "landing_gear": translations.landingGear,
+    "tires": translations.tires,
+    "brakes": translations.brakes,
     "propeller": translations.propeller,
+    "oil": translations.oil,
+    "flight_surfaces": translations.flightSurfaces,
     "electrical": translations.electrical,
-    "pitot": translations.pitot,
+    "fuel_system": translations.fuelSystem,
     "avionics": translations.avionics,
   };
 
-  // System display order (critical systems first)
-  const systemOrder = ["engine", "landing_gear", "propeller", "electrical", "pitot", "avionics"];
+  // V2: 10-system display order (critical systems first)
+  const systemOrder = ["engine", "landing_gear", "tires", "brakes", "propeller", "oil", "flight_surfaces", "electrical", "fuel_system", "avionics"];
   const systems = systemsData.systems;
   let html = "";
 
@@ -203,39 +212,42 @@ export function renderHangarSystemsHtml(
     if (!sys) return;
 
     const pct = Math.round(sys.condition);
+    const icon = SYSTEM_ICONS[key] || key.toUpperCase().slice(0, 4);
 
-    // Color based on condition
-    let barColor = "#22c55e"; // Green (good)
+    // V2 spec D2 color thresholds
+    let barColor = "#22c55e"; // Green (>= 75)
     let textColor = "#22c55e";
+    let label = "Neuf";
     if (sys.failed) {
-      barColor = "#ef4444";
-      textColor = "#ef4444";
+      barColor = "#991b1b"; textColor = "#991b1b"; label = "HS";
     } else if (pct < 10) {
-      barColor = "#ef4444"; // Red (critical)
-      textColor = "#ef4444";
+      barColor = "#991b1b"; textColor = "#991b1b"; label = "HS";
+    } else if (pct < 25) {
+      barColor = "#ef4444"; textColor = "#ef4444"; label = "Critique";
     } else if (pct < 50) {
-      barColor = "#f59e0b"; // Orange (warning)
-      textColor = "#f59e0b";
+      barColor = "#f59e0b"; textColor = "#f59e0b"; label = "Usé";
     } else if (pct < 75) {
-      barColor = "#eab308"; // Yellow
-      textColor = "#eab308";
+      barColor = "#eab308"; textColor = "#eab308"; label = "Bon";
     }
 
     // Status badge for problematic systems
     let badge = "";
     if (sys.failed) {
-      badge = `<span style="font-size: 7px; padding: 1px 4px; background: #ef4444; color: white; border-radius: 2px; font-weight: 700;">${translations.failure}</span>`;
+      badge = `<span style="font-size: 7px; padding: 1px 4px; background: #991b1b; color: white; border-radius: 2px; font-weight: 700;">${translations.failure}</span>`;
     } else if (pct < 10) {
       badge = `<span style="font-size: 7px; padding: 1px 4px; background: #ef4444; color: white; border-radius: 2px; font-weight: 700;">CRIT</span>`;
     }
 
     html += `
-      <div style="padding: 6px 8px; background: #1a1a24; border-radius: 4px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;">
-          <span style="font-size: 9px; color: #9ca3af;">${systemNames[key] || key}</span>
-          ${badge || `<span style="font-size: 10px; color: ${textColor}; font-weight: 600;">${pct}%</span>`}
+      <div style="padding: 4px 8px; background: #1a1a24; border-radius: 4px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span style="font-size: 8px; color: ${textColor}; font-weight: 700; font-family: monospace; min-width: 30px;">${icon}</span>
+            <span style="font-size: 9px; color: #9ca3af;">${systemNames[key] || key}</span>
+          </div>
+          ${badge || `<span style="font-size: 9px; color: ${textColor}; font-weight: 600;">${pct}%</span>`}
         </div>
-        <div style="background: #374151; border-radius: 2px; height: 4px; overflow: hidden;">
+        <div style="background: #374151; border-radius: 2px; height: 3px; overflow: hidden;">
           <div style="width: ${pct}%; height: 100%; background: ${barColor}; transition: width 0.3s;"></div>
         </div>
       </div>
@@ -391,12 +403,12 @@ export function renderRefuelPopupHtml(data: RefuelPopupData): string {
   const gaugeColor = targetPercent > 50 ? "#22c55e" : targetPercent > 25 ? "#f59e0b" : "#ef4444";
 
   return `
-    <div class="refuel-overlay" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 9999;">
+    <div class="refuel-overlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 9999;">
       <div style="background: #1f2937; border: 2px solid #374151; border-radius: 12px; padding: 20px; width: 320px;">
         <!-- Header -->
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
           <div style="font-size: 18px; font-weight: 700; color: white;">${translations.refuelTitle}</div>
-          <button class="refuel-close-btn" style="background: none; border: none; color: #9ca3af; font-size: 24px; cursor: pointer; padding: 0; line-height: 1;">×</button>
+          <button class="refuel-close-btn" style="background: #374151; border: none; border-radius: 4px; padding: 4px 10px; color: #9ca3af; cursor: pointer; font-size: 14px;">X</button>
         </div>
 
         <!-- Aircraft Info -->
@@ -501,7 +513,7 @@ export function renderSystemsPopupHtml(data: SystemsPopupData): string {
   }).join("");
 
   return `
-    <div style="position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 100;">
+    <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 100;">
       <div style="background: #1e1e2e; border-radius: 12px; padding: 16px; max-width: 340px; width: 90%; box-shadow: 0 8px 32px rgba(0,0,0,0.5);">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
           <div>

@@ -4,7 +4,7 @@
 
 // Tracking Manager
 export { trackingManager } from "./TrackingManager";
-export type { TrackingState, BackgroundTrackingState, TrackingCallbacks } from "./TrackingManager";
+export type { TrackingState, TrackingCallbacks } from "./TrackingManager";
 
 // Map Manager
 export { mapManager } from "./MapManager";
@@ -14,9 +14,7 @@ export type { MapBounds, AirportData, FactoryData, MapCallbacks } from "./MapMan
 export { missionCreationManager } from "./MissionCreationManager";
 export type { FlightPlanData, PayloadState, MissionCreationCallbacks } from "./MissionCreationManager";
 
-// Free Flight Manager
-export { freeFlightManager } from "./FreeFlightManager";
-export type { FreeFlightCallbacks } from "./FreeFlightManager";
+// Free Flight Manager removed — replaced by FlightTracker service
 
 // Database Manager (P2P local storage)
 export { DatabaseManager } from "./DatabaseManager";

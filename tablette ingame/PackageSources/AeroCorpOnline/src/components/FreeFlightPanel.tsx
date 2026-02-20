@@ -7,7 +7,7 @@ import { FSComponent, VNode, Subject, MappedSubject } from "@microsoft/msfs-sdk"
 import { Button } from "@efb/efb-api";
 import type { Language } from "../types";
 import { freeFlightState, formatFlightTime } from "../state/FreeFlightState";
-import { freeFlightManager } from "../managers/FreeFlightManager";
+import { positionState } from "../state/positionState";
 
 // Import translations
 import frTranslations from "../locales/fr.json";
@@ -52,6 +52,7 @@ export function renderFreeFlightPanel(props: FreeFlightPanelProps): VNode {
   const departureAirport = freeFlightState.departureAirport;
   const todayStats = freeFlightState.todayStats;
   const showEndFlightConfirm = freeFlightState.showEndFlightConfirm;
+  const isAtCorrectAirport = positionState.isAtCorrectAirport;
 
   return (
     <div style="background: #252532; border-radius: 12px; padding: 16px; position: relative;">
@@ -107,11 +108,11 @@ export function renderFreeFlightPanel(props: FreeFlightPanelProps): VNode {
         {/* Live position data */}
         <div style="display: flex; gap: 8px; margin-bottom: 10px;">
           <div style="flex: 1; background: #1a1a24; border-radius: 6px; padding: 8px; text-align: center;">
-            <div style="font-size: 12px; font-weight: 600; color: white;">{groundSpeed} kt</div>
+            <div style="font-size: 12px; font-weight: 600; color: white;">{groundSpeed.map(s => Math.round(s))} kt</div>
             <div style="font-size: 9px; color: #6b7280;">Vitesse sol</div>
           </div>
           <div style="flex: 1; background: #1a1a24; border-radius: 6px; padding: 8px; text-align: center;">
-            <div style="font-size: 12px; font-weight: 600; color: white;">{altitude.map(a => a.toLocaleString())} ft</div>
+            <div style="font-size: 12px; font-weight: 600; color: white;">{altitude.map(a => Math.round(a))} ft</div>
             <div style="font-size: 9px; color: #6b7280;">Altitude</div>
           </div>
           <div style="flex: 1; background: #1a1a24; border-radius: 6px; padding: 8px; text-align: center;">
@@ -142,6 +143,21 @@ export function renderFreeFlightPanel(props: FreeFlightPanelProps): VNode {
 
       {/* Free Flight Not Active - Show idle state */}
       <div style={status.map(s => s === "in_flight" ? "display: none;" : "display: flex; flex-direction: column; align-items: center; padding: 20px; text-align: center;")}>
+
+        {/* Position mismatch warning */}
+        <div style={isAtCorrectAirport.map(ok => ok
+          ? "display: none;"
+          : "width: 100%; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 6px; padding: 10px; margin-bottom: 12px; text-align: left;")}>
+          <div style="font-size: 11px; font-weight: 600; color: #ef4444; margin-bottom: 4px;">
+            Position incorrecte
+          </div>
+          <div style="font-size: 10px; color: #fca5a5;">
+            {positionState.dbAirport.map(db =>
+              `Votre avion est stationne a ${db || "?"}.`
+            )} Deplacez-vous ou effectuez un transfert.
+          </div>
+        </div>
+
         <svg style="width: 40px; height: 40px; margin-bottom: 12px; opacity: 0.4;" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="1.5">
           <path d="M21.5 11.5L12 17L2.5 11.5"/>
           <path d="M21.5 6.5L12 12L2.5 6.5L12 1L21.5 6.5Z"/>
@@ -150,7 +166,7 @@ export function renderFreeFlightPanel(props: FreeFlightPanelProps): VNode {
           {currentLanguage.map(l => translations[l].missions.noActiveMission)}
         </div>
         <div style="color: #4b5563; font-size: 10px; margin-bottom: 12px;">
-          Le vol libre demarre automatiquement en jeu
+          Le vol libre demarre au demarrage moteur
         </div>
         <Button callback={onGoToCreation}>
           <div style="background: rgba(59, 130, 246, 0.2); border: 1px solid #3b82f6; color: #60a5fa; padding: 8px 16px; border-radius: 6px; font-size: 11px; font-weight: 500;">
@@ -232,14 +248,9 @@ export function renderFreeFlightPanel(props: FreeFlightPanelProps): VNode {
 
           {/* Buttons */}
           <div style="display: flex; gap: 8px;">
-            <Button callback={() => freeFlightManager.dismissEndFlightPopup()}>
+            <Button callback={() => freeFlightState.showEndFlightConfirm.set(false)}>
               <div style="flex: 1; background: rgba(107, 114, 128, 0.2); border: 1px solid #6b7280; color: #9ca3af; padding: 10px 16px; border-radius: 6px; font-size: 11px; font-weight: 500; text-align: center;">
-                Continuer
-              </div>
-            </Button>
-            <Button callback={() => void freeFlightManager.confirmSessionEnd()}>
-              <div style="flex: 1; background: rgba(34, 197, 94, 0.2); border: 1px solid #22c55e; color: #22c55e; padding: 10px 16px; border-radius: 6px; font-size: 11px; font-weight: 600; text-align: center;">
-                Terminer
+                Fermer
               </div>
             </Button>
           </div>

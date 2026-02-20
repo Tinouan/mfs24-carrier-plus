@@ -39,6 +39,7 @@ export interface SettingsViewProps {
   onTestCommBus: () => void;
   onSimulateOffline: () => void;
   onChangeGameMode: () => void;
+  onTestWearAndTear?: () => void;
 }
 
 /**
@@ -55,6 +56,7 @@ export function renderSettingsTab(props: SettingsViewProps): VNode {
     onTestCommBus,
     onSimulateOffline,
     onChangeGameMode,
+    onTestWearAndTear,
   } = props;
 
   return (
@@ -251,6 +253,20 @@ export function renderSettingsTab(props: SettingsViewProps): VNode {
               {currentLanguage.map(l => l === "fr" ? "Tester APIs MSFS" : "Test MSFS APIs")}
             </div>
           </Button>
+
+          {onTestWearAndTear ? (
+            <div>
+              <div style="border-top: 1px solid #374151; margin: 12px 0; opacity: 0.5;"></div>
+              <div style="font-size: 11px; color: #9ca3af; margin-bottom: 12px;">
+                TEST TEMPORAIRE — Wear &amp; Tear SimVars settable ? Resultats dans la console.
+              </div>
+              <Button callback={(): void => onTestWearAndTear!()}>
+                <div style="background: #ef4444; border: 1px solid #ef4444; border-radius: 6px; padding: 12px; text-align: center; font-size: 12px; color: white; font-weight: 600;">
+                  TEST W&amp;T SETTABLE
+                </div>
+              </Button>
+            </div>
+          ) : <span></span>}
         </div>
 
         {/* Section: A propos */}

@@ -12,6 +12,7 @@ import { WorldRouter, TransferRouter } from "../services";
 import { mapState, simVarState, authState, transferState, marketState } from "../state";
 import { navigationState } from "../state/NavigationState";
 import { showNotification } from "../state/PopupState";
+import { PositionService } from "../services/PositionService";
 import { isGameReady } from "../state/GameModeState";
 import { factoryState } from "../state/FactoryState";
 import { RecipeService } from "../services/RecipeService";
@@ -1099,7 +1100,11 @@ export class MapController {
   public async openPilotTransfer(destIcao: string, destName: string): Promise<void> {
     const user = authState.currentUser.get();
     const originIcao = user?.current_airport || user?.preferred_airport || "";
-    if (!originIcao || originIcao === destIcao) return;
+    console.log(`[Transfer] openPilotTransfer: origin=${originIcao}, dest=${destIcao}, user=${!!user}`);
+    if (!originIcao || originIcao === destIcao) {
+      console.log(`[Transfer] BLOCKED: originIcao=${originIcao}, destIcao=${destIcao}`);
+      return;
+    }
 
     try {
       // Refresh wallet from DB before showing popup
@@ -1109,12 +1114,14 @@ export class MapController {
       }
 
       const estimate = await TransferRouter.estimatePilotTransfer(originIcao, destIcao);
+      console.log(`[Transfer] estimate: ${estimate.distance_nm} NM, ${estimate.cost_cr} CR`);
       transferState.transferDestIcao.set(destIcao);
       transferState.transferDestName.set(destName);
       transferState.transferEstimate.set(estimate);
       transferState.showPilotTransferPopup.set(true);
     } catch (e) {
-      console.error("[MapController] estimatePilotTransfer error:", e);
+      console.error("[MapController] openPilotTransfer error:", e);
+      showNotification(`Transfer error: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -1131,32 +1138,23 @@ export class MapController {
     try {
       const result = await TransferRouter.transferPilot(String(user.id), destIcao);
       if (result.success) {
-        // Look up new airport coordinates from cache
+        // Sync PositionService (single source of truth for position)
+        await PositionService.loadFromDb();
+
+        // Reload full player profile from DB (money, airport, etc.)
+        const player = await DatabaseManager.getPlayer();
+        if (player) {
+          authState.currentUser.set(player);
+          marketState.walletPersonal.set(player.money);
+        }
+
+        // Persist lat/lon for map reference
         const airports = DatabaseManager.getAirportsCache();
         const destAirport = airports.find(a => a.ident === destIcao);
         const newLat = destAirport?.latitude || 0;
         const newLon = destAirport?.longitude || 0;
-
-        // Update auth state with new position
-        authState.currentUser.set({
-          ...user,
-          current_airport: destIcao,
-          last_latitude: newLat || user.last_latitude,
-          last_longitude: newLon || user.last_longitude,
-        });
-
-        // Persist last_latitude/longitude in DB
         if (newLat && newLon) {
           void this.savePlayerPosition(newLat, newLon);
-        }
-
-        // Force immediate DataStore backup for critical position data
-        DatabaseManager.forceSaveSync();
-
-        // Refresh wallet
-        const player = await DatabaseManager.getPlayer();
-        if (player) {
-          marketState.walletPersonal.set(player.money);
         }
 
         showNotification(this.t("transfer", "pilotTransferred") + ` → ${destName} (${destIcao})`);

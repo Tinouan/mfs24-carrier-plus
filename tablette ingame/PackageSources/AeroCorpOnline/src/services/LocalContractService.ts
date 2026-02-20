@@ -5,7 +5,7 @@
 
 import { DatabaseManager, Item, Airport, InventoryItem, Aircraft } from "../managers/DatabaseManager";
 import type { ContractOffer, ActiveContract, ContractCargoItem } from "../types";
-import { simVarState } from "../state";
+import { positionState } from "../state/positionState";
 
 // ═══════════════════════════════════════════════════════════
 // CONSTANTS
@@ -290,9 +290,8 @@ class LocalContractServiceClass {
     const player = await DatabaseManager.getPlayer();
     if (!player) return;
 
-    // Regenerate AI contracts — use GPS fallback if DB airport is empty
-    const gps = simVarState.closestAirport.get();
-    const airport = player.current_airport || (gps && gps !== "----" ? gps : "") || "LFPG";
+    // Regenerate AI contracts at player's DB position
+    const airport = player.current_airport || positionState.dbAirport.get() || "LFPG";
     await this.generateAIContracts(airport);
   }
 

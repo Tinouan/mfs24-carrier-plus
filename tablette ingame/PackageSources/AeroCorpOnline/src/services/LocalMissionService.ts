@@ -379,6 +379,14 @@ class LocalMissionServiceClass {
 
     // Update player XP
     player.xp += xpEarned;
+
+    // Calculate and award money reward
+    const moneyEarned = this.calculateMoneyReward(mission, grade);
+    if (moneyEarned > 0) {
+      player.money += moneyEarned;
+      console.log(`[LocalMissionService] Awarded ${moneyEarned} CR`);
+    }
+
     await DatabaseManager.savePlayer(player);
 
     // V2.0: Update pilot career stats
@@ -403,8 +411,7 @@ class LocalMissionServiceClass {
     await DatabaseManager.savePilotCareerStats(careerStats);
     console.log(`[LocalMissionService] Updated career stats: ${careerStats.total_missions} missions, ${careerStats.total_flight_time_minutes}min total`);
 
-    // Update aircraft location
-    await DatabaseManager.updateAircraftLocation(mission.aircraft_id, data.final_icao);
+    // Aircraft location NOT updated here — handled by PositionService.onSuccessfulLanding() in MissionController
 
     // Apply landing damage based on FPM
     const landingDamage = await localFleetService.applyLandingDamage(
@@ -432,6 +439,7 @@ class LocalMissionServiceClass {
       score_total: scores.total,
       grade,
       xp_earned: xpEarned,
+      money_earned: moneyEarned,
       cheated: false,
       cheat_penalty_percent: 0,
       landing_fpm: data.landing_fpm,
@@ -604,6 +612,27 @@ class LocalMissionServiceClass {
   }
 
   /**
+   * Calculate money reward for a completed mission.
+   * Based on distance + cargo weight, scaled by grade.
+   */
+  private calculateMoneyReward(mission: LocalMission, grade: string): number {
+    // Base reward: distance-based
+    const distanceNm = mission.distance_nm ?? 0;
+    let reward = Math.round(distanceNm * 5); // 5 CR per nm base
+
+    // Cargo bonus (heavier cargo = more money)
+    if (mission.cargo_kg > 0) {
+      reward += Math.round(mission.cargo_kg * 0.3); // 0.3 CR per kg
+    }
+
+    // Grade multiplier
+    reward = Math.round(reward * this.getGradeMultiplier(grade));
+
+    // Minimum reward (at least something for completing)
+    return Math.max(reward, 50);
+  }
+
+  /**
    * Check if aircraft can fly based on systems status
    * Returns { canFly: boolean, reason?: string }
    */
@@ -617,20 +646,17 @@ class LocalMissionServiceClass {
 
     // Check if using NEW format (engine_condition) or OLD format (engine)
     if (typeof systems.engine_condition === "number") {
-      // NEW format: check for failed systems or very low conditions
-      const criticalSystems = [
-        { name: "Engine", condition: systems.engine_condition, failed: systems.engine_failed },
-        { name: "Propeller", condition: systems.propeller_condition, failed: systems.propeller_failed },
-        { name: "Landing Gear", condition: systems.landing_gear_condition, failed: systems.landing_gear_failed },
-      ];
-
+      // V2: Check critical systems (engine, landing_gear, tires, fuel_system)
+      const criticalSystemNames = ["engine", "landing_gear", "tires", "fuel_system"];
       const failedSystems: string[] = [];
 
-      for (const sys of criticalSystems) {
-        if (sys.failed) {
-          failedSystems.push(`${sys.name} (FAILED)`);
-        } else if (sys.condition < 10) {
-          failedSystems.push(`${sys.name} (${Math.round(sys.condition)}% - Critical)`);
+      for (const sysName of criticalSystemNames) {
+        const condition = systems[`${sysName}_condition`] ?? 100;
+        const failed = systems[`${sysName}_failed`] ?? false;
+        if (failed) {
+          failedSystems.push(`${sysName} (FAILED)`);
+        } else if (condition < 10) {
+          failedSystems.push(`${sysName} (${Math.round(condition)}% - Critical)`);
         }
       }
 
@@ -645,7 +671,7 @@ class LocalMissionServiceClass {
       const degradedSystems = [
         { name: "Electrical", condition: systems.electrical_condition },
         { name: "Avionics", condition: systems.avionics_condition },
-        { name: "Pitot", condition: systems.pitot_condition },
+        { name: "Oil", condition: systems.oil_condition ?? 100 },
       ].filter((s) => s.condition < 30);
 
       if (degradedSystems.length > 0) {

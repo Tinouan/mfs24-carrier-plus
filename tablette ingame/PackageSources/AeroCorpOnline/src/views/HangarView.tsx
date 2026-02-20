@@ -395,7 +395,7 @@ export function renderHangarTab(props: HangarViewProps): VNode {
 
         {/* Edit Registration Popup */}
         <div style={hangarEditRegPopupOpen.map(show => show
-          ? "position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 1000;"
+          ? "position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 1000;"
           : "display: none;")}>
           <div style="background: #252532; border-radius: 12px; padding: 20px; min-width: 280px; max-width: 90%; border: 1px solid #3b82f6;">
             {/* Header */}
@@ -444,7 +444,7 @@ export function renderHangarTab(props: HangarViewProps): VNode {
 
         {/* Repair Popup */}
         <div style={hangarRepairPopupOpen.map(show => show
-          ? "position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 1000;"
+          ? "position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 1000;"
           : "display: none;")}>
           <div style="background: #252532; border-radius: 12px; padding: 20px; min-width: 320px; max-width: 90%; border: 1px solid #f59e0b;">
             {/* Header */}
@@ -510,7 +510,7 @@ export function renderHangarTab(props: HangarViewProps): VNode {
         {/* V7.1: Aircraft Transfer Popup (ICAO input)                 */}
         {/* ═══════════════════════════════════════════════════════════ */}
         <div style={showAircraftTransferPopup.map(show => show
-          ? "position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 1000;"
+          ? "position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 1000;"
           : "display: none;")}>
           <div style="background: #252532; border-radius: 12px; padding: 20px; min-width: 320px; max-width: 90%; border: 1px solid #8b5cf6;">
             {/* Header */}

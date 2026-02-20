@@ -118,6 +118,7 @@ export const freeFlightState = {
 
   // UI state
   showEndFlightConfirm: Subject.create<boolean>(false),
+  positionBlocked: Subject.create<boolean>(false),
   loading: Subject.create<boolean>(false),
   error: Subject.create<string | null>(null),
 

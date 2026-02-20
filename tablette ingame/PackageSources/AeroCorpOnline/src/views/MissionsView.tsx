@@ -550,8 +550,10 @@ export function renderMissionsTab(props: MissionsViewProps): VNode {
                     {missionAircraftSystems.map(sys => {
                       if (!sys) return null;
                       const systemNames: Record<string, string> = {
-                        "engine": t("hangar", "engine"), "landing_gear": t("hangar", "landingGear"), "propeller": t("hangar", "propeller"),
-                        "electrical": t("hangar", "electrical"), "pitot": t("hangar", "pitot"), "avionics": t("hangar", "avionics"),
+                        "engine": t("hangar", "engine"), "landing_gear": t("hangar", "landingGear"), "tires": t("hangar", "tires"),
+                        "brakes": t("hangar", "brakes"), "propeller": t("hangar", "propeller"), "oil": t("hangar", "oil"),
+                        "flight_surfaces": t("hangar", "flightSurfaces"), "electrical": t("hangar", "electrical"),
+                        "fuel_system": t("hangar", "fuelSystem"), "avionics": t("hangar", "avionics"),
                       };
                       if (!sys.can_takeoff) {
                         return (

@@ -73,7 +73,7 @@ export class LocalTransferService {
 
     // Get player
     const player = await db.getPlayer();
-    if (!player || player.id !== playerId) {
+    if (!player || String(player.id) !== String(playerId)) {
       return { success: false, error: "Player not found" };
     }
 

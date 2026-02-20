@@ -158,12 +158,12 @@ export function renderRefuelPopupHtml(data: RefuelPopupData): string {
   const gaugeColor = getFuelGaugeColor(targetPercent);
 
   return `
-    <div class="refuel-overlay" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 9999;">
+    <div class="refuel-overlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 9999;">
       <div style="background: #1f2937; border: 2px solid #374151; border-radius: 12px; padding: 20px; width: 320px;">
         <!-- Header -->
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
           <div style="font-size: 18px; font-weight: 700; color: white;">${translations.refuelTitle}</div>
-          <button class="refuel-close-btn" style="background: none; border: none; color: #9ca3af; font-size: 24px; cursor: pointer; padding: 0; line-height: 1;">×</button>
+          <button class="refuel-close-btn" style="background: #374151; border: none; border-radius: 4px; padding: 4px 10px; color: #9ca3af; cursor: pointer; font-size: 14px;">X</button>
         </div>
 
         <!-- Aircraft Info -->
@@ -255,7 +255,7 @@ export function renderSystemsPopupHtml(data: SystemsPopupData): string {
   }).join("");
 
   return `
-    <div class="systems-overlay" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 9999;">
+    <div class="systems-overlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 9999;">
       <div style="background: #1f2937; border: 2px solid #374151; border-radius: 12px; padding: 20px; width: 360px; max-height: 90%; overflow-y: auto;">
         <!-- Header -->
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">

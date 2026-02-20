@@ -704,7 +704,7 @@ export function renderCompanyTab(props: CompanyViewProps): VNode {
 
       {/* Market Buy Popup */}
       <div style={showMarketBuyPopup.map(s => s
-        ? "position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px;"
+        ? "position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px;"
         : "display: none;")}>
         <div style="background: #252532; border-radius: 12px; padding: 20px; width: 100%; max-width: 320px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
@@ -783,7 +783,7 @@ export function renderCompanyTab(props: CompanyViewProps): VNode {
 
       {/* Sell Item Popup */}
       <div style={showSellItemPopup.map(s => s
-        ? "position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px;"
+        ? "position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px;"
         : "display: none;")}>
         <div style="background: #252532; border-radius: 12px; padding: 20px; width: 100%; max-width: 320px; max-height: 90vh; overflow-y: auto;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
@@ -798,7 +798,7 @@ export function renderCompanyTab(props: CompanyViewProps): VNode {
 
       {/* Aircraft Sell Popup */}
       <div style={showSellAircraftPopup.map(s => s
-        ? "position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px;"
+        ? "position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px;"
         : "display: none;")}>
         <div style="background: #252532; border-radius: 12px; padding: 20px; width: 100%; max-width: 320px; max-height: 90vh; overflow-y: auto;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">

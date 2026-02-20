@@ -87,12 +87,13 @@ export interface AircraftDetails {
   passenger_capacity: number;
   condition: number;  // V2.3: Aircraft condition (0-1)
   hours: number;      // V2.3: Total flight hours
-  // Systems status
+  // Systems status (V2: dynamic, keyed by system name)
+  system_statuses: Record<string, string>;
+  // Legacy accessors (kept for backward compat)
   landing_gear: string;
   engine_status: string;
   propeller_status: string;
   electrical_status: string;
-  pitot_status: string;
   avionics_status: string;
 }
 
@@ -131,12 +132,12 @@ export interface MissionAircraftInfo {
   status: string;
   current_airport_ident: string | null;
   owner_type: string;
-  // Systems status
+  // Systems status (V2: dynamic)
+  system_statuses: Record<string, string>;
   engine_status: string;
   landing_gear: string;
   propeller_status: string;
   electrical_status: string;
-  pitot_status: string;
   avionics_status: string;
 }
 
@@ -217,6 +218,7 @@ export interface MissionRecapData {
   score_total: number;
   grade: string;
   xp_earned: number;
+  money_earned?: number;
   cheated: boolean;
   cheat_penalty_percent: number;
   landing_fpm: number;
@@ -245,6 +247,7 @@ export interface MissionCompleteResponse {
   };
   score_total: number;
   grade: string;
+  money_earned?: number;
   xp_breakdown?: XpBreakdown | null;
   modifiers_validated?: string[];
   modifiers_failed?: string[];

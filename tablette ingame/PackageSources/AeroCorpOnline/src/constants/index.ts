@@ -93,18 +93,28 @@ export const SYSTEM_NAMES: Record<string, string> = {
   landing_gear: "Landing Gear",
   propeller: "Propeller",
   electrical: "Electrical",
-  pitot: "Pitot",
   avionics: "Avionics",
+  tires: "Tires",
+  brakes: "Brakes",
+  oil: "Oil",
+  flight_surfaces: "Flight Surfaces",
+  fuel_system: "Fuel System",
 };
 
 export const SYSTEM_NAMES_FR: Record<string, string> = {
   engine: "Moteur",
-  landing_gear: "Train d'atterrissage",
+  landing_gear: "Train",
   propeller: "Hélice",
   electrical: "Électrique",
-  pitot: "Tube Pitot",
   avionics: "Avionique",
+  tires: "Pneus",
+  brakes: "Freins",
+  oil: "Huile",
+  flight_surfaces: "Surfaces de vol",
+  fuel_system: "Circuit carburant",
 };
+
+export * from "./WearConstants";
 
 // ═══════════════════════════════════════════════════════════
 // UI CONFIGURATION
