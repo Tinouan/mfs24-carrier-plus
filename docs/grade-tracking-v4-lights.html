@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AeroCorp Online — Tracking v4 (Lights)</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a12;
+    color: #e2e2e8;
+    font-family: 'IBM Plex Sans', sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+    padding: 30px;
+    gap: 40px;
+    flex-wrap: wrap;
+  }
+  .view-label {
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #4b5563;
+    text-align: center;
+    margin-bottom: 10px;
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<!-- ==========================================
+     VUE 1 : TRACKING — Vol de nuit, tout OK
+     ========================================== -->
+<div>
+  <div class="view-label">Tracking — vol de nuit, lumieres OK</div>
+  <div style="width: 520px; background: #13131f; border-radius: 16px; border: 1px solid #2a2a3d; overflow: hidden;">
+
+    <!-- Header: MISSION EN COURS -->
+    <div style="padding: 16px 24px 12px; border-bottom: 1px solid #2a2a3d;">
+      <div style="font-size: 10px; letter-spacing: 2.5px; text-transform: uppercase; color: #4b5563; font-weight: 600; margin-bottom: 12px;">Mission en cours</div>
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+        <div style="font-size: 16px; font-weight: 700; color: #f0f0f5;">LFPG</div>
+        <div style="flex: 1; margin: 0 14px; height: 4px; background: #2a2a3d; border-radius: 2px;">
+          <div style="width: 62%; height: 100%; background: #3b82f6; border-radius: 2px;"></div>
+        </div>
+        <div style="font-size: 16px; font-weight: 700; color: #f0f0f5;">LFBO</div>
+      </div>
+      <div style="text-align: center; margin-bottom: 4px;">
+        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 700; color: #3b82f6;">62%</span>
+      </div>
+      <!-- TEMPS DE VOL déplacé ici, centré -->
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #6b7280;">195 nm parcourus</span>
+        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 600; color: #e2e2e8;">1:05</span>
+        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #6b7280;">120 nm restants</span>
+      </div>
+    </div>
+
+    <!-- Phase + Grade live -->
+    <div style="display: flex; gap: 12px; padding: 14px 24px; border-bottom: 1px solid #2a2a3d;">
+      <!-- Phase -->
+      <div style="flex: 1; background: #1a1a2a; border-radius: 10px; padding: 12px 14px;">
+        <div style="font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #4b5563; margin-bottom: 8px;">Phase</div>
+        <div style="text-align: center;">
+          <div style="display: inline-block; padding: 4px 16px; border: 1px solid #22c55e; border-radius: 6px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 600; color: #22c55e;">CROISIERE</div>
+        </div>
+        <div style="text-align: center; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #e2e2e8; margin-top: 6px;">FL350</div>
+        <div style="display: flex; justify-content: space-between; margin-top: 8px; padding: 0 4px;">
+          <span style="font-size: 9px; color: #4b5563;">Roul</span>
+          <span style="font-size: 9px; color: #4b5563;">Montee</span>
+          <span style="font-size: 9px; color: #22c55e; font-weight: 600;">Crois</span>
+          <span style="font-size: 9px; color: #4b5563;">Desc</span>
+          <span style="font-size: 9px; color: #4b5563;">Roul</span>
+        </div>
+      </div>
+
+      <!-- Grade live -->
+      <div style="flex: 1; background: #1a1a2a; border-radius: 10px; padding: 12px 14px;">
+        <div style="font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #4b5563; margin-bottom: 8px;">Grade estime</div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div style="width: 48px; height: 48px; border-radius: 50%; border: 2px solid #22c55e; display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 700; color: #22c55e;">A</div>
+          <div>
+            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 18px; font-weight: 700; color: #e2e2e8;">872 <span style="font-size: 12px; color: #4b5563; font-weight: 400;">/1000</span></div>
+          </div>
+        </div>
+        <div style="height: 6px; background: #2a2a3d; border-radius: 3px; margin-top: 10px;">
+          <div style="width: 87%; height: 100%; background: #22c55e; border-radius: 3px;"></div>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-top: 3px;">
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 8px; color: #4b5563;">F</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 8px; color: #4b5563;">E</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 8px; color: #4b5563;">D</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 8px; color: #4b5563;">C</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 8px; color: #4b5563;">B</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 8px; color: #22c55e; font-weight: 600;">A</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 8px; color: #4b5563;">S</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- G-Force + LUMIERES (remplace Temps de vol) -->
+    <div style="display: flex; gap: 12px; padding: 14px 24px; border-bottom: 1px solid #2a2a3d;">
+      <!-- G-Force OK -->
+      <div style="flex: 1; background: #1a1a2a; border: 1px solid #1e3a2a; border-radius: 10px; padding: 12px 14px;">
+        <div style="font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #4b5563; margin-bottom: 6px;">G-Force max</div>
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 22px; font-weight: 700; color: #e2e2e8;">1.4 <span style="font-size: 12px; color: #6b7280; font-weight: 400;">G</span></div>
+        <div style="display: flex; align-items: center; gap: 6px; margin-top: 6px;">
+          <div style="width: 8px; height: 8px; border-radius: 50%; background: #22c55e;"></div>
+          <span style="font-size: 11px; font-weight: 500; color: #22c55e;">OK - 200/200 pts</span>
+        </div>
+      </div>
+      <!-- LUMIERES — Tout OK (nuit) -->
+      <div style="flex: 1; background: #1a1a2a; border: 1px solid #1e3a2a; border-radius: 10px; padding: 12px 14px;">
+        <div style="font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #4b5563; margin-bottom: 6px;">Lumieres</div>
+        <!-- Grille 2x3 compacte -->
+        <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+          <!-- NAV -->
+          <div style="display: flex; align-items: center; gap: 4px; width: calc(50% - 2px); padding: 3px 6px; background: #1e3a2a; border-radius: 4px;">
+            <div style="width: 6px; height: 6px; border-radius: 50%; background: #22c55e;"></div>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #22c55e;">NAV</span>
+          </div>
+          <!-- STROBE -->
+          <div style="display: flex; align-items: center; gap: 4px; width: calc(50% - 2px); padding: 3px 6px; background: #1e3a2a; border-radius: 4px;">
+            <div style="width: 6px; height: 6px; border-radius: 50%; background: #22c55e;"></div>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #22c55e;">STRB</span>
+          </div>
+          <!-- BEACON -->
+          <div style="display: flex; align-items: center; gap: 4px; width: calc(50% - 2px); padding: 3px 6px; background: #1e3a2a; border-radius: 4px;">
+            <div style="width: 6px; height: 6px; border-radius: 50%; background: #22c55e;"></div>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #22c55e;">BCN</span>
+          </div>
+          <!-- LANDING -->
+          <div style="display: flex; align-items: center; gap: 4px; width: calc(50% - 2px); padding: 3px 6px; background: #1e3a2a; border-radius: 4px;">
+            <div style="width: 6px; height: 6px; border-radius: 50%; background: #22c55e;"></div>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #22c55e;">LDG</span>
+          </div>
+          <!-- TAXI -->
+          <div style="display: flex; align-items: center; gap: 4px; width: calc(50% - 2px); padding: 3px 6px; background: #162016; border-radius: 4px;">
+            <div style="width: 6px; height: 6px; border-radius: 50%; background: #4b5563;"></div>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #4b5563;">TAXI</span>
+          </div>
+          <!-- STATUS -->
+          <div style="display: flex; align-items: center; gap: 4px; width: calc(50% - 2px); padding: 3px 6px; background: #1e3a2a; border-radius: 4px;">
+            <div style="width: 6px; height: 6px; border-radius: 50%; background: #22c55e;"></div>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #22c55e;">OK</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ATC Suivi -->
+    <div style="padding: 14px 24px; border-bottom: 1px solid #2a2a3d;">
+      <div style="background: #1a1a2a; border: 1px solid #1e3a2a; border-radius: 10px; padding: 12px 14px;">
+        <div style="font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #4b5563; margin-bottom: 8px;">Suivi ATC</div>
+        <div style="display: flex; gap: 16px;">
+          <div style="flex: 1;">
+            <div style="font-size: 10px; color: #6b7280; margin-bottom: 2px;">Altitude assignee</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 16px; font-weight: 600; color: #e2e2e8;">FL350</div>
+            <div style="display: flex; align-items: center; gap: 4px; margin-top: 4px;">
+              <div style="width: 6px; height: 6px; border-radius: 50%; background: #22c55e;"></div>
+              <span style="font-size: 10px; color: #22c55e;">Respectee</span>
+            </div>
+          </div>
+          <div style="flex: 1;">
+            <div style="font-size: 10px; color: #6b7280; margin-bottom: 2px;">Vitesse croisiere</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 16px; font-weight: 600; color: #e2e2e8;">250 <span style="font-size: 10px; color: #6b7280; font-weight: 400;">kts</span></div>
+            <div style="display: flex; align-items: center; gap: 4px; margin-top: 4px;">
+              <div style="width: 6px; height: 6px; border-radius: 50%; background: #22c55e;"></div>
+              <span style="font-size: 10px; color: #22c55e;">Respectee</span>
+            </div>
+          </div>
+          <div style="flex: 1;">
+            <div style="font-size: 10px; color: #6b7280; margin-bottom: 2px;">Communications</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 16px; font-weight: 600; color: #e2e2e8;">12/12</div>
+            <div style="display: flex; align-items: center; gap: 4px; margin-top: 4px;">
+              <div style="width: 6px; height: 6px; border-radius: 50%; background: #22c55e;"></div>
+              <span style="font-size: 10px; color: #22c55e;">Toutes OK</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modificateurs actifs -->
+    <div style="padding: 14px 24px;">
+      <div style="font-size: 10px; letter-spacing: 2.5px; text-transform: uppercase; color: #4b5563; font-weight: 600; margin-bottom: 10px;">Modificateurs actifs</div>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <div style="display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; background: #1a2e1a; border: 1px solid #22c55e40; border-radius: 6px;">
+          <span style="font-size: 11px; color: #9ca3af;">Nuit</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 600; color: #22c55e;">+50%</span>
+        </div>
+        <div style="display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; background: #1a2e1a; border: 1px solid #22c55e40; border-radius: 6px;">
+          <span style="font-size: 11px; color: #9ca3af;">Cargo 78%</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 600; color: #22c55e;">x1.3</span>
+        </div>
+        <div style="display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; background: #1a2e1a; border: 1px solid #22c55e40; border-radius: 6px;">
+          <span style="font-size: 11px; color: #9ca3af;">Temps reel</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 600; color: #22c55e;">x2.0</span>
+        </div>
+        <div style="display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; background: #1a2e1a; border: 1px solid #22c55e40; border-radius: 6px;">
+          <span style="font-size: 11px; color: #9ca3af;">Fuel 22%</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 600; color: #22c55e;">+20%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ==========================================
+     VUE 2 : TRACKING — Nuit, lumieres manquantes + G alerte
+     ========================================== -->
+<div>
+  <div class="view-label">Tracking — lumieres manquantes + alertes</div>
+  <div style="width: 520px; background: #13131f; border-radius: 16px; border: 1px solid #2a2a3d; overflow: hidden;">
+
+    <!-- Header -->
+    <div style="padding: 16px 24px 12px; border-bottom: 1px solid #2a2a3d;">
+      <div style="font-size: 10px; letter-spacing: 2.5px; text-transform: uppercase; color: #4b5563; font-weight: 600; margin-bottom: 12px;">Mission en cours</div>
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+        <div style="font-size: 16px; font-weight: 700; color: #f0f0f5;">LFPG</div>
+        <div style="flex: 1; margin: 0 14px; height: 4px; background: #2a2a3d; border-radius: 2px;">
+          <div style="width: 38%; height: 100%; background: #3b82f6; border-radius: 2px;"></div>
+        </div>
+        <div style="font-size: 16px; font-weight: 700; color: #f0f0f5;">LFBO</div>
+      </div>
+      <div style="text-align: center; margin-bottom: 4px;">
+        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 700; color: #3b82f6;">38%</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #6b7280;">120 nm parcourus</span>
+        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 600; color: #e2e2e8;">0:42</span>
+        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #6b7280;">195 nm restants</span>
+      </div>
+    </div>
+
+    <!-- Phase + Grade (grade en baisse) -->
+    <div style="display: flex; gap: 12px; padding: 14px 24px; border-bottom: 1px solid #2a2a3d;">
+      <div style="flex: 1; background: #1a1a2a; border-radius: 10px; padding: 12px 14px;">
+        <div style="font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #4b5563; margin-bottom: 8px;">Phase</div>
+        <div style="text-align: center;">
+          <div style="display: inline-block; padding: 4px 16px; border: 1px solid #3b82f6; border-radius: 6px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 600; color: #3b82f6;">MONTEE</div>
+        </div>
+        <div style="text-align: center; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #e2e2e8; margin-top: 6px;">FL280</div>
+        <div style="display: flex; justify-content: space-between; margin-top: 8px; padding: 0 4px;">
+          <span style="font-size: 9px; color: #4b5563;">Roul</span>
+          <span style="font-size: 9px; color: #3b82f6; font-weight: 600;">Montee</span>
+          <span style="font-size: 9px; color: #4b5563;">Crois</span>
+          <span style="font-size: 9px; color: #4b5563;">Desc</span>
+          <span style="font-size: 9px; color: #4b5563;">Roul</span>
+        </div>
+      </div>
+      <!-- Grade B -->
+      <div style="flex: 1; background: #1a1a2a; border-radius: 10px; padding: 12px 14px;">
+        <div style="font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #4b5563; margin-bottom: 8px;">Grade estime</div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div style="width: 48px; height: 48px; border-radius: 50%; border: 2px solid #f59e0b; display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 700; color: #f59e0b;">B</div>
+          <div>
+            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 18px; font-weight: 700; color: #e2e2e8;">780 <span style="font-size: 12px; color: #4b5563; font-weight: 400;">/1000</span></div>
+          </div>
+        </div>
+        <div style="height: 6px; background: #2a2a3d; border-radius: 3px; margin-top: 10px;">
+          <div style="width: 78%; height: 100%; background: #f59e0b; border-radius: 3px;"></div>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-top: 3px;">
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 8px; color: #4b5563;">F</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 8px; color: #4b5563;">E</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 8px; color: #4b5563;">D</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 8px; color: #4b5563;">C</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 8px; color: #f59e0b; font-weight: 600;">B</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 8px; color: #4b5563;">A</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 8px; color: #4b5563;">S</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- G-Force ALERTE + LUMIERES MANQUANTES -->
+    <div style="display: flex; gap: 12px; padding: 14px 24px; border-bottom: 1px solid #2a2a3d;">
+      <!-- G-Force critique -->
+      <div style="flex: 1; background: #1a1a2a; border: 1px solid #ef444460; border-radius: 10px; padding: 12px 14px;">
+        <div style="font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #4b5563; margin-bottom: 6px;">G-Force max</div>
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 22px; font-weight: 700; color: #ef4444;">2.1 <span style="font-size: 12px; color: #6b7280; font-weight: 400;">G</span></div>
+        <div style="display: flex; align-items: center; gap: 6px; margin-top: 6px;">
+          <div style="width: 8px; height: 8px; border-radius: 50%; background: #ef4444;"></div>
+          <span style="font-size: 11px; font-weight: 500; color: #ef4444;">CRITIQUE - 80/200 pts</span>
+        </div>
+        <div style="margin-top: 8px; padding: 6px 8px; background: #2a1515; border: 1px solid #ef444450; border-radius: 6px;">
+          <div style="font-size: 10px; color: #fca5a5; line-height: 1.3;">Stabilisez l'appareil. Score impacte.</div>
+        </div>
+      </div>
+      <!-- LUMIERES — 2 manquantes (nuit) -->
+      <div style="flex: 1; background: #1a1a2a; border: 1px solid #ef444460; border-radius: 10px; padding: 12px 14px;">
+        <div style="font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #4b5563; margin-bottom: 6px;">Lumieres</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+          <!-- NAV: ON -->
+          <div style="display: flex; align-items: center; gap: 4px; width: calc(50% - 2px); padding: 3px 6px; background: #1e3a2a; border-radius: 4px;">
+            <div style="width: 6px; height: 6px; border-radius: 50%; background: #22c55e;"></div>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #22c55e;">NAV</span>
+          </div>
+          <!-- STROBE: OFF !! -->
+          <div style="display: flex; align-items: center; gap: 4px; width: calc(50% - 2px); padding: 3px 6px; background: #351a1a; border: 1px solid #ef444440; border-radius: 4px;">
+            <div style="width: 6px; height: 6px; border-radius: 50%; background: #ef4444;"></div>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #ef4444;">STRB</span>
+          </div>
+          <!-- BEACON: ON -->
+          <div style="display: flex; align-items: center; gap: 4px; width: calc(50% - 2px); padding: 3px 6px; background: #1e3a2a; border-radius: 4px;">
+            <div style="width: 6px; height: 6px; border-radius: 50%; background: #22c55e;"></div>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #22c55e;">BCN</span>
+          </div>
+          <!-- LANDING: OFF !! -->
+          <div style="display: flex; align-items: center; gap: 4px; width: calc(50% - 2px); padding: 3px 6px; background: #351a1a; border: 1px solid #ef444440; border-radius: 4px;">
+            <div style="width: 6px; height: 6px; border-radius: 50%; background: #ef4444;"></div>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #ef4444;">LDG</span>
+          </div>
+          <!-- TAXI: grisé (pas requis en vol) -->
+          <div style="display: flex; align-items: center; gap: 4px; width: calc(50% - 2px); padding: 3px 6px; background: #162016; border-radius: 4px;">
+            <div style="width: 6px; height: 6px; border-radius: 50%; background: #4b5563;"></div>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #4b5563;">TAXI</span>
+          </div>
+          <!-- STATUS global -->
+          <div style="display: flex; align-items: center; gap: 4px; width: calc(50% - 2px); padding: 3px 6px; background: #351a1a; border-radius: 4px;">
+            <div style="width: 6px; height: 6px; border-radius: 50%; background: #ef4444;"></div>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 600; color: #ef4444;">2 OFF</span>
+          </div>
+        </div>
+        <!-- Alerte dans la carte -->
+        <div style="margin-top: 6px; padding: 5px 8px; background: #2a1515; border: 1px solid #ef444450; border-radius: 6px;">
+          <div style="font-size: 10px; color: #fca5a5; line-height: 1.3;">Vol de nuit: STROBE et LANDING requis.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ATC Suivi avec alerte -->
+    <div style="padding: 14px 24px; border-bottom: 1px solid #2a2a3d;">
+      <div style="background: #1a1a2a; border: 1px solid #f59e0b40; border-radius: 10px; padding: 12px 14px;">
+        <div style="font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #4b5563; margin-bottom: 8px;">Suivi ATC</div>
+        <div style="display: flex; gap: 16px;">
+          <div style="flex: 1;">
+            <div style="font-size: 10px; color: #6b7280; margin-bottom: 2px;">Altitude assignee</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 16px; font-weight: 600; color: #f59e0b;">FL350</div>
+            <div style="display: flex; align-items: center; gap: 4px; margin-top: 4px;">
+              <div style="width: 6px; height: 6px; border-radius: 50%; background: #f59e0b;"></div>
+              <span style="font-size: 10px; color: #f59e0b;">FL280 actuel</span>
+            </div>
+          </div>
+          <div style="flex: 1;">
+            <div style="font-size: 10px; color: #6b7280; margin-bottom: 2px;">Vitesse croisiere</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 16px; font-weight: 600; color: #e2e2e8;">250 <span style="font-size: 10px; color: #6b7280; font-weight: 400;">kts</span></div>
+            <div style="display: flex; align-items: center; gap: 4px; margin-top: 4px;">
+              <div style="width: 6px; height: 6px; border-radius: 50%; background: #22c55e;"></div>
+              <span style="font-size: 10px; color: #22c55e;">Respectee</span>
+            </div>
+          </div>
+          <div style="flex: 1;">
+            <div style="font-size: 10px; color: #6b7280; margin-bottom: 2px;">Communications</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 16px; font-weight: 600; color: #e2e2e8;">8/8</div>
+            <div style="display: flex; align-items: center; gap: 4px; margin-top: 4px;">
+              <div style="width: 6px; height: 6px; border-radius: 50%; background: #22c55e;"></div>
+              <span style="font-size: 10px; color: #22c55e;">Toutes OK</span>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top: 10px; padding: 6px 10px; background: #2a2010; border: 1px solid #f59e0b40; border-radius: 6px;">
+          <div style="font-size: 10px; color: #fcd34d; line-height: 1.3;">
+            <span style="font-weight: 700; color: #f59e0b;">!</span> Altitude non respectee (FL280 / FL350 assigne). En montee.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modificateurs actifs -->
+    <div style="padding: 14px 24px;">
+      <div style="font-size: 10px; letter-spacing: 2.5px; text-transform: uppercase; color: #4b5563; font-weight: 600; margin-bottom: 10px;">Modificateurs actifs</div>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <div style="display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; background: #1a2e1a; border: 1px solid #22c55e40; border-radius: 6px;">
+          <span style="font-size: 11px; color: #9ca3af;">Nuit</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 600; color: #22c55e;">+50%</span>
+        </div>
+        <div style="display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; background: #1a2e1a; border: 1px solid #22c55e40; border-radius: 6px;">
+          <span style="font-size: 11px; color: #9ca3af;">Cargo 45%</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 600; color: #22c55e;">x1.2</span>
+        </div>
+        <div style="display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; background: #1a2e1a; border: 1px solid #22c55e40; border-radius: 6px;">
+          <span style="font-size: 11px; color: #9ca3af;">Temps reel</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 600; color: #22c55e;">x2.0</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ==========================================
+     VUE 3 : TRACKING — Jour, certaines off OK
+     ========================================== -->
+<div>
+  <div class="view-label">Tracking — vol de jour, lumieres adaptees</div>
+  <div style="width: 520px; background: #13131f; border-radius: 16px; border: 1px solid #2a2a3d; overflow: hidden;">
+
+    <!-- Header -->
+    <div style="padding: 16px 24px 12px; border-bottom: 1px solid #2a2a3d;">
+      <div style="font-size: 10px; letter-spacing: 2.5px; text-transform: uppercase; color: #4b5563; font-weight: 600; margin-bottom: 12px;">Mission en cours</div>
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+        <div style="font-size: 16px; font-weight: 700; color: #f0f0f5;">EGLL</div>
+        <div style="flex: 1; margin: 0 14px; height: 4px; background: #2a2a3d; border-radius: 2px;">
+          <div style="width: 80%; height: 100%; background: #3b82f6; border-radius: 2px;"></div>
+        </div>
+        <div style="font-size: 16px; font-weight: 700; color: #f0f0f5;">LFPG</div>
+      </div>
+      <div style="text-align: center; margin-bottom: 4px;">
+        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 700; color: #3b82f6;">80%</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #6b7280;">160 nm parcourus</span>
+        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 600; color: #e2e2e8;">0:55</span>
+        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #6b7280;">40 nm restants</span>
+      </div>
+    </div>
+
+    <!-- Phase descente + Grade S -->
+    <div style="display: flex; gap: 12px; padding: 14px 24px; border-bottom: 1px solid #2a2a3d;">
+      <div style="flex: 1; background: #1a1a2a; border-radius: 10px; padding: 12px 14px;">
+        <div style="font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #4b5563; margin-bottom: 8px;">Phase</div>
+        <div style="text-align: center;">
+          <div style="display: inline-block; padding: 4px 16px; border: 1px solid #f59e0b; border-radius: 6px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 600; color: #f59e0b;">DESCENTE</div>
+        </div>
+        <div style="text-align: center; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #e2e2e8; margin-top: 6px;">FL120</div>
+        <div style="display: flex; justify-content: space-between; margin-top: 8px; padding: 0 4px;">
+          <span style="font-size: 9px; color: #4b5563;">Roul</span>
+          <span style="font-size: 9px; color: #4b5563;">Montee</span>
+          <span style="font-size: 9px; color: #4b5563;">Crois</span>
+          <span style="font-size: 9px; color: #f59e0b; font-weight: 600;">Desc</span>
+          <span style="font-size: 9px; color: #4b5563;">Roul</span>
+        </div>
+      </div>
+      <div style="flex: 1; background: #1a1a2a; border-radius: 10px; padding: 12px 14px;">
+        <div style="font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #4b5563; margin-bottom: 8px;">Grade estime</div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div style="width: 48px; height: 48px; border-radius: 50%; border: 2px solid #eab308; display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 700; color: #eab308;">S</div>
+          <div>
+            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 18px; font-weight: 700; color: #e2e2e8;">965 <span style="font-size: 12px; color: #4b5563; font-weight: 400;">/1000</span></div>
+          </div>
+        </div>
+        <div style="height: 6px; background: #2a2a3d; border-radius: 3px; margin-top: 10px;">
+          <div style="width: 96%; height: 100%; background: #eab308; border-radius: 3px;"></div>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-top: 3px;">
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 8px; color: #4b5563;">F</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 8px; color: #4b5563;">E</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 8px; color: #4b5563;">D</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 8px; color: #4b5563;">C</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 8px; color: #4b5563;">B</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 8px; color: #4b5563;">A</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 8px; color: #eab308; font-weight: 600;">S</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- G-Force OK + LUMIERES DE JOUR -->
+    <div style="display: flex; gap: 12px; padding: 14px 24px; border-bottom: 1px solid #2a2a3d;">
+      <div style="flex: 1; background: #1a1a2a; border: 1px solid #1e3a2a; border-radius: 10px; padding: 12px 14px;">
+        <div style="font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #4b5563; margin-bottom: 6px;">G-Force max</div>
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 22px; font-weight: 700; color: #e2e2e8;">1.2 <span style="font-size: 12px; color: #6b7280; font-weight: 400;">G</span></div>
+        <div style="display: flex; align-items: center; gap: 6px; margin-top: 6px;">
+          <div style="width: 8px; height: 8px; border-radius: 50%; background: #22c55e;"></div>
+          <span style="font-size: 11px; font-weight: 500; color: #22c55e;">OK - 200/200 pts</span>
+        </div>
+      </div>
+      <!-- Lumieres de jour: NAV off = OK, LDG off = OK en croisiere -->
+      <div style="flex: 1; background: #1a1a2a; border: 1px solid #1e3a2a; border-radius: 10px; padding: 12px 14px;">
+        <div style="font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #4b5563; margin-bottom: 6px;">Lumieres</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+          <!-- NAV: off, pas requis jour -->
+          <div style="display: flex; align-items: center; gap: 4px; width: calc(50% - 2px); padding: 3px 6px; background: #162016; border-radius: 4px;">
+            <div style="width: 6px; height: 6px; border-radius: 50%; background: #4b5563;"></div>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #4b5563;">NAV</span>
+          </div>
+          <!-- STROBE: ON (requis en vol toujours) -->
+          <div style="display: flex; align-items: center; gap: 4px; width: calc(50% - 2px); padding: 3px 6px; background: #1e3a2a; border-radius: 4px;">
+            <div style="width: 6px; height: 6px; border-radius: 50%; background: #22c55e;"></div>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #22c55e;">STRB</span>
+          </div>
+          <!-- BEACON: ON -->
+          <div style="display: flex; align-items: center; gap: 4px; width: calc(50% - 2px); padding: 3px 6px; background: #1e3a2a; border-radius: 4px;">
+            <div style="width: 6px; height: 6px; border-radius: 50%; background: #22c55e;"></div>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #22c55e;">BCN</span>
+          </div>
+          <!-- LANDING: off, pas requis jour croisière -->
+          <div style="display: flex; align-items: center; gap: 4px; width: calc(50% - 2px); padding: 3px 6px; background: #162016; border-radius: 4px;">
+            <div style="width: 6px; height: 6px; border-radius: 50%; background: #4b5563;"></div>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #4b5563;">LDG</span>
+          </div>
+          <!-- TAXI: off -->
+          <div style="display: flex; align-items: center; gap: 4px; width: calc(50% - 2px); padding: 3px 6px; background: #162016; border-radius: 4px;">
+            <div style="width: 6px; height: 6px; border-radius: 50%; background: #4b5563;"></div>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #4b5563;">TAXI</span>
+          </div>
+          <!-- STATUS -->
+          <div style="display: flex; align-items: center; gap: 4px; width: calc(50% - 2px); padding: 3px 6px; background: #1e3a2a; border-radius: 4px;">
+            <div style="width: 6px; height: 6px; border-radius: 50%; background: #22c55e;"></div>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #22c55e;">OK</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ATC OK -->
+    <div style="padding: 14px 24px; border-bottom: 1px solid #2a2a3d;">
+      <div style="background: #1a1a2a; border: 1px solid #1e3a2a; border-radius: 10px; padding: 12px 14px;">
+        <div style="font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #4b5563; margin-bottom: 8px;">Suivi ATC</div>
+        <div style="display: flex; gap: 16px;">
+          <div style="flex: 1;">
+            <div style="font-size: 10px; color: #6b7280; margin-bottom: 2px;">Altitude assignee</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 16px; font-weight: 600; color: #e2e2e8;">FL120</div>
+            <div style="display: flex; align-items: center; gap: 4px; margin-top: 4px;">
+              <div style="width: 6px; height: 6px; border-radius: 50%; background: #22c55e;"></div>
+              <span style="font-size: 10px; color: #22c55e;">Respectee</span>
+            </div>
+          </div>
+          <div style="flex: 1;">
+            <div style="font-size: 10px; color: #6b7280; margin-bottom: 2px;">Vitesse croisiere</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 16px; font-weight: 600; color: #e2e2e8;">220 <span style="font-size: 10px; color: #6b7280; font-weight: 400;">kts</span></div>
+            <div style="display: flex; align-items: center; gap: 4px; margin-top: 4px;">
+              <div style="width: 6px; height: 6px; border-radius: 50%; background: #22c55e;"></div>
+              <span style="font-size: 10px; color: #22c55e;">Respectee</span>
+            </div>
+          </div>
+          <div style="flex: 1;">
+            <div style="font-size: 10px; color: #6b7280; margin-bottom: 2px;">Communications</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 16px; font-weight: 600; color: #e2e2e8;">15/15</div>
+            <div style="display: flex; align-items: center; gap: 4px; margin-top: 4px;">
+              <div style="width: 6px; height: 6px; border-radius: 50%; background: #22c55e;"></div>
+              <span style="font-size: 10px; color: #22c55e;">Toutes OK</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modificateurs actifs -->
+    <div style="padding: 14px 24px;">
+      <div style="font-size: 10px; letter-spacing: 2.5px; text-transform: uppercase; color: #4b5563; font-weight: 600; margin-bottom: 10px;">Modificateurs actifs</div>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <div style="display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; background: #1a2e1a; border: 1px solid #22c55e40; border-radius: 6px;">
+          <span style="font-size: 11px; color: #9ca3af;">Cargo 92%</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 600; color: #22c55e;">x1.5</span>
+        </div>
+        <div style="display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; background: #1a2e1a; border: 1px solid #22c55e40; border-radius: 6px;">
+          <span style="font-size: 11px; color: #9ca3af;">Temps reel</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 600; color: #22c55e;">x2.0</span>
+        </div>
+        <div style="display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; background: #1a2e1a; border: 1px solid #22c55e40; border-radius: 6px;">
+          <span style="font-size: 11px; color: #9ca3af;">Fuel 35%</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 600; color: #22c55e;">+20%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
