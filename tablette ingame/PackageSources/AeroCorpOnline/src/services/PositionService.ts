@@ -35,6 +35,8 @@ class PositionServiceClass {
   private lastSimLat = 0;
   private lastSimLon = 0;
   private readonly POSITION_MISMATCH_NM = 5;
+  private fallbackCooldownMs = 0;
+  private readonly FALLBACK_INTERVAL_MS = 5000; // 5 sec entre chaque calcul
 
   // ═══════════════════════════════════════
   // READ — Where is the pilot?
@@ -123,7 +125,14 @@ class PositionServiceClass {
   }
 
   updateSimVar(rawClosestAirport: string): void {
-    this.simVarAirport = rawClosestAirport || "----";
+    if (rawClosestAirport && rawClosestAirport !== "----" && rawClosestAirport !== "") {
+      // Cas normal : GPS retourne un ICAO valide
+      this.simVarAirport = rawClosestAirport;
+    } else {
+      // Fallback cold & dark : calculer depuis lat/lon
+      const fallbackIcao = this.tryFallbackFromLatLon();
+      this.simVarAirport = fallbackIcao || "----";
+    }
     this.hasReceivedSimData = true;
     positionState.simVarAirport.set(this.simVarAirport);
 
@@ -132,6 +141,48 @@ class PositionServiceClass {
     if (!correct) {
       console.log("[Position] MISMATCH: sim=" + this.simVarAirport + " db=" + this.dbAirport + " dist=" + this.simDistanceFromDbNm.toFixed(1) + "nm");
     }
+  }
+
+  /**
+   * Cold & dark fallback: find nearest airport from lat/lon when GPS CLOSEST AIRPORT = "----"
+   * Optimized with bounding box pre-filter + 5s cooldown.
+   */
+  private tryFallbackFromLatLon(): string {
+    const now = Date.now();
+    if (now - this.fallbackCooldownMs < this.FALLBACK_INTERVAL_MS) {
+      // Cooldown actif — retourner le dernier résultat connu
+      return this.simVarAirport !== "----" ? this.simVarAirport : "";
+    }
+    this.fallbackCooldownMs = now;
+
+    if (this.lastSimLat === 0 && this.lastSimLon === 0) return "";
+
+    const airports = DatabaseManager.getAirportsCache();
+    if (airports.length === 0) return "";
+
+    // Pré-filtrer par bounding box (±0.5° ≈ 30nm)
+    const margin = 0.5;
+    const lat = this.lastSimLat;
+    const lon = this.lastSimLon;
+
+    let nearestIdent = "";
+    let nearestDist = Infinity;
+    for (const ap of airports) {
+      if (!ap.latitude || !ap.longitude) continue;
+      if (ap.latitude < lat - margin || ap.latitude > lat + margin) continue;
+      if (ap.longitude < lon - margin || ap.longitude > lon + margin) continue;
+      const d = haversineNm(lat, lon, ap.latitude, ap.longitude);
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearestIdent = ap.ident;
+      }
+    }
+
+    if (nearestDist < 10) {
+      console.log(`[Position] Cold & dark fallback: ${nearestIdent} (${nearestDist.toFixed(1)} nm)`);
+      return nearestIdent;
+    }
+    return "";
   }
 
   // ═══════════════════════════════════════

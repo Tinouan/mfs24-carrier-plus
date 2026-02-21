@@ -12,6 +12,8 @@ import { freeFlightState, type FreeFlightRecapData } from "../state/FreeFlightSt
 import { simVarState, missionState, settingsState } from "../state";
 import { isGameReady } from "../state/GameModeState";
 import { renderAndBindRecap } from "../helpers/freeFlightRecapHelper";
+import { evaluateLightsStatus } from "../helpers/LightsHelper";
+import type { CriticalSnapshot } from "../services/SimVarReader";
 
 // Translations object type — matches the shape in AeroCorpOnline.tsx
 type TranslationsMap = Record<string, { freeFlight: Record<string, string> }>;
@@ -87,23 +89,47 @@ export class FreeFlightController {
   // TICK — Called by readSimVars() every cycle
   // ═══════════════════════════════════════
 
-  tick(): void {
-    const fuelCapacity = SimVar.GetSimVarValue("FUEL TOTAL CAPACITY", "gallons") as number || 0;
-    const engineRunning = SimVar.GetSimVarValue("ENG COMBUSTION:1", "boolean") as boolean;
-
+  tick(snap: CriticalSnapshot): void {
     FlightTracker.tick({
-      onGround: simVarState.onGround.get(),
-      airspeed: simVarState.airspeed.get(),
-      groundSpeed: simVarState.groundSpeed.get(),
-      gForce: simVarState.gForce.get(),
-      verticalSpeed: simVarState.verticalSpeed.get(),
-      fuelGallons: simVarState.fuelQuantity.get(),
-      fuelCapacity,
-      lat: simVarState.latitude.get(),
-      lon: simVarState.longitude.get(),
-      engineRunning,
-      altitude: simVarState.altitude.get(),
+      onGround: snap.onGround,
+      airspeed: snap.airspeed,
+      groundSpeed: snap.groundSpeed,
+      gForce: snap.gForce,
+      verticalSpeed: snap.verticalSpeed,
+      fuelGallons: snap.fuelQuantity,
+      fuelCapacity: snap.fuelCapacity,
+      lat: snap.lat,
+      lon: snap.lon,
+      engineRunning: snap.engineRunning,
+      altitude: snap.altitude,
     });
+
+    // Lights + simRate evaluation (only when free flight is active)
+    if (freeFlightState.status.get() !== "in_flight") return;
+
+    const lightsOn = {
+      nav: SimVar.GetSimVarValue("LIGHT NAV ON", "bool") !== 0,
+      strobe: SimVar.GetSimVarValue("LIGHT STROBE ON", "bool") !== 0,
+      beacon: SimVar.GetSimVarValue("LIGHT BEACON ON", "bool") !== 0,
+      landing: SimVar.GetSimVarValue("LIGHT LANDING ON", "bool") !== 0,
+      taxi: SimVar.GetSimVarValue("LIGHT TAXI ON", "bool") !== 0,
+    };
+    const timeOfDay = SimVar.GetSimVarValue("E:TIME OF DAY", "number") as number;
+    const simRate = SimVar.GetSimVarValue("SIMULATION RATE", "number") as number;
+
+    const lights = evaluateLightsStatus(
+      snap.onGround, timeOfDay >= 2, snap.altitude, snap.verticalSpeed < -300, lightsOn
+    );
+
+    freeFlightState.ffTrackingLightNav.set(lights.nav);
+    freeFlightState.ffTrackingLightStrobe.set(lights.strobe);
+    freeFlightState.ffTrackingLightBeacon.set(lights.beacon);
+    freeFlightState.ffTrackingLightLanding.set(lights.landing);
+    freeFlightState.ffTrackingLightTaxi.set(lights.taxi);
+    freeFlightState.ffTrackingLightsMissing.set(lights.missing);
+    freeFlightState.ffTrackingLightsUnnecessary.set(lights.unnecessary);
+    freeFlightState.ffTrackingLightsStatusColor.set(lights.statusColor);
+    freeFlightState.ffTrackingSimRate.set(simRate || 1.0);
   }
 
   // ═══════════════════════════════════════

@@ -78,6 +78,36 @@ export interface MissionsViewProps {
   trackingRealTime: Subject<string>;
   trackingSimTime: Subject<string>;
 
+  // V2: Grade estimation + ATC suivi
+  trackingGradeEstimated: Subject<string>;
+  trackingScoreEstimated: Subject<number>;
+  trackingScoreGforce: Subject<number>;
+  trackingGforceAlert: Subject<string>;
+  trackingCargoFillPercent: Subject<number>;
+  trackingAtcAssignedAlt: Subject<number>;
+  trackingAtcAltDeviation: Subject<boolean>;
+  trackingAtcCruiseSpd: Subject<number>;
+  trackingAtcSpdDeviation: Subject<boolean>;
+  trackingSimRate: Subject<number>;
+  // V3: Lights
+  trackingLightNav: Subject<number>;
+  trackingLightStrobe: Subject<number>;
+  trackingLightBeacon: Subject<number>;
+  trackingLightLanding: Subject<number>;
+  trackingLightTaxi: Subject<number>;
+  trackingLightsMissing: Subject<number>;
+  trackingLightsUnnecessary: Subject<number>;
+  trackingLightsStatusColor: Subject<string>;
+  trackingLightsAlert: Subject<string>;
+  // V5: Suivi vol
+  trackingSuiviAtcMode: Subject<string>;
+  trackingSuiviCrossTrackNm: Subject<number>;
+  trackingSuiviRouteStatus: Subject<string>;
+  trackingSuiviInCruise: Subject<boolean>;
+  trackingSuiviAlert: Subject<string>;
+  // V6: Weather
+  trackingWeatherScore: Subject<number>;
+
   // Mission creation - Step 1
   creationStep1Valid: Subject<boolean>;
   missionOriginIcao: Subject<string | null>;
@@ -116,6 +146,7 @@ export interface MissionsViewProps {
   fpOriginIcao: Subject<string>;
   fpDestinationIcao: Subject<string>;
   fpCanValidate: Subject<boolean>;
+  fpFlightMode: Subject<'IFR' | 'VFR'>;
   fpDestinationInputRef: NodeReference<HTMLInputElement>;
 
   // Mission status
@@ -206,6 +237,33 @@ export function renderMissionsTab(props: MissionsViewProps): VNode {
     waypointsTotal,
     trackingRealTime,
     trackingSimTime,
+    trackingGradeEstimated,
+    trackingScoreEstimated,
+    trackingScoreGforce,
+    trackingGforceAlert,
+    trackingCargoFillPercent,
+    trackingAtcAssignedAlt,
+    trackingAtcAltDeviation,
+    trackingAtcCruiseSpd,
+    trackingAtcSpdDeviation,
+    trackingSimRate,
+    trackingLightNav,
+    trackingLightStrobe,
+    trackingLightBeacon,
+    trackingLightLanding,
+    trackingLightTaxi,
+    trackingLightsMissing,
+    trackingLightsUnnecessary,
+    trackingLightsStatusColor,
+    trackingLightsAlert,
+    // V5: Suivi vol
+    trackingSuiviAtcMode,
+    trackingSuiviCrossTrackNm,
+    trackingSuiviRouteStatus,
+    trackingSuiviInCruise,
+    trackingSuiviAlert,
+    // V6: Weather
+    trackingWeatherScore,
     creationStep1Valid,
     missionOriginIcao,
     currentSimAircraftReg,
@@ -235,6 +293,7 @@ export function renderMissionsTab(props: MissionsViewProps): VNode {
     fpOriginIcao,
     fpDestinationIcao,
     fpCanValidate,
+    fpFlightMode,
     fpDestinationInputRef,
     missionStatus,
     missionError,
@@ -347,8 +406,33 @@ export function renderMissionsTab(props: MissionsViewProps): VNode {
           waypointsTotal,
           trackingRealTime,
           trackingSimTime,
+          trackingGradeEstimated,
+          trackingScoreEstimated,
+          trackingScoreGforce,
+          trackingGforceAlert,
+          trackingCargoFillPercent,
+          trackingAtcAssignedAlt,
+          trackingAtcAltDeviation,
+          trackingAtcCruiseSpd,
+          trackingAtcSpdDeviation,
+          trackingSimRate,
+          trackingLightNav,
+          trackingLightStrobe,
+          trackingLightBeacon,
+          trackingLightLanding,
+          trackingLightTaxi,
+          trackingLightsMissing,
+          trackingLightsUnnecessary,
+          trackingLightsStatusColor,
+          trackingLightsAlert,
+          trackingSuiviAtcMode,
+          trackingSuiviCrossTrackNm,
+          trackingSuiviRouteStatus,
+          trackingSuiviInCruise,
+          trackingSuiviAlert,
+          trackingWeatherScore,
           onCancelMission,
-          onGoToCreation: () => missionsSubTab.set("disponibles"),
+          onGoToCreation: () => { missionsSubTab.set("disponibles"); showCreationFlow.set(true); onOpenCreationFlow(); },
         })}
 
         {/* Phase 3: Active contracts (below tracking panel, same sub-tab) */}
@@ -591,8 +675,8 @@ export function renderMissionsTab(props: MissionsViewProps): VNode {
                   </div>
                 </div>{/* End NOT VALIDATED */}
 
-                {/* Aircraft Info Card — always visible (refuel + systems buttons) */}
-                <div ref={missionAircraftInfoRef} style="margin-top: 8px;">
+                {/* Aircraft Info Card — hidden after cargo validation */}
+                <div ref={missionAircraftInfoRef} style={cargoValidated.map(v => v ? "display: none;" : "margin-top: 8px;")}>
                   <div style="text-align: center; padding: 16px; color: #6b7280; font-size: 11px;">
                     {t("missions", "waitingForAircraft")}
                   </div>
@@ -784,8 +868,17 @@ export function renderMissionsTab(props: MissionsViewProps): VNode {
               creationStep1Valid, cargoValidated)}>
               {/* Step Header */}
               <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: #1a1a24;">
-                <div style="font-size: 11px; font-weight: 600; color: #22c55e;">
-                  {currentLanguage.map(l => translations[l].missions.step3FlightPlan)}
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span style="font-size: 11px; font-weight: 600; color: #22c55e;">
+                    {currentLanguage.map(l => translations[l].missions.step3FlightPlan)}
+                  </span>
+                  <span style={fpFlightMode.map(m => m === 'VFR'
+                    ? "padding: 2px 8px; background: #f59e0b; color: white; border-radius: 4px; font-size: 10px; font-weight: 600;"
+                    : m === 'IFR'
+                      ? "padding: 2px 8px; background: #3b82f6; color: white; border-radius: 4px; font-size: 10px; font-weight: 600;"
+                      : "display: none;")}>
+                    {fpFlightMode}
+                  </span>
                 </div>
                 <div style={creationStep3Valid.map(v => v
                   ? "font-size: 14px; color: #22c55e;"
@@ -813,20 +906,33 @@ export function renderMissionsTab(props: MissionsViewProps): VNode {
                     </Button>
                   </div>
 
+                  {/* VFR mode message */}
+                  <div style={fpFlightMode.map(m => m === 'VFR'
+                    ? "color: #f59e0b; font-size: 11px; margin-bottom: 10px; text-align: center; padding: 8px; background: rgba(245, 158, 11, 0.1); border-radius: 6px;"
+                    : "display: none;")}>
+                    Aucun plan GPS detecte — saisissez la destination pour un vol VFR direct
+                  </div>
+
                   {/* Flight Plan Info */}
                   <div style="background: #1a1a24; border-radius: 6px; padding: 10px; margin-bottom: 10px;">
-                    <div style="display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 6px;">
+                    {/* Active plan line — hidden in VFR */}
+                    <div style={fpFlightMode.map(m => m === 'VFR'
+                      ? "display: none;"
+                      : "display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 6px;")}>
                       <span style="color: #6b7280;">{currentLanguage.map(l => translations[l].missions.activePlan)}:</span>
                       <span style={fpHasActivePlan.map(h => h ? "color: #22c55e; font-weight: 600;" : "color: #ef4444;")}>
                         {MappedSubject.create(([h, l]) => h ? translations[l].common.yes : translations[l].common.no, fpHasActivePlan, currentLanguage)}
                       </span>
                     </div>
-                    <div style="display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 6px;">
+                    {/* Waypoints line — hidden in VFR */}
+                    <div style={fpFlightMode.map(m => m === 'VFR'
+                      ? "display: none;"
+                      : "display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 6px;")}>
                       <span style="color: #6b7280;">Waypoints:</span>
                       <span style="color: white;">{fpWaypointCount}</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 6px;">
-                      <span style="color: #6b7280;">Distance:</span>
+                      <span style="color: #6b7280;">{fpFlightMode.map(m => m === 'VFR' ? "Distance estimee:" : "Distance:")}</span>
                       <span style="color: white;">{fpTotalDistance.map(d => d.toFixed(1))} nm</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 6px;">
@@ -876,7 +982,9 @@ export function renderMissionsTab(props: MissionsViewProps): VNode {
                       </span>
                     </div>
                     <div style="font-size: 10px; color: #9ca3af;">
-                      {fpTotalDistance.map(d => d.toFixed(1))} nm • {fpWaypointCount} waypoints
+                      {fpTotalDistance.map(d => d.toFixed(1))} nm
+                      {fpFlightMode.map(m => m === 'VFR' ? ' • VFR direct' : '')}
+                      {MappedSubject.create(([m, wc]) => m === 'IFR' ? ` • ${wc} waypoints` : '', fpFlightMode, fpWaypointCount)}
                     </div>
                   </div>
                   <Button callback={(): void => { onModifyFlightPlan(); }}>

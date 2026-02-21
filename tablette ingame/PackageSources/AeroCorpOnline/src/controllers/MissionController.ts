@@ -19,7 +19,8 @@ import {
   type AirportInventoryItem, type AircraftCargoItem, type PassengerItem,
   type MissionAircraftData, type MissionAircraftTranslations, type MissionAircraftInfoState,
 } from "../helpers";
-import type { MissionCompleteResponse } from "../types";
+import type { MissionRecapData } from "../types";
+import { haversineDistanceNm } from "../services/SimVarReader";
 
 // Global MSFS declarations in src/types/msfs-globals.d.ts
 
@@ -156,7 +157,18 @@ export class MissionController {
   public updateFpCanValidate(): void {
     const hasActivePlan = missionCreationState.fpHasActivePlan.get();
     const destIcao = missionCreationState.fpDestinationInput.get();
-    missionCreationState.fpCanValidate.set(hasActivePlan && destIcao.length === 4);
+    const flightMode = missionCreationState.fpFlightMode.get();
+
+    if (flightMode === 'VFR') {
+      // VFR: destination ICAO must be 4 chars, exist in airports cache, and differ from origin
+      const destExists = destIcao.length === 4 &&
+        this.databaseManager.getAirportsCache().some(a => a.ident === destIcao.toUpperCase());
+      const originIcao = missionCreationState.fpOriginIcao.get();
+      missionCreationState.fpCanValidate.set(destExists && destIcao.toUpperCase() !== originIcao.toUpperCase());
+    } else {
+      // IFR: unchanged
+      missionCreationState.fpCanValidate.set(hasActivePlan && destIcao.length === 4);
+    }
   }
 
   /**
@@ -217,7 +229,21 @@ export class MissionController {
     // Then, add input event listener to capture typed value into Subject
     input.addEventListener("input", (e: Event) => {
       const target = e.target as HTMLInputElement;
-      missionCreationState.fpDestinationInput.set(target.value.toUpperCase());
+      const value = target.value.toUpperCase();
+      missionCreationState.fpDestinationInput.set(value);
+
+      // VFR: calculate distance in real-time when ICAO is 4 chars
+      if (missionCreationState.fpFlightMode.get() === 'VFR' && value.length === 4) {
+        const originIcao = missionCreationState.fpOriginIcao.get();
+        const airports = this.databaseManager.getAirportsCache();
+        const origin = airports.find(a => a.ident === originIcao);
+        const dest = airports.find(a => a.ident === value);
+        if (origin && dest) {
+          const distNm = haversineDistanceNm(origin.latitude, origin.longitude, dest.latitude, dest.longitude);
+          missionCreationState.fpTotalDistance.set(Math.round(distNm * 10) / 10);
+        }
+      }
+      this.updateFpCanValidate();
     });
 
     // Also capture on keyup as a fallback
@@ -226,6 +252,7 @@ export class MissionController {
       const value = target.value.toUpperCase();
       if (value !== missionCreationState.fpDestinationInput.get()) {
         missionCreationState.fpDestinationInput.set(value);
+        this.updateFpCanValidate();
       }
     });
   }
@@ -616,19 +643,24 @@ export class MissionController {
     let destination = "";
     let totalDistance = 0;
 
-    if (fp.waypoints && Array.isArray(fp.waypoints) && fp.waypoints.length > 0) {
-      for (let i = 0; i < fp.waypoints.length; i++) {
-        const wp = fp.waypoints[i];
-        const ident = wp.ident || wp.icao || "";
-        waypoints.push({
-          ident,
-          lat: wp.lla?.lat || wp.lat || 0,
-          lon: wp.lla?.long || wp.lla?.lon || wp.lon || 0,
-          type: wp.waypointType || wp.type || "unknown",
-        });
-        if (i === 0 && /^[A-Z]{4}$/.test(ident)) origin = ident;
-        if (i === fp.waypoints.length - 1 && /^[A-Z]{4}$/.test(ident)) destination = ident;
+    try {
+      if (fp.waypoints && Array.isArray(fp.waypoints) && fp.waypoints.length > 0) {
+        for (let i = 0; i < fp.waypoints.length; i++) {
+          const wp = fp.waypoints[i];
+          if (!wp) continue; // Skip undefined entries (VFR plans may have sparse arrays)
+          const ident = wp.ident || wp.icao || "";
+          waypoints.push({
+            ident,
+            lat: wp.lla?.lat || wp.lat || 0,
+            lon: wp.lla?.long || wp.lla?.lon || wp.lon || 0,
+            type: wp.waypointType || wp.type || "unknown",
+          });
+          if (i === 0 && /^[A-Z]{4}$/.test(ident)) origin = ident;
+          if (i === fp.waypoints.length - 1 && /^[A-Z]{4}$/.test(ident)) destination = ident;
+        }
       }
+    } catch (e) {
+      console.log("[MissionController] Error parsing EFB flight plan waypoints (VFR?):", e);
     }
 
     if (!origin) {
@@ -688,7 +720,8 @@ export class MissionController {
     const hasActivePlan = missionCreationState.fpHasActivePlan.get();
     console.log("[ACO] Waypoint count:", wpCount, "| GPS Active:", hasActivePlan);
 
-    if (wpCount < 2 && !hasActivePlan) {
+    const flightMode = missionCreationState.fpFlightMode.get();
+    if (flightMode === 'IFR' && wpCount < 2 && !hasActivePlan) {
       popupState.popupNotification.set(this.t("missions", "readGpsFirst"));
       return;
     }
@@ -699,9 +732,22 @@ export class MissionController {
     missionCreationState.fpValidated.set(true);
 
     const origin = missionCreationState.fpOriginIcao.get();
-    const distance = missionCreationState.fpTotalDistance.get();
 
-    popupState.popupNotification.set(`Plan valide: ${origin} > ${destination} (${distance} nm)`);
+    // VFR: ensure distance is computed from haversine if not already set
+    if (flightMode === 'VFR' && missionCreationState.fpTotalDistance.get() === 0) {
+      const airports = this.databaseManager.getAirportsCache();
+      const originAp = airports.find(a => a.ident === origin);
+      const destAp = airports.find(a => a.ident === destination);
+      if (originAp && destAp) {
+        const distNm = haversineDistanceNm(originAp.latitude, originAp.longitude, destAp.latitude, destAp.longitude);
+        missionCreationState.fpTotalDistance.set(Math.round(distNm * 10) / 10);
+      }
+    }
+
+    const distance = missionCreationState.fpTotalDistance.get();
+    const modeLabel = flightMode === 'VFR' ? 'VFR' : 'IFR';
+
+    popupState.popupNotification.set(`Plan valide (${modeLabel}): ${origin} > ${destination} (${distance} nm)`);
     this.updateCreationSteps();
   }
 
@@ -951,12 +997,14 @@ export class MissionController {
         throw new Error("Invalid mission response from server");
       }
 
+      const flightModeValue = missionCreationState.fpFlightMode.get();
       missionState.activeMission.set({
         id: mission.id,
         origin_icao: mission.origin_icao,
         destination_icao: mission.destination_icao,
         aircraft_type: selectedAircraft?.aircraft_type || "",
         status: mission.status,
+        flight_mode: flightModeValue,
       });
 
       missionState.waypointsTotal.set(mission.waypoints_total || waypointCount);
@@ -969,10 +1017,11 @@ export class MissionController {
       missionState.missionStatus.set("success");
       popupState.popupNotification.set(`${this.t("missions", "missionCreatedSuccess")} ${origin} -> ${destination}`);
 
-      trackingManager.resetBackgroundTracking();
+      trackingManager.resetTrackingVariables();
 
       this.writePayloadToSimVars();
       this.startFlightTrackingV1();
+      trackingManager.setFlightMode(flightModeValue);
 
       this.resetCreationSteps();
 
@@ -1072,7 +1121,7 @@ export class MissionController {
       await MissionRouter.failMission(mission.id);
       console.log("[ACO] Mission cancelled");
       missionState.activeMission.set(null);
-      trackingManager.resetBackgroundTracking();
+      trackingManager.resetTrackingVariables();
       missionState.missionStatus.set("idle");
       missionState.missionError.set(null);
       void this.loadCurrentAircraftForMission();
@@ -2142,27 +2191,9 @@ export class MissionController {
     console.log("[ACO] V1.0: Completing mission with modifiers:", mission.id);
 
     try {
-      const flightTimeMinutes = this.flightStartTime
-        ? Math.round((Date.now() - this.flightStartTime.getTime()) / 60000)
-        : 0;
+      // V4: Use FlightSummary from TrackingManager (centralized data)
+      const summary = trackingManager.getFlightSummary();
 
-      const realTimeSeconds = Math.floor((Date.now() - this.realTimeStartMs) / 1000);
-      let simTimeSeconds = 0;
-      try {
-        const currentSimTime = SimVar.GetSimVarValue("E:ABSOLUTE TIME", "seconds") as number;
-        simTimeSeconds = Math.floor(currentSimTime - this.simTimeStartSec);
-      } catch (e) {
-        simTimeSeconds = realTimeSeconds;
-      }
-
-      const fuelCapacity = SimVar.GetSimVarValue("FUEL TOTAL CAPACITY", "gallons") as number;
-      const fuelQuantity = SimVar.GetSimVarValue("FUEL TOTAL QUANTITY", "gallons") as number;
-      const fuelCurrentPercent = fuelCapacity > 0 ? (fuelQuantity / fuelCapacity) * 100 : 100;
-
-      const autopilotUsed = SimVar.GetSimVarValue("AUTOPILOT MASTER", "boolean") as boolean;
-
-      const lat = simVarState.latitude.get();
-      const lon = simVarState.longitude.get();
       // Use SimVar airport from PositionService, fallback to mission destination
       const simApt = positionState.simVarAirport.get();
       const finalIcao = (simApt && simApt !== "----")
@@ -2173,25 +2204,46 @@ export class MissionController {
         this.payloadStartLbs > 0 &&
         Math.abs(this.payloadVerifiedLbs - this.payloadStartLbs) / this.payloadStartLbs > 0.05;
 
-      const waypointsPassed = missionState.waypointsPassed.get();
-      const waypointsTotal = missionState.waypointsTotal.get();
-
-      const result: MissionCompleteResponse = await MissionRouter.completeMissionV1(mission.id, {
-        landing_fpm: this.landingFpm,
-        max_gforce: this.maxGForce,
+      const result: MissionRecapData = await MissionRouter.completeMissionV1(mission.id, {
+        landing_fpm: summary.touchdownVS || this.landingFpm,
+        max_gforce: summary.maxGForce,
         final_icao: finalIcao,
-        flight_time_seconds: flightTimeMinutes * 60,
-        fuel_used_kg: 100 - fuelCurrentPercent,
+        flight_time_seconds: summary.flightDurationSec,
+        fuel_used_kg: Math.max(0, summary.fuelPercentStart - summary.fuelPercentEnd),
+        fuel_remaining_percent: summary.fuelPercentEnd,
         distance_flown_nm: trackingState.trackingDistanceFlown.get(),
-        real_time_ratio: realTimeSeconds > 0 ? simTimeSeconds / realTimeSeconds : 1,
+        real_time_ratio: summary.simRateAverage > 0 ? 1 / summary.simRateAverage : 1,
         cargo_actual_kg: trackingState.trackingCargoActual.get(),
         cargo_expected_kg: trackingState.trackingCargoExpected.get(),
+        cargo_fill_percent: trackingState.trackingCargoFillPercent.get(),
+        night_active: summary.isNightFlight,
+        lights_compliance: summary.lightsCompliance,
+        flightpath_compliance: summary.flightPathCompliance,
+        weather_difficulty: summary.weatherDifficulty,
+        slew_used: summary.slewUsed,
+        crash_occurred: summary.crashOccurred,
+        unlimited_fuel: summary.unlimitedFuelUsed,
         modifiers_validated: [],
         modifiers_failed: [],
       });
 
+      // Add controller-specific fields not available in the service
+      result.cheated = cheated || summary.slewUsed || summary.crashOccurred;
+      result.cheat_penalty_percent = (cheated || summary.slewUsed) ? 50 : 0;
+      result.landing_quality = trackingManager.getLandingQuality(summary.touchdownVS || this.landingFpm);
+      result.atc_compliance = trackingState.trackingAtcCompliance.get();
+      result.atc_violations = trackingState.trackingAtcViolations.get();
+      result.flightpath_compliance = summary.flightPathCompliance;
+      result.weather_difficulty = summary.weatherDifficulty;
+      result.aircraft_type = mission.aircraft_type;
+
+      // If cheated, reduce XP
+      if (cheated && result.xp_earned > 0) {
+        result.xp_earned = Math.round(result.xp_earned / 2);
+      }
+
       missionState.activeMission.set(null);
-      trackingManager.resetBackgroundTracking();
+      trackingManager.resetTrackingVariables();
 
       missionState.missionCheckpoints.set([]);
       missionState.checkpointsValidated.set(0);
@@ -2200,34 +2252,7 @@ export class MissionController {
       missionState.selectedModifiers.set([]);
       missionState.xpEstimate.set(null);
 
-      missionState.missionRecapData.set({
-        origin_icao: mission.origin_icao,
-        destination_icao: mission.destination_icao,
-        final_icao: finalIcao,
-        distance_nm: mission.distance_nm || trackingState.trackingDistanceFlown.get(),
-        score_landing: result.scores?.landing || 0,
-        score_gforce: result.scores?.gforce || 0,
-        score_destination: result.scores?.destination || 0,
-        score_time: result.scores?.time || 0,
-        score_fuel: result.scores?.fuel || 0,
-        score_total: result.score_total || 0,
-        grade: result.grade || "F",
-        xp_earned: result.xp_breakdown?.total_xp || 0,
-        money_earned: result.money_earned || 0,
-        cheated: cheated,
-        cheat_penalty_percent: cheated ? 50 : 0,
-        landing_fpm: this.landingFpm,
-        max_gforce: this.maxGForce,
-        modifiers_validated: result.modifiers_validated || [],
-        modifiers_failed: result.modifiers_failed || [],
-        xp_breakdown: result.xp_breakdown || undefined,
-        flight_time_minutes: flightTimeMinutes,
-        fuel_remaining_percent: fuelCurrentPercent,
-        cargo_weight_kg: mission.cargo_weight_kg || 0,
-        atc_compliance: trackingState.trackingAtcCompliance.get(),
-        atc_violations: trackingState.trackingAtcViolations.get(),
-        landing_quality: trackingManager.getLandingQuality(this.landingFpm),
-      });
+      missionState.missionRecapData.set(result);
       popupState.showMissionRecap.set(true);
       missionState.missionStatus.set("idle");
       missionState.missionError.set(null);

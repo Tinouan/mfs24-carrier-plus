@@ -51,6 +51,7 @@ import { PositionService } from "./services/PositionService";
 import { FreeFlightController } from "./controllers/FreeFlightController";
 import { positionState } from "./state/positionState";
 import { NativePersistence } from "./services/NativePersistence";
+import { readCriticalSimVars } from "./services/SimVarReader";
 
 // Render helpers for DOM updates
 import {
@@ -768,7 +769,6 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
     // Initialize database and seed data with SEED connection
     InitService.initialize({
       onProgress: (step, progress) => {
-        console.log(`[ACO] Init: ${progress}% - ${step}`);
         authState.seedInitStep.set(step);
         authState.seedInitProgress.set(progress);
       },
@@ -784,8 +784,6 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
           const airportInput = this.welcomeAirportRef.instance;
           const pilotNameInput = this.welcomePilotNameRef.instance;
 
-          console.log("[ACO] Setting up WelcomePopup inputs - pilotName:", !!pilotNameInput, "airport:", !!airportInput);
-
           // Setup Coherent keyboard capture for WelcomePopup inputs
           // This tells MSFS to stop capturing keyboard when input is focused
           if (pilotNameInput) {
@@ -796,7 +794,6 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
             airportInput.addEventListener("input", () => {
               const value = airportInput.value.toUpperCase();
               const isValid = /^[A-Z]{4}$/.test(value);
-              console.log("[ACO] Airport ICAO validation:", value, "valid:", isValid);
               authState.firstLaunchAirportValid.set(isValid);
               // V4.1 FIX: Sync Subject with input value (for fallback in completeFirstLaunchSetup)
               authState.firstLaunchAirport.set(value);
@@ -829,6 +826,8 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
         // Load position AFTER DatabaseManager is initialized + data restored
         void PositionService.loadFromDb();
         this.initializePersistenceAndEconomy();
+        // FIX: Load player data (money, XP, career stats) into state
+        void this.loadPlayerDataIntoState();
         // Airports are now loaded — trigger map reload + centering
         if (this.mapController.isMapInitialized()) {
           this.mapController.refreshMapSize();
@@ -867,6 +866,8 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
         gameModeState.modeSwitchLoading.set(false);
         void PositionService.loadFromDb();
         this.initializePersistenceAndEconomy();
+        // FIX: Load player data into state
+        void this.loadPlayerDataIntoState();
         if (this.mapController.isMapInitialized()) {
           this.mapController.refreshMapSize();
           void this.mapController.centerMapOnPlayerAirport();
@@ -903,11 +904,9 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
       SyncService.stopPolling();
       SyncService.disconnect();
       NetworkState.setOffline();
-      console.log("[ACO] Solo mode: Stopped SEED services, NetworkState set to OFFLINE");
     } else {
       // Online mode = will connect to SEED
       NetworkState.setConnecting();
-      console.log("[ACO] Online mode: NetworkState set to CONNECTING");
     }
 
     // Persist mode choice
@@ -915,14 +914,14 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
       SetStoredData("ACO_GameMode", mode);
     }
 
-    console.log(`[ACO] ${mode === "solo" ? "Solo" : "Online"} mode activated`);
-
     // Continue initialization with selected mode
     InitService.continueWithMode(mode)
       .then(() => {
         gameModeState.modeSwitchLoading.set(false);
         void PositionService.loadFromDb();
         this.initializePersistenceAndEconomy();
+        // FIX: Load player data into state
+        void this.loadPlayerDataIntoState();
         // Airports are now loaded — trigger map reload + centering
         if (this.mapController.isMapInitialized()) {
           this.mapController.refreshMapSize();
@@ -937,6 +936,51 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
   };
 
   /**
+   * Load player data from database into reactive state.
+   * Called on every initialization path (reload, mode selection, solo fallback).
+   * Must be called AFTER DatabaseManager is initialized and data is restored.
+   */
+  private async loadPlayerDataIntoState(): Promise<void> {
+    try {
+      const player = await InitService.getPlayerInfo();
+      if (!player) return;
+
+      marketState.walletPersonal.set(player.money);
+
+      const careerStats = await DatabaseManager.getOrCreatePilotCareerStats(player.id);
+
+      authState.currentUser.set({
+        id: player.id,
+        username: player.name,
+        email: player.email || "",
+        xp: player.xp,
+        money: player.money,
+        nationality: player.nationality,
+        preferred_airport: player.preferred_airport,
+        current_airport: player.current_airport,
+        last_latitude: player.last_latitude,
+        last_longitude: player.last_longitude,
+        career_stats: {
+          total_missions: careerStats.total_missions,
+          total_flight_time_minutes: careerStats.total_flight_time_minutes,
+          total_distance_nm: careerStats.total_distance_nm,
+          average_grade: careerStats.average_grade,
+        },
+      });
+      authState.isLoggedIn.set(true);
+      this.socialController.setPlayerId(player.id);
+
+      // Also load company balance if player has a company
+      const companyData = companyState.companyData.get();
+      if (companyData) {
+        companyState.companyBalance.set(companyData.balance ?? 0);
+      }
+    } catch (e) {
+      console.error("[ACO] Failed to load player data:", e);
+    }
+  }
+
+  /**
    * P2P: Initialize persistence manager and AI economy
    * Called after database is ready (either on first launch completion or on existing data)
    * @param skipLoadStates - If true, skip loading states (used after fresh first launch to avoid overwriting fresh data)
@@ -944,32 +988,25 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
   private initializePersistenceAndEconomy(skipLoadStates: boolean = false): void {
     // Initialize persistence manager
     PersistenceManager.initialize({
-      onLoaded: () => {
-        console.log("[ACO] States loaded from local database");
-      },
+      onLoaded: () => {},
       onError: (error) => {
         console.error("[ACO] Persistence error:", error);
       },
-      onSaved: (store) => {
-        console.log(`[ACO] Auto-saved: ${store}`);
-      },
+      onSaved: () => {},
     });
 
     // V4.1 FIX: Skip loading states if this is a fresh first launch
     // Fresh first launch data is already in DatabaseManager, no need to re-load
     // Re-loading could potentially restore stale cached data
     if (skipLoadStates) {
-      console.log("[ACO] Skipping loadAllStates (fresh first launch)");
       // Just enable auto-save and start AI economy
       PersistenceManager.enableAutoSave();
       AIEconomyService.initialize({
-        onPricesUpdated: (count) => console.log(`[AIEconomy] Updated ${count} prices`),
-        onOrdersGenerated: (count) => console.log(`[AIEconomy] Generated ${count} AI orders`),
+        onPricesUpdated: () => {},
+        onOrdersGenerated: () => {},
       });
       AIEconomyService.start();
-      AIEconomyService.forceUpdate().then(() => {
-        console.log("[ACO] P2P local mode ready with AI economy (fresh first launch)");
-      });
+      AIEconomyService.forceUpdate();
       return;
     }
 
@@ -981,15 +1018,13 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
 
         // Start AI economy for solo mode (price fluctuation, AI orders)
         AIEconomyService.initialize({
-          onPricesUpdated: (count) => console.log(`[AIEconomy] Updated ${count} prices`),
-          onOrdersGenerated: (count) => console.log(`[AIEconomy] Generated ${count} AI orders`),
+          onPricesUpdated: () => {},
+          onOrdersGenerated: () => {},
         });
         AIEconomyService.start();
 
         // Generate initial AI orders if market is empty
-        AIEconomyService.forceUpdate().then(() => {
-          console.log("[ACO] P2P local mode ready with AI economy");
-        });
+        AIEconomyService.forceUpdate();
       })
       .catch((error) => {
         console.error("[ACO] Failed to load states:", error);
@@ -1020,80 +1055,32 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
     // Complete the setup with user data
     InitService.completeFirstLaunch(pilotName, nationality, startingAirport)
       .then(async () => {
-        console.log("[ACO] First launch setup complete!");
         // V4.1 FIX: Initialize persistence but SKIP loadAllStates to prevent overwriting fresh data
         // The player data is already fresh in DatabaseManager from completeFirstLaunch()
         this.initializePersistenceAndEconomy(true); // skipLoadStates = true
 
-        // Load player data into state (including career stats)
-        try {
-          const player = await InitService.getPlayerInfo();
-          if (player) {
-            console.log(`[ACO] Player loaded: ${player.name} with ${player.money} credits, ${player.xp} XP`);
-            marketState.walletPersonal.set(player.money);
+        // Load player data into state (shared method for all init paths)
+        await this.loadPlayerDataIntoState();
 
-            // Load career stats for profile display
-            const careerStats = await DatabaseManager.getOrCreatePilotCareerStats(player.id);
+        // Initialize position state from fresh player data
+        void PositionService.loadFromDb();
 
-            authState.currentUser.set({
-              id: player.id,
-              username: player.name,
-              email: player.email || "",
-              xp: player.xp,
-              money: player.money,
-              nationality: player.nationality,
-              preferred_airport: player.preferred_airport,
-              current_airport: player.current_airport,  // V4.1: Current position
-              last_latitude: player.last_latitude,      // V4.1: Map marker fallback
-              last_longitude: player.last_longitude,    // V4.1: Map marker fallback
-              career_stats: {
-                total_missions: careerStats.total_missions,
-                total_flight_time_minutes: careerStats.total_flight_time_minutes,
-                total_distance_nm: careerStats.total_distance_nm,
-                average_grade: careerStats.average_grade,
-              },
-            });
-            authState.isLoggedIn.set(true);
-            this.socialController.setPlayerId(player.id);
-
-            // V3.0: Initialize position state from fresh player data
-            PositionService.loadFromDb();
-
-            // V4.1 FIX: Center map on player's starting airport after first launch
-            console.log(`[ACO] Centering map on new pilot's airport: ${player.current_airport || player.preferred_airport}`);
+        // Center map on chosen airport
+        const user = authState.currentUser.get();
+        if (user) {
+          const chosenIcao = user.current_airport || user.preferred_airport;
+          if (chosenIcao) {
             void this.mapController.centerMapOnPlayerAirport();
-
-            // V4.1 BRUTE FORCE: Directly force marker + view on chosen airport
-            const chosenIcao = player.current_airport || player.preferred_airport || startingAirport;
             const airports = DatabaseManager.getAirportsCache();
             const airport = airports.find(a => a.ident === chosenIcao);
             if (airport) {
               this.mapController.forcePosition(airport.latitude, airport.longitude, 12);
-              console.log(`[ACO] BRUTE FORCE: marker+view forced to ${chosenIcao} (${airport.latitude}, ${airport.longitude})`);
             }
           }
-        } catch (e) {
-          console.warn("[ACO] Could not load player info:", e);
         }
 
         // Refresh hangar list with the new aircraft
-        console.log("[ACO] Refreshing hangar after first launch...");
         void this.hangarController.fetchHangarAircraftList();
-
-        // V4.1 FIX: Final verification log - the balance MUST be 100,000 CR
-        const finalBalance = marketState.walletPersonal.get();
-        const finalUserMoney = authState.currentUser.get()?.money;
-        console.log(`[ACO] ═══════════════════════════════════════════════════`);
-        console.log(`[ACO] FIRST LAUNCH COMPLETE - Balance Verification`);
-        console.log(`[ACO] marketState.walletPersonal: ${finalBalance}`);
-        console.log(`[ACO] authState.currentUser.money: ${finalUserMoney}`);
-        console.log(`[ACO] Expected: 100,000 CR`);
-        if (finalBalance !== 100000 || finalUserMoney !== 100000) {
-          console.error(`[ACO] CRITICAL: Balance mismatch! Expected 100,000 but got ${finalBalance}/${finalUserMoney}`);
-        } else {
-          console.log(`[ACO] ✓ Balance is correct: 100,000 CR`);
-        }
-        console.log(`[ACO] ═══════════════════════════════════════════════════`);
       })
       .catch((error) => {
         console.error("[ACO] Failed to complete first launch:", error);
@@ -1115,6 +1102,7 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
       getWaypointsPassed: () => missionState.waypointsPassed.get(),
       getClosestAirport: () => positionState.simVarAirport.get(),
       getTotalPayload: () => this.missionController.getTotalPayload(),
+      getAircraftCargoCapacity: () => cargoState.aircraftCargoCapacity.get(),
       // V2.0: Full state update from manager
       onTrackingStateUpdate: (state) => {
         if (state.distanceFlown !== undefined) trackingState.trackingDistanceFlown.set(state.distanceFlown);
@@ -1141,6 +1129,34 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
         if (state.flightPhaseId !== undefined) checkpointState.flightPhaseId.set(state.flightPhaseId as FlightPhaseId);
         if (state.flightPhaseText !== undefined) checkpointState.flightPhaseText.set(state.flightPhaseText);
         if (state.flightPhaseColor !== undefined) checkpointState.flightPhaseColor.set(state.flightPhaseColor);
+        // V2: Grade estimation + ATC suivi
+        if (state.gradeEstimated !== undefined) trackingState.trackingGradeEstimated.set(state.gradeEstimated);
+        if (state.scoreEstimated !== undefined) trackingState.trackingScoreEstimated.set(state.scoreEstimated);
+        if (state.scoreGforce !== undefined) trackingState.trackingScoreGforce.set(state.scoreGforce);
+        if (state.gforceAlert !== undefined) trackingState.trackingGforceAlert.set(state.gforceAlert);
+        if (state.cargoFillPercent !== undefined) trackingState.trackingCargoFillPercent.set(state.cargoFillPercent);
+        if (state.atcAssignedAlt !== undefined) trackingState.trackingAtcAssignedAlt.set(state.atcAssignedAlt);
+        if (state.atcAltDeviation !== undefined) trackingState.trackingAtcAltDeviation.set(state.atcAltDeviation);
+        if (state.atcCruiseSpd !== undefined) trackingState.trackingAtcCruiseSpd.set(state.atcCruiseSpd);
+        if (state.atcSpdDeviation !== undefined) trackingState.trackingAtcSpdDeviation.set(state.atcSpdDeviation);
+        // V3: Lights
+        if (state.lightNav !== undefined) trackingState.trackingLightNav.set(state.lightNav);
+        if (state.lightStrobe !== undefined) trackingState.trackingLightStrobe.set(state.lightStrobe);
+        if (state.lightBeacon !== undefined) trackingState.trackingLightBeacon.set(state.lightBeacon);
+        if (state.lightLanding !== undefined) trackingState.trackingLightLanding.set(state.lightLanding);
+        if (state.lightTaxi !== undefined) trackingState.trackingLightTaxi.set(state.lightTaxi);
+        if (state.lightsMissing !== undefined) trackingState.trackingLightsMissing.set(state.lightsMissing);
+        if (state.lightsUnnecessary !== undefined) trackingState.trackingLightsUnnecessary.set(state.lightsUnnecessary);
+        if (state.lightsStatusColor !== undefined) trackingState.trackingLightsStatusColor.set(state.lightsStatusColor);
+        if (state.lightsAlert !== undefined) trackingState.trackingLightsAlert.set(state.lightsAlert);
+        // V5: Suivi vol
+        if (state.suiviAtcMode !== undefined) trackingState.trackingSuiviAtcMode.set(state.suiviAtcMode);
+        if (state.suiviCrossTrackNm !== undefined) trackingState.trackingSuiviCrossTrackNm.set(state.suiviCrossTrackNm);
+        if (state.suiviRouteStatus !== undefined) trackingState.trackingSuiviRouteStatus.set(state.suiviRouteStatus);
+        if (state.suiviInCruise !== undefined) trackingState.trackingSuiviInCruise.set(state.suiviInCruise);
+        if (state.suiviAlert !== undefined) trackingState.trackingSuiviAlert.set(state.suiviAlert);
+        // V6: Weather
+        if (state.weatherScore !== undefined) trackingState.trackingWeatherScore.set(state.weatherScore);
         // Update max G-force
         const maxG = trackingManager.getMaxGForce();
         simVarState.gForce.set(maxG);
@@ -1169,7 +1185,6 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
       },
       onTouchdown: (fpm) => {
         this.missionController.landingFpm = fpm;
-        console.log("[ACO] Touchdown callback - FPM:", fpm);
       },
       onLandingRatingDetected: (fpm, rating) => {
         simVarState.lastLandingRate.set(fpm);
@@ -1192,6 +1207,15 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
         missionCreationState.fpTotalDistance.set(data.totalDistanceNm);
         missionCreationState.fpPrevWpId.set(data.prevWpId);
         missionCreationState.fpNextWpId.set(data.nextWpId);
+
+        // VFR detection: no GPS flight plan → VFR mode
+        if (data.wpCount === 0 && !data.hasActivePlan) {
+          missionCreationState.fpFlightMode.set('VFR');
+          missionCreationState.fpSource.set('vfr');
+        } else {
+          missionCreationState.fpFlightMode.set('IFR');
+          missionCreationState.fpSource.set('gps');
+        }
 
         // Use origin from missionOriginIcao or detected origin
         const currentOrigin = missionState.missionOriginIcao.get();
@@ -1311,7 +1335,6 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
         if (units.fuel) settingsState.unitFuel.set(units.fuel);
         if (units.speed) settingsState.unitSpeed.set(units.speed);
         if (units.temperature) settingsState.unitTemperature.set(units.temperature);
-        console.log("[ACO] Unit preferences loaded:", units);
       }
     } catch (error) {
       console.error("[ACO] Failed to load unit preferences:", error);
@@ -1329,7 +1352,6 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
   private setLanguage(lang: Language): void {
     settingsState.currentLanguage.set(lang);
     NativePersistence.set("aco_language", lang);
-    console.log("[ACO] Language set to:", lang);
   }
 
   // V1.5: Load language from NativePersistence
@@ -1338,7 +1360,6 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
     const validLanguages: Language[] = ["en", "fr", "de", "es"];
     if (savedLang && validLanguages.includes(savedLang)) {
       settingsState.currentLanguage.set(savedLang);
-      console.log("[ACO] Language loaded:", savedLang);
     }
   }
 
@@ -1373,7 +1394,6 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
     // V1.4: Auto-sync aircraft fuel when app resumes (anti-cheat)
     // This ensures fuel is enforced when returning from main menu
     if (isGameReady()) {
-      console.log("[ACO] App resumed, syncing aircraft state...");
       void this.hangarController.autoSyncCurrentAircraft();
     }
 
@@ -1411,47 +1431,33 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
   private readSimVars(): void {
     try {
       if (typeof SimVar !== "undefined") {
-        // Position & Navigation
-        simVarState.latitude.set(SimVar.GetSimVarValue("PLANE LATITUDE", "degrees") as number || 0);
-        simVarState.longitude.set(SimVar.GetSimVarValue("PLANE LONGITUDE", "degrees") as number || 0);
-        simVarState.altitude.set(SimVar.GetSimVarValue("PLANE ALTITUDE", "feet") as number || 0);
-        simVarState.heading.set(SimVar.GetSimVarValue("PLANE HEADING DEGREES TRUE", "degrees") as number || 0);
+        // Centralized SimVar read (CriticalSnapshot)
+        const snap = readCriticalSimVars();
 
-        // Speeds
-        simVarState.groundSpeed.set(SimVar.GetSimVarValue("GROUND VELOCITY", "knots") as number || 0);
-        simVarState.airspeed.set(SimVar.GetSimVarValue("AIRSPEED INDICATED", "knots") as number || 0);
-        const vs = SimVar.GetSimVarValue("VERTICAL SPEED", "feet per minute") as number || 0;
-        simVarState.verticalSpeed.set(vs);
-
-        // Other data
-        simVarState.gForce.set(SimVar.GetSimVarValue("G FORCE", "GForce") as number || 1);
-        simVarState.fuelQuantity.set(SimVar.GetSimVarValue("FUEL TOTAL QUANTITY", "gallons") as number || 0);
-        simVarState.touchdownVelocity.set(SimVar.GetSimVarValue("PLANE TOUCHDOWN NORMAL VELOCITY", "feet per second") as number || 0);
-
-        // V1.2: Current aircraft registration (for anti-cheat aircraft locking)
-        const atcId = SimVar.GetSimVarValue("ATC ID", "string") as string;
-        simVarState.currentSimAircraftReg.set(atcId?.toUpperCase() || "");
-
-        // Closest airport (might not be available)
-        let airport = "----";
-        try {
-          airport = SimVar.GetSimVarValue("GPS CLOSEST AIRPORT ID", "string") as string || "----";
-          simVarState.closestAirport.set(airport);
-        } catch {
-          simVarState.closestAirport.set("----");
-        }
+        // Map to SimVarState Subjects
+        simVarState.latitude.set(snap.lat);
+        simVarState.longitude.set(snap.lon);
+        simVarState.altitude.set(snap.altitude);
+        simVarState.heading.set(snap.heading);
+        simVarState.groundSpeed.set(snap.groundSpeed);
+        simVarState.airspeed.set(snap.airspeed);
+        simVarState.verticalSpeed.set(snap.verticalSpeed);
+        simVarState.gForce.set(snap.gForce);
+        simVarState.fuelQuantity.set(snap.fuelQuantity);
+        simVarState.touchdownVelocity.set(snap.touchdownVelocity);
+        simVarState.currentSimAircraftReg.set(snap.atcId);
+        simVarState.closestAirport.set(snap.closestAirport);
+        simVarState.onGround.set(snap.onGround);
 
         // Position tracking (strict BDD-based)
-        PositionService.updateSimPosition(simVarState.latitude.get(), simVarState.longitude.get());
-        PositionService.updateSimVar(airport);
+        PositionService.updateSimPosition(snap.lat, snap.lon);
+        PositionService.updateSimVar(snap.closestAirport);
 
         // Landing detection (delegated to TrackingManager for UI feedback)
-        const currentOnGround = SimVar.GetSimVarValue("SIM ON GROUND", "bool") as boolean;
-        trackingManager.processUILandingDetection(vs, currentOnGround);
-        simVarState.onGround.set(currentOnGround);
+        trackingManager.processUILandingDetection(snap.verticalSpeed, snap.onGround);
 
         // FlightTracker tick (delegated to FreeFlightController)
-        this.freeFlightController.tick();
+        this.freeFlightController.tick(snap);
 
         // Update map position if map is initialized
         if (this.mapController.isMapInitialized()) {
@@ -1552,65 +1558,6 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
   /**
    * Test MSFS APIs availability in Coherent GT (simplified)
    */
-  /**
-   * TEMPORARY TEST — Wear & Tear SimVars: Settable or Read-Only?
-   * Delete after test is complete.
-   */
-  private testWearAndTearSettable(): void {
-    console.log("=== TEST WEAR & TEAR SETTABLE ===");
-
-    const tests = [
-      { id: 35, name: "LANDING_GEAR", index: 1 },
-      { id: 37, name: "TIRE", index: 1 },
-      { id: 39, name: "PISTON_ENGINE", index: 1 },
-    ];
-
-    for (const test of tests) {
-      const before = SimVar.GetSimVarValue(`${test.index}:WEAR AND TEAR LEVEL:${test.id}`, "percent over 100");
-      console.log(`[${test.name}] AVANT = ${before}`);
-
-      try {
-        SimVar.SetSimVarValue(`${test.index}:WEAR AND TEAR LEVEL:${test.id}`, "percent over 100", 0.5);
-        console.log(`[${test.name}] SET 0.5 → pas d'erreur`);
-      } catch (e) {
-        console.log(`[${test.name}] SET 0.5 → ERREUR: ${e}`);
-      }
-    }
-
-    setTimeout(() => {
-      console.log("--- RELECTURE APRÈS 1s ---");
-      for (const test of tests) {
-        const after = SimVar.GetSimVarValue(`${test.index}:WEAR AND TEAR LEVEL:${test.id}`, "percent over 100");
-        console.log(`[${test.name}] APRÈS = ${after}`);
-      }
-
-      console.log("--- TEST SYNTAXE ALTERNATIVE (sans index) ---");
-      const beforeAlt = SimVar.GetSimVarValue("WEAR AND TEAR LEVEL:35", "percent over 100");
-      console.log(`[ALT LANDING_GEAR] AVANT = ${beforeAlt}`);
-
-      try {
-        SimVar.SetSimVarValue("WEAR AND TEAR LEVEL:35", "percent over 100", 0.3);
-        console.log("[ALT LANDING_GEAR] SET 0.3 → pas d'erreur");
-      } catch (e) {
-        console.log(`[ALT LANDING_GEAR] SET 0.3 → ERREUR: ${e}`);
-      }
-
-      setTimeout(() => {
-        const afterAlt = SimVar.GetSimVarValue("WEAR AND TEAR LEVEL:35", "percent over 100");
-        console.log(`[ALT LANDING_GEAR] APRÈS = ${afterAlt}`);
-
-        console.log("--- TEST GLOBAL ---");
-        const globalBefore = SimVar.GetSimVarValue("WEAR AND TEAR EXPOSED PARTS LEVEL", "percent over 100");
-        console.log(`[GLOBAL] Moyenne actuelle = ${globalBefore}`);
-
-        console.log("=== FIN DU TEST ===");
-        console.log("RÉSULTAT:");
-        console.log("- Si APRÈS ≈ 0.5 (ou 0.3) → SETTABLE ✅");
-        console.log("- Si APRÈS = même valeur que AVANT → READ-ONLY ❌");
-        console.log("- Si ERREUR au SET → READ-ONLY ❌");
-      }, 500);
-    }, 1000);
-  }
 
   private async testCommBus(): Promise<void> {
     const w = window as any;
@@ -1692,7 +1639,6 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
   }
 
   private setDestinationAirport(airport: { icao: string; name: string }): void {
-    console.log("[ACO] Destination set:", airport.icao, airport.name);
     mapState.destinationAirport.set(airport);
     mapState.selectedAirport.set(null);
     // Also set the flight plan destination input
@@ -1726,7 +1672,6 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
       this.flightHistoryEntries = flights;
       this.transactionLogEntries = transactions;
 
-      console.log(`[ACO] Unified history loaded: ${flights.length} flights, ${transactions.length} transactions`);
       this.renderMarketTransactionHistory();
       this.renderMissionHistory();
       this.renderFreeFlightHistory();
@@ -1941,7 +1886,7 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
         {/* Left Sidebar - Specs v0.9 Order */}
         <div style="width: 40px; background: #252532; display: flex; flex-direction: column; justify-content: space-between; border-right: 1px solid #374151; flex-shrink: 0;">
           {/* Phase 2: 5+1 Sidebar — Map, Missions, Business, Hangar, Pilote + Settings */}
-          <div style="display: flex; flex-direction: column; padding-top: 50px;">
+          <div style="display: flex; flex-direction: column; padding-top: 44px;">
             {renderSidebarTab({ tabId: "map", activeTab: navigationState.activeTab, onClick: () => navigationState.activeTab.set("map") })}
             {renderSidebarTab({ tabId: "missions", activeTab: navigationState.activeTab, onClick: () => navigationState.activeTab.set("missions") })}
             {renderSidebarTab({ tabId: "business", activeTab: navigationState.activeTab, onClick: () => navigationState.activeTab.set("business") })}
@@ -1957,20 +1902,18 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
         </div>
 
         {/* Content Area — padding-top matches sidebar to clear native EFB header */}
-        <div style="flex: 1; overflow: hidden; position: relative; display: flex; flex-direction: column; padding-top: 50px;">
+        <div style="flex: 1; overflow: hidden; position: relative; display: flex; flex-direction: column; padding-top: 44px;">
           {/* Phase 1: Rich Header Bar — player info always visible */}
-          <div style="display: flex; align-items: center; justify-content: space-between; padding: 0 12px; height: 36px; background: #1a1f2e; border-bottom: 1px solid #374151; flex-shrink: 0;">
+          <div style="display: flex; align-items: center; padding: 0 10px; height: 32px; background: #1a1f2e; border-bottom: 1px solid #374151; flex-shrink: 0; gap: 0;">
 
-            {/* Left: Pilot name + level */}
-            <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
-              {/* Pilot icon */}
-              <svg style="width: 14px; height: 14px; flex-shrink: 0;" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2">
+            {/* GROUP 1: Identite pilote */}
+            <div style="display: flex; align-items: center; gap: 6px; padding-right: 10px; min-width: 0;">
+              <svg style="width: 13px; height: 13px; flex-shrink: 0;" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2">
                 <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/>
               </svg>
-              <span style={authState.currentUser.map(u => u ? `font-size: 11px; font-weight: 600; color: #e5e7eb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 90px;` : "display: none;")}>
+              <span style={authState.currentUser.map(u => u ? "font-size: 11px; font-weight: 600; color: #e5e7eb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80px;" : "display: none;")}>
                 {authState.currentUser.map(u => u?.username ?? "")}
               </span>
-              {/* Level badge */}
               <span style={authState.currentUser.map(u => {
                 if (!u?.xp && u?.xp !== 0) return "display: none;";
                 const lvl = calculateLevel(u.xp ?? 0).level;
@@ -1984,96 +1927,101 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
               </span>
             </div>
 
-            {/* Center: CR perso + CR company + XP bar */}
-            <div style="display: flex; align-items: center; gap: 14px;">
-              {/* Personal CR */}
+            {/* Separateur */}
+            <div style="width: 1px; height: 20px; background: #374151; flex-shrink: 0;"></div>
+
+            {/* GROUP 2: Finances */}
+            <div style="display: flex; align-items: center; gap: 12px; padding: 0 10px;">
               <div style="display: flex; align-items: center; gap: 4px;">
-                <svg style="width: 12px; height: 12px;" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2">
+                <svg style="width: 11px; height: 11px; flex-shrink: 0;" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5">
                   <path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
                 </svg>
                 <span style="font-size: 10px; color: #22c55e; font-weight: 600; white-space: nowrap;">
-                  {marketState.walletPersonal.map(v => v.toLocaleString())}
+                  {marketState.walletPersonal.map(v => v.toLocaleString() + " CR")}
                 </span>
               </div>
-
-              {/* Company CR — hidden if no company */}
               <div style={companyState.companyId.map(id => id ? "display: flex; align-items: center; gap: 4px;" : "display: none;")}>
-                <svg style="width: 12px; height: 12px;" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2">
+                <svg style="width: 11px; height: 11px; flex-shrink: 0;" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2.5">
                   <path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/>
                 </svg>
                 <span style="font-size: 10px; color: #3b82f6; font-weight: 600; white-space: nowrap;">
                   {companyState.companyBalance.map(v => v.toLocaleString())}
                 </span>
               </div>
-
-              {/* XP progress bar */}
-              <div style="display: flex; align-items: center; gap: 6px;">
-                <div style="width: 60px; height: 6px; background: #374151; border-radius: 3px; overflow: hidden;">
-                  <div style={authState.currentUser.map(u => {
-                    const info = calculateLevel(u?.xp ?? 0);
-                    return `width: ${info.progress}%; height: 100%; background: #a855f7; border-radius: 3px; transition: width 0.3s;`;
-                  })}></div>
-                </div>
-                <span style="font-size: 9px; color: #a855f7; white-space: nowrap;">
-                  {authState.currentUser.map(u => {
-                    const info = calculateLevel(u?.xp ?? 0);
-                    return `${info.currentXp}/${info.nextLevelXp}`;
-                  })}
-                </span>
-              </div>
             </div>
 
-            {/* Right: Flight status + connection badge */}
-            <div style="display: flex; align-items: center; gap: 8px;">
-              {/* Flight status */}
+            {/* Separateur */}
+            <div style="width: 1px; height: 20px; background: #374151; flex-shrink: 0;"></div>
+
+            {/* GROUP 3: XP Progression */}
+            <div style="display: flex; align-items: center; gap: 6px; padding: 0 10px; flex: 1; justify-content: center;">
+              <div style="width: 80px; height: 5px; background: #374151; border-radius: 3px; overflow: hidden; flex-shrink: 0;">
+                <div style={authState.currentUser.map(u => {
+                  const info = calculateLevel(u?.xp ?? 0);
+                  return `width: ${info.progress}%; height: 100%; background: #a855f7; border-radius: 3px; transition: width 0.3s;`;
+                })}></div>
+              </div>
+              <span style="font-size: 9px; color: #9ca3af; white-space: nowrap;">
+                {authState.currentUser.map(u => {
+                  const info = calculateLevel(u?.xp ?? 0);
+                  return `${info.currentXp} / ${info.nextLevelXp} XP`;
+                })}
+              </span>
+            </div>
+
+            {/* Separateur */}
+            <div style="width: 1px; height: 20px; background: #374151; flex-shrink: 0;"></div>
+
+            {/* GROUP 4: Statut vol + connexion */}
+            <div style="display: flex; align-items: center; gap: 6px; padding-left: 10px;">
               <div style={MappedSubject.create(([onGround, tracking]) => {
                 const inFlight = !onGround || tracking;
                 const color = inFlight ? "#f97316" : "#22c55e";
-                return `display: flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 10px; background: ${color}18; border: 1px solid ${color}44;`;
+                return `display: flex; align-items: center; gap: 3px; padding: 2px 6px; border-radius: 10px; background: ${color}15; border: 1px solid ${color}40;`;
               }, simVarState.onGround, freeFlightState.isTracking)}>
                 <div style={MappedSubject.create(([onGround, tracking]) => {
                   const inFlight = !onGround || tracking;
                   const color = inFlight ? "#f97316" : "#22c55e";
-                  return `width: 6px; height: 6px; border-radius: 50%; background: ${color};`;
+                  return `width: 5px; height: 5px; border-radius: 50%; background: ${color};`;
                 }, simVarState.onGround, freeFlightState.isTracking)}></div>
                 <span style={MappedSubject.create(([onGround, tracking]) => {
                   const inFlight = !onGround || tracking;
                   const color = inFlight ? "#f97316" : "#22c55e";
-                  return `font-size: 9px; color: ${color}; font-weight: 600; text-transform: uppercase;`;
+                  return `font-size: 8px; color: ${color}; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;`;
                 }, simVarState.onGround, freeFlightState.isTracking)}>
                   {MappedSubject.create(([onGround, tracking]) => {
                     const inFlight = !onGround || tracking;
-                    return inFlight ? "En vol" : "Au sol";
+                    return inFlight ? "EN VOL" : "AU SOL";
                   }, simVarState.onGround, freeFlightState.isTracking)}
                 </span>
               </div>
 
-              {/* Connection badge (compact) */}
               <div style={MappedSubject.create(([status, offlineSimulated, gameMode]) => {
                 const isSolo = gameMode === "solo";
                 const isOnline = !isSolo && status === "connected" && !offlineSimulated;
                 const isConnecting = !isSolo && status === "connecting" && !offlineSimulated;
-                const color = isOnline ? "#22c55e" : isConnecting ? "#fbbf24" : "#ef4444";
-                return `display: flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 10px; background: ${color}18; border: 1px solid ${color}44;`;
+                const color = isOnline ? "#22c55e" : isConnecting ? "#fbbf24" : "#6b7280";
+                return `display: flex; align-items: center; gap: 3px; padding: 2px 6px; border-radius: 10px; background: ${color}15; border: 1px solid ${color}40;`;
               }, authState.seedConnectionStatus, settingsState.isOfflineSimulated, gameModeState.currentMode)}>
                 <div style={MappedSubject.create(([status, offlineSimulated, gameMode]) => {
                   const isSolo = gameMode === "solo";
                   const isOnline = !isSolo && status === "connected" && !offlineSimulated;
                   const isConnecting = !isSolo && status === "connecting" && !offlineSimulated;
-                  const color = isOnline ? "#22c55e" : isConnecting ? "#fbbf24" : "#ef4444";
+                  const color = isOnline ? "#22c55e" : isConnecting ? "#fbbf24" : "#6b7280";
                   return `width: 5px; height: 5px; border-radius: 50%; background: ${color}; flex-shrink: 0;`;
                 }, authState.seedConnectionStatus, settingsState.isOfflineSimulated, gameModeState.currentMode)}></div>
                 <span style={MappedSubject.create(([status, offlineSimulated, gameMode]) => {
                   const isSolo = gameMode === "solo";
                   const isOnline = !isSolo && status === "connected" && !offlineSimulated;
                   const isConnecting = !isSolo && status === "connecting" && !offlineSimulated;
-                  const color = isOnline ? "#22c55e" : isConnecting ? "#fbbf24" : "#ef4444";
-                  return `font-size: 8px; color: ${color}; font-weight: 600; text-transform: uppercase;`;
+                  const color = isOnline ? "#22c55e" : isConnecting ? "#fbbf24" : "#6b7280";
+                  return `font-size: 8px; color: ${color}; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;`;
                 }, authState.seedConnectionStatus, settingsState.isOfflineSimulated, gameModeState.currentMode)}>
                   {MappedSubject.create(([status, offlineSimulated, gameMode]) => {
                     const isSolo = gameMode === "solo";
-                    const isOnline = !isSolo && status === "connected" && !offlineSimulated;
-                    const isConnecting = !isSolo && status === "connecting" && !offlineSimulated;
+                    if (isSolo) return "SOLO";
+                    const isOnline = status === "connected" && !offlineSimulated;
+                    const isConnecting = status === "connecting" && !offlineSimulated;
                     return isOnline ? "ONLINE" : isConnecting ? "..." : "OFFLINE";
                   }, authState.seedConnectionStatus, settingsState.isOfflineSimulated, gameModeState.currentMode)}
                 </span>
@@ -2186,6 +2134,34 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
             waypointsTotal: missionState.waypointsTotal,
             trackingRealTime: trackingState.trackingRealTime,
             trackingSimTime: trackingState.trackingSimTime,
+            // V2: Grade estimation + ATC suivi
+            trackingGradeEstimated: trackingState.trackingGradeEstimated,
+            trackingScoreEstimated: trackingState.trackingScoreEstimated,
+            trackingScoreGforce: trackingState.trackingScoreGforce,
+            trackingGforceAlert: trackingState.trackingGforceAlert,
+            trackingCargoFillPercent: trackingState.trackingCargoFillPercent,
+            trackingAtcAssignedAlt: trackingState.trackingAtcAssignedAlt,
+            trackingAtcAltDeviation: trackingState.trackingAtcAltDeviation,
+            trackingAtcCruiseSpd: trackingState.trackingAtcCruiseSpd,
+            trackingAtcSpdDeviation: trackingState.trackingAtcSpdDeviation,
+            trackingSimRate: trackingState.trackingSimRate,
+            // V3: Lights
+            trackingLightNav: trackingState.trackingLightNav,
+            trackingLightStrobe: trackingState.trackingLightStrobe,
+            trackingLightBeacon: trackingState.trackingLightBeacon,
+            trackingLightLanding: trackingState.trackingLightLanding,
+            trackingLightTaxi: trackingState.trackingLightTaxi,
+            trackingLightsMissing: trackingState.trackingLightsMissing,
+            trackingLightsUnnecessary: trackingState.trackingLightsUnnecessary,
+            trackingLightsStatusColor: trackingState.trackingLightsStatusColor,
+            trackingLightsAlert: trackingState.trackingLightsAlert,
+            trackingSuiviAtcMode: trackingState.trackingSuiviAtcMode,
+            trackingSuiviCrossTrackNm: trackingState.trackingSuiviCrossTrackNm,
+            trackingSuiviRouteStatus: trackingState.trackingSuiviRouteStatus,
+            trackingSuiviInCruise: trackingState.trackingSuiviInCruise,
+            trackingSuiviAlert: trackingState.trackingSuiviAlert,
+            // V6: Weather
+            trackingWeatherScore: trackingState.trackingWeatherScore,
             creationStep1Valid: missionCreationState.creationStep1Valid,
             missionOriginIcao: missionState.missionOriginIcao,
             currentSimAircraftReg: simVarState.currentSimAircraftReg,
@@ -2215,6 +2191,7 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
             fpOriginIcao: missionCreationState.fpOriginIcao,
             fpDestinationIcao: missionCreationState.fpDestinationIcao,
             fpCanValidate: missionCreationState.fpCanValidate,
+            fpFlightMode: missionCreationState.fpFlightMode,
             fpDestinationInputRef: this.fpDestinationInputRef,
             missionStatus: missionState.missionStatus,
             missionError: missionState.missionError,
@@ -2425,7 +2402,6 @@ class AeroCorpOnlineView extends AppView<RequiredProps<AppViewProps, "bus">> {
             onTestCommBus: () => { void this.testCommBus(); },
             onSimulateOffline: () => { void this.toggleSimulateOffline(); },
             onChangeGameMode: () => showModeSelector(),
-            onTestWearAndTear: () => { this.testWearAndTearSettable(); },
           })}
 
           {/* Map Tab Content - V1.8: Extracted to MapView.tsx */}

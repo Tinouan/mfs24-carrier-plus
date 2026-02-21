@@ -188,6 +188,7 @@ export interface ActiveMission {
   status: string;
   cargo_weight_kg?: number;
   distance_nm?: number;
+  flight_mode?: 'IFR' | 'VFR';
 }
 
 // Full API response for active mission (includes checkpoints)
@@ -205,17 +206,25 @@ export interface ActiveMissionResponse {
   created_at?: string;
 }
 
+// V2: Modifier tag for tracking and recap display
+export interface ModifierTag {
+  label: string;   // Display name: "Nuit", "Cargo 78%", etc.
+  value: string;    // Display value: "+50%", "x1.3", etc.
+  active: boolean;  // Whether the modifier is currently active
+}
+
 export interface MissionRecapData {
   origin_icao: string;
   destination_icao: string;
   final_icao: string;
   distance_nm: number;
-  score_landing: number;
-  score_gforce: number;
-  score_destination: number;
-  score_time: number;
-  score_fuel: number;
-  score_total: number;
+  distance_flown_nm?: number;
+  // V2 Scoring: /1000 scale, 4 categories
+  score_landing: number;      // 0-450
+  score_gforce: number;       // 0-200
+  score_destination: number;  // 0-250
+  score_distance: number;     // 0-100
+  score_total: number;        // 0-1000
   grade: string;
   xp_earned: number;
   money_earned?: number;
@@ -223,17 +232,28 @@ export interface MissionRecapData {
   cheat_penalty_percent: number;
   landing_fpm: number;
   max_gforce: number;
-  // V1.0: Modifiers and XP breakdown
-  modifiers_validated?: string[];
-  modifiers_failed?: string[];
-  xp_breakdown?: XpBreakdown;
-  // V2.3: Enhanced recap data
+  // V2: Modifiers and XP breakdown
+  modifiers_active?: ModifierTag[];
+  xp_breakdown?: XpBreakdownV2;
+  // V2: Enhanced recap data
   flight_time_minutes?: number;
   fuel_remaining_percent?: number;
   cargo_weight_kg?: number;
+  cargo_fill_percent?: number;
   atc_compliance?: number;
   atc_violations?: number;
   landing_quality?: string;
+  aircraft_type?: string;
+  // V4: Anti-cheat flags
+  slew_detected?: boolean;
+  crash_detected?: boolean;
+  unlimited_fuel_detected?: boolean;
+  // V5: Suivi vol
+  flightpath_compliance?: number;
+  // V6: Weather
+  weather_difficulty?: number;
+  // V7: VFR support
+  flight_mode?: 'IFR' | 'VFR';
 }
 
 // API response for mission completion (nested scores object)
@@ -242,17 +262,38 @@ export interface MissionCompleteResponse {
     landing: number;
     gforce: number;
     destination: number;
-    time: number;
-    fuel: number;
+    distance: number;
   };
   score_total: number;
   grade: string;
   money_earned?: number;
-  xp_breakdown?: XpBreakdown | null;
-  modifiers_validated?: string[];
-  modifiers_failed?: string[];
+  xp_breakdown?: XpBreakdownV2 | null;
+  modifiers_active?: ModifierTag[];
 }
 
+// V2 XP breakdown with full formula details
+export interface XpBreakdownV2 {
+  distance_nm: number;
+  base_xp: number;             // distance_nm * 4
+  cargo_fill_percent: number;
+  cargo_multiplier: number;    // 1.0 to 1.5
+  night_bonus: number;         // 0 or 0.50
+  fuel_bonus: number;          // 0 to 0.20
+  lights_compliance: number;   // 0.0 to 1.0 (ratio)
+  lights_bonus: number;        // 0, 0.05, 0.10, or 0.15
+  flightpath_compliance: number; // 0.0 to 1.0 (ratio)
+  flightpath_bonus: number;      // 0, 0.05, 0.10, 0.15, or 0.20
+  weather_difficulty: number;    // 0.0 to 1.0 (normalized avg score / 6)
+  weather_bonus: number;         // 0, 0.02, 0.05, 0.10, or 0.15
+  total_additive: number;      // 1 + night + fuel + lights + flightpath + weather
+  simrate_ratio: number;       // 0-100+ (was real_time_ratio)
+  simrate_bonus: number;       // 0 to 1.00 (was real_time_bonus)
+  grade: string;
+  grade_multiplier: number;    // 0.2 to 2.0
+  total_xp: number;
+}
+
+// Legacy XP breakdown (kept for backward compatibility with history)
 export interface XpBreakdown {
   base_xp: number;
   cargo_multiplier: number;

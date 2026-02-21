@@ -11,3 +11,4 @@ export * from "./PlayerHelpers";
 export * from "./CompanyPermissions";
 export * from "./CompanyRenderHelpers";
 export * from "./ContractRenderHelpers";
+export { evaluateLightsStatus, type LightsStatus } from "./LightsHelper";

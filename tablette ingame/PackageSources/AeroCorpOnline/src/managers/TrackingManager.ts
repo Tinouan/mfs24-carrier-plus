@@ -15,6 +15,9 @@ import { FLIGHT_TRACKING_INTERVAL_MS } from "../constants";
 import { MissionRouter } from "../services";
 import { isGameReady } from "../state/GameModeState";
 import type { ActiveMission, MissionCheckpoint, MissionAircraftInfo, LandingRating } from "../types";
+import { readFullSnapshot, FlightPhase, haversineDistanceNm as sharedHaversine, crossTrackDistanceM } from "../services/SimVarReader";
+import { evaluateLightsStatus } from "../helpers/LightsHelper";
+import type { TrackingSnapshot, FlightSummary } from "../services/SimVarReader";
 
 // Global MSFS declarations in src/types/msfs-globals.d.ts
 
@@ -61,6 +64,40 @@ export interface TrackingState {
   flightPhaseId: string;
   flightPhaseText: string;
   flightPhaseColor: string;
+
+  // V2: Grade estimation (real-time)
+  gradeEstimated: string;
+  scoreEstimated: number;
+  scoreGforce: number;
+  gforceAlert: string;       // "ok" | "warning" | "critical"
+  cargoFillPercent: number;
+
+  // V2: ATC Suivi
+  atcAssignedAlt: number;
+  atcAltDeviation: boolean;
+  atcCruiseSpd: number;
+  atcSpdDeviation: boolean;
+
+  // V5: Suivi vol
+  suiviAtcMode: string;          // 'native' | 'gps_fallback'
+  suiviCrossTrackNm: number;
+  suiviRouteStatus: string;      // 'ok' | 'warning' | 'error'
+  suiviInCruise: boolean;
+  suiviAlert: string;
+
+  // V6: Weather
+  weatherScore: number; // 0-100
+
+  // V3: Lights tracking
+  lightNav: number;       // 0=grey, 1=green, 2=red
+  lightStrobe: number;
+  lightBeacon: number;
+  lightLanding: number;
+  lightTaxi: number;
+  lightsMissing: number;       // count of required lights that are OFF
+  lightsUnnecessary: number;   // count of ON-but-not-required lights
+  lightsStatusColor: string;   // "green" | "red" | "orange"
+  lightsAlert: string;         // contextual alert message ("" if OK)
 }
 
 // BackgroundTrackingState removed — background tracking now handled by FlightTracker
@@ -77,6 +114,7 @@ export interface TrackingCallbacks {
   getWaypointsPassed: () => number;
   getClosestAirport: () => string;
   getTotalPayload: () => number;
+  getAircraftCargoCapacity: () => number;
 
   // State updates
   onTrackingStateUpdate: (state: Partial<TrackingState>) => void;
@@ -124,9 +162,10 @@ class TrackingManager {
   private destLon = 0;
   private fuelStartPercent = 0;
 
-  // V1.0 real-time tracking
-  private realTimeStartMs = 0;
-  private simTimeStartSec = 0;
+  // V1.0 real-time tracking (airborne only)
+  private airborneRealTimeMs = 0;
+  private airborneSimTimeSec = 0;
+  private lastTickTimeMs = 0;
   private lastSimTimeSec = 0;
 
   // V1.0 checkpoint tracking
@@ -138,6 +177,46 @@ class TrackingManager {
   private atcClearedLanding = false;
   private tookOffWithoutClearance = false;
   private landedWithoutClearance = false;
+
+  // V3: Lights compliance tracking
+  private lightsComplianceSum = 0;
+  private lightsComplianceTicks = 0;
+
+  // V5: Suivi vol — ATC mode detection
+  private atcMode: 'native' | 'gps_fallback' = 'gps_fallback';
+  private atcNativeDetected = false;
+  private atcClearedTakeoffEver = false;
+  private atcClearedLandingEver = false;
+  private atcDiffNonZeroConsecutiveTicks = 0;
+
+  // V5: Suivi vol — compliance ticks
+  private altComplianceTicks = 0;
+  private altComplianceOk = 0;
+  private spdComplianceTicks = 0;
+  private spdComplianceOk = 0;
+  private routeComplianceTicks = 0;
+  private routeComplianceOk = 0;
+
+  // V5: Suivi vol — recommended values (GPS fallback)
+  private recommendedAlt = 0;
+
+  // V6: Weather difficulty
+  private weatherScoreSamples: number[] = [];
+
+  // V7: Flight mode (IFR/VFR)
+  private flightMode: 'IFR' | 'VFR' = 'IFR';
+
+  // V4: FlightSummary accumulators
+  private tickCount = 0;
+  private simRateSamples: number[] = [];
+  private nightTickCount = 0;
+  private totalTickCount = 0;
+  private slewDetected = false;
+  private crashDetected = false;
+  private unlimitedFuelDetected = false;
+  private atcAltDeviations: number[] = [];
+  private atcDistDeviations: number[] = [];
+  private touchdownVS = 0; // from PLANE TOUCHDOWN NORMAL VELOCITY * 60
 
   // V2.0 additional tracking state
   private wasOnGround = true;
@@ -295,17 +374,17 @@ class TrackingManager {
   }
 
   /**
-   * Get real-time start milliseconds
+   * Get accumulated airborne real-time in milliseconds
    */
-  getRealTimeStartMs(): number {
-    return this.realTimeStartMs;
+  getAirborneRealTimeMs(): number {
+    return this.airborneRealTimeMs;
   }
 
   /**
-   * Get sim time start seconds
+   * Get accumulated airborne sim-time in seconds
    */
-  getSimTimeStartSec(): number {
-    return this.simTimeStartSec;
+  getAirborneSimTimeSec(): number {
+    return this.airborneSimTimeSec;
   }
 
   /**
@@ -313,6 +392,119 @@ class TrackingManager {
    */
   getAutopilotEverUsed(): boolean {
     return this.autopilotEverUsed;
+  }
+
+  /**
+   * Get lights compliance ratio (0.0 to 1.0)
+   */
+  getLightsCompliance(): number {
+    if (this.lightsComplianceTicks <= 0) return 1.0;
+    return this.lightsComplianceSum / this.lightsComplianceTicks;
+  }
+
+  /**
+   * Get recommended cruise altitude based on mission distance and heading (IFR semi-circular rule)
+   */
+  getRecommendedAltitude(distanceNm: number, headingDeg: number): number {
+    let baseAlt: number;
+    if (distanceNm < 50)        baseAlt = 3000;
+    else if (distanceNm < 100)  baseAlt = 5000;
+    else if (distanceNm < 200)  baseAlt = 8000;
+    else if (distanceNm < 400)  baseAlt = 15000;
+    else if (distanceNm < 800)  baseAlt = 25000;
+    else if (distanceNm < 1500) baseAlt = 35000;
+    else                        baseAlt = 39000;
+
+    // IFR semi-circular rule: East (0-179°) = odd thousands, West (180-359°) = even thousands
+    if (baseAlt >= 3000) {
+      const thousands = Math.round(baseAlt / 1000);
+      const isEast = headingDeg >= 0 && headingDeg < 180;
+      if (isEast) {
+        // Odd: 3, 5, 7, 9, 11...
+        if (thousands % 2 === 0) return (thousands + 1) * 1000;
+      } else {
+        // Even: 4, 6, 8, 10, 12...
+        if (thousands % 2 !== 0) return (thousands + 1) * 1000;
+      }
+    }
+    return baseAlt;
+  }
+
+  /**
+   * Get flightpath compliance (weighted: alt×0.35 + spd×0.25 + route×0.40)
+   */
+  getFlightPathCompliance(): number {
+    const alt = this.altComplianceTicks > 0 ? this.altComplianceOk / this.altComplianceTicks : 0;
+    const spd = this.spdComplianceTicks > 0 ? this.spdComplianceOk / this.spdComplianceTicks : 0;
+    const route = this.routeComplianceTicks > 0 ? this.routeComplianceOk / this.routeComplianceTicks : 0;
+    return (alt * 0.35) + (spd * 0.25) + (route * 0.40);
+  }
+
+  /**
+   * Get touchdown vertical speed (from PLANE TOUCHDOWN NORMAL VELOCITY)
+   */
+  getTouchdownVS(): number {
+    return this.touchdownVS;
+  }
+
+  /**
+   * Get accumulated flight summary for scoring
+   */
+  getFlightSummary(): FlightSummary {
+    const simRateAvg = this.simRateSamples.length > 0
+      ? this.simRateSamples.reduce((a, b) => a + b, 0) / this.simRateSamples.length
+      : 1;
+    const atcAltAvg = this.atcAltDeviations.length > 0
+      ? this.atcAltDeviations.reduce((a, b) => a + b, 0) / this.atcAltDeviations.length
+      : 0;
+    const atcDistAvg = this.atcDistDeviations.length > 0
+      ? this.atcDistDeviations.reduce((a, b) => a + b, 0) / this.atcDistDeviations.length
+      : 0;
+
+    const mission = this.callbacks?.getActiveMission();
+    const totalDist = this.callbacks?.getMissionDistanceNm() || 0;
+    const fuelSnap = readFullSnapshot(this.currentProgressPercent);
+
+    return {
+      originIcao: mission?.origin_icao || "",
+      destIcao: mission?.destination_icao || "",
+      aircraftTitle: fuelSnap.aircraftTitle,
+      plannedDistanceNm: totalDist,
+      actualDistanceNm: totalDist > 0 ? totalDist * (this.currentProgressPercent / 100) : 0,
+      flightStartTime: this.flightStartTime ? this.flightStartTime.getTime() : 0,
+      flightEndTime: Date.now(),
+      flightDurationSec: Math.floor(this.airborneRealTimeMs / 1000),
+      touchdownVS: this.touchdownVS,
+      maxGForce: this.maxGForce,
+      distanceRatio: totalDist > 0 ? (totalDist * (this.currentProgressPercent / 100)) / totalDist : 1,
+      fuelPercentStart: this.fuelStartPercent,
+      fuelPercentEnd: fuelSnap.fuelPercent,
+      cargoPercent: fuelSnap.cargoPercent,
+      isNightFlight: this.totalTickCount > 0 ? (this.nightTickCount / this.totalTickCount) > 0.5 : false,
+      simRateAverage: simRateAvg,
+      realtimeRatio: Math.min(1 / simRateAvg, 1.0) * 100,
+      lightsCompliance: this.getLightsCompliance(),
+      slewUsed: this.slewDetected,
+      crashOccurred: this.crashDetected,
+      unlimitedFuelUsed: this.unlimitedFuelDetected,
+      atcAltDeviationAvg: atcAltAvg,
+      atcDistDeviationAvg: atcDistAvg,
+      // V5: Suivi vol compliance
+      atcMode: this.atcMode,
+      altCompliance: this.altComplianceTicks > 0 ? this.altComplianceOk / this.altComplianceTicks : 0,
+      spdCompliance: this.spdComplianceTicks > 0 ? this.spdComplianceOk / this.spdComplianceTicks : 0,
+      routeCompliance: this.routeComplianceTicks > 0 ? this.routeComplianceOk / this.routeComplianceTicks : 0,
+      flightPathCompliance: this.getFlightPathCompliance(),
+      // V6: Weather difficulty
+      weatherDifficulty: this.weatherScoreSamples.length > 0
+        ? Math.min(
+            (this.weatherScoreSamples.reduce((a, b) => a + b, 0) / this.weatherScoreSamples.length) / 6,
+            1.0
+          )
+        : 0,
+      // V7: Flight mode
+      flightMode: this.flightMode,
+    };
   }
 
   /**
@@ -386,13 +578,13 @@ class TrackingManager {
     const expectedCargo = this.callbacks.getAircraftCargoWeight();
     console.log("[TrackingManager] Expected cargo:", expectedCargo, "kg");
 
-    // Initialize real-time tracking
-    this.realTimeStartMs = Date.now();
+    // Initialize airborne time tracking (accumulators, not timestamps)
+    this.airborneRealTimeMs = 0;
+    this.airborneSimTimeSec = 0;
+    this.lastTickTimeMs = Date.now();
     try {
-      this.simTimeStartSec = SimVar.GetSimVarValue("E:ABSOLUTE TIME", "seconds") as number;
-      this.lastSimTimeSec = this.simTimeStartSec;
+      this.lastSimTimeSec = SimVar.GetSimVarValue("E:ABSOLUTE TIME", "seconds") as number;
     } catch (e) {
-      this.simTimeStartSec = 0;
       this.lastSimTimeSec = 0;
     }
 
@@ -442,11 +634,13 @@ class TrackingManager {
       this.fuelStartPercent = fuelCap > 0 ? Math.round((fuelQty / fuelCap) * 100) : 100;
     } catch (e) { this.fuelStartPercent = 100; }
 
-    // Initialize time tracking
-    this.realTimeStartMs = Date.now();
+    // Initialize airborne time tracking (accumulators)
+    this.airborneRealTimeMs = 0;
+    this.airborneSimTimeSec = 0;
+    this.lastTickTimeMs = Date.now();
     try {
-      this.simTimeStartSec = SimVar.GetSimVarValue("E:ABSOLUTE TIME", "seconds") as number;
-    } catch (e) { this.simTimeStartSec = 0; }
+      this.lastSimTimeSec = SimVar.GetSimVarValue("E:ABSOLUTE TIME", "seconds") as number;
+    } catch (e) { this.lastSimTimeSec = 0; }
 
     // Store expected cargo weight
     if (this.callbacks) {
@@ -500,6 +694,48 @@ class TrackingManager {
     this.tookOffWithoutClearance = false;
     this.landedWithoutClearance = false;
 
+    // Airborne time tracking reset
+    this.airborneRealTimeMs = 0;
+    this.airborneSimTimeSec = 0;
+    this.lastTickTimeMs = 0;
+    this.lastSimTimeSec = 0;
+
+    // Lights compliance reset
+    this.lightsComplianceSum = 0;
+    this.lightsComplianceTicks = 0;
+
+    // V5: Suivi vol reset
+    this.atcMode = 'gps_fallback';
+    this.atcNativeDetected = false;
+    this.atcClearedTakeoffEver = false;
+    this.atcClearedLandingEver = false;
+    this.atcDiffNonZeroConsecutiveTicks = 0;
+    this.altComplianceTicks = 0;
+    this.altComplianceOk = 0;
+    this.spdComplianceTicks = 0;
+    this.spdComplianceOk = 0;
+    this.routeComplianceTicks = 0;
+    this.routeComplianceOk = 0;
+    this.recommendedAlt = 0;
+
+    // V6: Weather reset
+    this.weatherScoreSamples = [];
+
+    // V7: Flight mode reset
+    this.flightMode = 'IFR';
+
+    // V4: FlightSummary accumulators reset
+    this.tickCount = 0;
+    this.simRateSamples = [];
+    this.nightTickCount = 0;
+    this.totalTickCount = 0;
+    this.slewDetected = false;
+    this.crashDetected = false;
+    this.unlimitedFuelDetected = false;
+    this.atcAltDeviations = [];
+    this.atcDistDeviations = [];
+    this.touchdownVS = 0;
+
     // Notify UI to reset
     if (this.callbacks) {
       this.callbacks.onTrackingStateUpdate({
@@ -533,6 +769,14 @@ class TrackingManager {
   }
 
   /**
+   * Set flight mode (IFR/VFR) — affects cross-track calculation
+   */
+  setFlightMode(mode: 'IFR' | 'VFR'): void {
+    this.flightMode = mode;
+    console.log(`[TrackingManager] Flight mode set: ${mode}`);
+  }
+
+  /**
    * Set destination coordinates (called after fetching from API)
    */
   setDestinationCoordinates(lat: number, lon: number): void {
@@ -546,7 +790,7 @@ class TrackingManager {
   // ═══════════════════════════════════════════════════════════════════════════
 
   /**
-   * V2.0: Full flight tracking with phase detection, waypoints, ATC, cargo, mission completion
+   * V4: Full flight tracking with centralized SimVar snapshot
    */
   private trackFlightV1(): void {
     if (!this.flightTrackingActive || !this.callbacks) {
@@ -561,103 +805,119 @@ class TrackingManager {
         return;
       }
 
-      // ========== READ SIMVARS ==========
-      const lat = SimVar.GetSimVarValue("PLANE LATITUDE", "degrees") as number;
-      const lon = SimVar.GetSimVarValue("PLANE LONGITUDE", "degrees") as number;
-      const altitude = SimVar.GetSimVarValue("PLANE ALTITUDE", "feet") as number;
-      const vs = SimVar.GetSimVarValue("VERTICAL SPEED", "feet per minute") as number;
-      const onGround = SimVar.GetSimVarValue("SIM ON GROUND", "boolean") as boolean;
-      const gForce = SimVar.GetSimVarValue("G FORCE", "GForce") as number;
-      const apMaster = SimVar.GetSimVarValue("AUTOPILOT MASTER", "boolean") as boolean;
-      const simRate = SimVar.GetSimVarValue("SIMULATION RATE", "number") as number || 1;
-      const fuelCapacity = SimVar.GetSimVarValue("FUEL TOTAL CAPACITY", "gallons") as number;
-      const fuelQuantity = SimVar.GetSimVarValue("FUEL TOTAL QUANTITY", "gallons") as number;
-      const radioAlt = SimVar.GetSimVarValue("RADIO HEIGHT", "feet") as number;
-      const parkingBrake = SimVar.GetSimVarValue("BRAKE PARKING POSITION", "boolean") as boolean;
-      const engineRunning = SimVar.GetSimVarValue("ENG COMBUSTION:1", "boolean") as boolean;
+      this.tickCount++;
+
+      // ========== CENTRALIZED SIMVAR READ ==========
+      const snap = readFullSnapshot(this.currentProgressPercent);
+
+      // ========== V4: ANTI-CHEAT ACCUMULATORS ==========
+      if (snap.slewActive) this.slewDetected = true;
+      if (snap.crashFlag !== 0) this.crashDetected = true;
+      if (snap.unlimitedFuel) this.unlimitedFuelDetected = true;
+
+      // ========== V4: SIMRATE + NIGHT ACCUMULATION ==========
+      this.totalTickCount++;
+      this.simRateSamples.push(snap.simulationRate);
+      if (snap.timeOfDay >= 2) this.nightTickCount++;
+
+      // ========== V4: ATC DEVIATION ACCUMULATION (every 3 ticks ~6s) ==========
+      if (this.tickCount % 3 === 0 && !snap.onGround) {
+        this.atcAltDeviations.push(Math.abs(snap.atcDiffAlt));
+        this.atcDistDeviations.push(Math.abs(snap.atcDiffDist));
+      }
 
       // ========== WAYPOINT TRACKING (V2.0) ==========
-      const currentWpNextId = SimVar.GetSimVarValue("GPS WP NEXT ID", "string") as string || "";
-      if (currentWpNextId !== this.lastWpNextId && this.lastWpNextId !== "") {
+      if (snap.gpsWpNextId !== this.lastWpNextId && this.lastWpNextId !== "") {
         this.waypointsPassed++;
-        console.log(`[TrackingManager] Waypoint passed! ${this.waypointsPassed}/${this.callbacks.getWaypointsTotal()} - Next: ${currentWpNextId}`);
+        console.log(`[TrackingManager] Waypoint passed! ${this.waypointsPassed}/${this.callbacks.getWaypointsTotal()} - Next: ${snap.gpsWpNextId}`);
         this.callbacks.onWaypointPassed(this.waypointsPassed);
       }
-      this.lastWpNextId = currentWpNextId;
+      this.lastWpNextId = snap.gpsWpNextId;
 
       // ========== PROGRESS CALCULATION ==========
       const totalDist = this.callbacks.getMissionDistanceNm();
       let distanceFlown = 0;
 
       if (this.destLat !== 0 && this.destLon !== 0) {
-        const distanceToDestination = this.haversineDistanceNm(lat, lon, this.destLat, this.destLon);
+        const distanceToDestination = sharedHaversine(snap.lat, snap.lon, this.destLat, this.destLon);
         distanceFlown = Math.max(0, totalDist - distanceToDestination);
       } else if (this.originLat !== 0 && this.originLon !== 0) {
-        distanceFlown = this.haversineDistanceNm(this.originLat, this.originLon, lat, lon);
+        distanceFlown = sharedHaversine(this.originLat, this.originLon, snap.lat, snap.lon);
       }
       const progressPct = totalDist > 0 ? Math.round((distanceFlown / totalDist) * 100) : 0;
       this.currentProgressPercent = Math.min(Math.max(0, progressPct), 100);
 
-      // ========== FLIGHT PHASE DETECTION (V2.2) ==========
-      // Text labels for Coherent GT compatibility (emojis render as black squares)
-      let phase: "taxi_out" | "climb" | "cruise" | "descent" | "taxi_in" = "cruise";
-      let phaseIcon = "[CRS]";
+      // ========== FLIGHT PHASE → UI MAPPING ==========
+      const fp = snap.flightPhase;
+      let phaseId: string = fp;
       let phaseText = this.callbacks.t("missions", "cruising");
       let phaseColor = "#22c55e";
 
-      if (onGround && this.currentProgressPercent < 10) {
-        phase = "taxi_out"; phaseIcon = "[DEP]";
+      if (fp === FlightPhase.PARKING || fp === FlightPhase.TAXI_OUT) {
+        phaseId = "taxi_out";
         phaseText = this.callbacks.t("missions", "taxiing"); phaseColor = "#22c55e";
-      } else if (onGround && this.currentProgressPercent >= 10) {
-        phase = "taxi_in"; phaseIcon = "[ARR]";
+      } else if (fp === FlightPhase.TAXI_IN) {
+        phaseId = "taxi_in";
         phaseText = this.callbacks.t("missions", "taxiing"); phaseColor = "#22c55e";
-      } else if (vs > 300 && this.currentProgressPercent < 30) {
-        phase = "climb"; phaseIcon = "[DEP]";
+      } else if (fp === FlightPhase.TAKEOFF_ROLL || fp === FlightPhase.INITIAL_CLIMB || fp === FlightPhase.CLIMB) {
+        phaseId = "climb";
         phaseText = this.callbacks.t("missions", "climbing"); phaseColor = "#f59e0b";
-      } else if (vs < -300 && this.currentProgressPercent > 70) {
-        phase = "descent"; phaseIcon = "[ARR]";
+      } else if (fp === FlightPhase.DESCENT || fp === FlightPhase.APPROACH) {
+        phaseId = "descent";
         phaseText = this.callbacks.t("missions", "descending"); phaseColor = "#f59e0b";
-      } else if (this.currentProgressPercent > 90) {
-        phase = "descent"; phaseIcon = "[ARR]";
-        phaseText = this.callbacks.t("missions", "descending"); phaseColor = "#f59e0b";
+      } else {
+        phaseId = "cruise";
+        phaseText = this.callbacks.t("missions", "cruising"); phaseColor = "#22c55e";
       }
 
-      this.callbacks.onFlightPhaseChange(phase, phaseText, phaseColor);
+      this.callbacks.onFlightPhaseChange(phaseId, phaseText, phaseColor);
 
       // ========== AUTOPILOT TRACKING ==========
-      if (apMaster) {
+      if (snap.apMaster) {
         this.autopilotEverUsed = true;
       }
 
       // ========== G-FORCE TRACKING ==========
-      if (Math.abs(gForce) > this.maxGForce) {
-        this.maxGForce = Math.abs(gForce);
+      // Use MAX G FORCE SimVar (cumulative, more reliable)
+      if (snap.gForceMax > this.maxGForce) {
+        this.maxGForce = snap.gForceMax;
         console.log("[TrackingManager] New max G-force:", this.maxGForce.toFixed(2));
       }
 
       // ========== FUEL TRACKING ==========
-      const fuelPct = fuelCapacity > 0 ? Math.round((fuelQuantity / fuelCapacity) * 100) : 100;
+      const fuelPct = snap.fuelCapacityGallons > 0 ? Math.round((snap.fuelTotalGallons / snap.fuelCapacityGallons) * 100) : 100;
       const fuelUsedPct = Math.max(0, this.fuelStartPercent - fuelPct);
-      const fuelUsedKg = (fuelUsedPct / 100) * fuelCapacity * 3.785 * 0.8; // gallons to kg
+      const fuelUsedKg = (fuelUsedPct / 100) * snap.fuelCapacityGallons * 3.785 * 0.8; // gallons to kg
 
-      // ========== TIME TRACKING ==========
-      const realTimeMs = Date.now() - this.realTimeStartMs;
-      const realTimeSeconds = Math.floor(realTimeMs / 1000);
-      let simTimeSeconds = 0;
+      // ========== TIME TRACKING (airborne only) ==========
+      const now = Date.now();
+      const deltaMs = now - this.lastTickTimeMs;
+      this.lastTickTimeMs = now;
+
+      const isAirbornePhase = fp === FlightPhase.INITIAL_CLIMB || fp === FlightPhase.CLIMB
+        || fp === FlightPhase.CRUISE || fp === FlightPhase.DESCENT || fp === FlightPhase.APPROACH;
+
+      let currentSimTimeSec = 0;
       try {
-        const currentSimTime = SimVar.GetSimVarValue("E:ABSOLUTE TIME", "seconds") as number;
-        simTimeSeconds = Math.floor(currentSimTime - this.simTimeStartSec);
-      } catch (e) { simTimeSeconds = realTimeSeconds; }
+        currentSimTimeSec = SimVar.GetSimVarValue("E:ABSOLUTE TIME", "seconds") as number;
+      } catch (e) { currentSimTimeSec = 0; }
+      const deltaSimSec = currentSimTimeSec > 0 && this.lastSimTimeSec > 0
+        ? currentSimTimeSec - this.lastSimTimeSec : deltaMs / 1000;
+      this.lastSimTimeSec = currentSimTimeSec;
+
+      if (isAirbornePhase) {
+        this.airborneRealTimeMs += deltaMs;
+        this.airborneSimTimeSec += deltaSimSec;
+      }
+
+      const realTimeSeconds = Math.floor(this.airborneRealTimeMs / 1000);
+      const simTimeSeconds = Math.floor(this.airborneSimTimeSec);
       const timeRatio = realTimeSeconds > 0 ? Math.round((realTimeSeconds / Math.max(1, simTimeSeconds)) * 100) : 100;
 
       // ========== BONUS CALCULATIONS ==========
-      // Night bonus
-      let bonusNight = 0;
-      try {
-        const localTimeSeconds = SimVar.GetSimVarValue("E:LOCAL TIME", "seconds") as number;
-        const localHour = Math.floor(localTimeSeconds / 3600) % 24;
-        bonusNight = (localHour < 6 || localHour >= 20) ? 100 : 0;
-      } catch (e) { bonusNight = 0; }
+      // Night bonus (from snapshot)
+      const localHour = Math.floor(snap.localTimeSeconds / 3600) % 24;
+      const bonusNight = (localHour < 6 || localHour >= 20) ? 100 : 0;
 
       // Cargo bonus
       let bonusCargo = 100;
@@ -692,46 +952,163 @@ class TrackingManager {
       // ========== ATC COMPLIANCE TRACKING (V2.3) ==========
       let atcScore = 100;
       let atcViolations = 0;
-      try {
-        const atcClearedTakeoffNow = SimVar.GetSimVarValue("ATC CLEARED TAKEOFF", "boolean") as boolean;
-        const atcClearedLandingNow = SimVar.GetSimVarValue("ATC CLEARED LANDING", "boolean") as boolean;
-        this.atcClearedTakeoff = atcClearedTakeoffNow;
-        this.atcClearedLanding = atcClearedLandingNow;
+      this.atcClearedTakeoff = snap.atcClearedTakeoff;
+      this.atcClearedLanding = snap.atcClearedLanding;
 
-        if (!onGround && phase === "climb" && !this.tookOffWithoutClearance && !this.atcClearedTakeoff) {
-          this.tookOffWithoutClearance = true;
-          console.log("[TrackingManager] ATC VIOLATION: Took off without clearance!");
+      if (!snap.onGround && (fp === FlightPhase.CLIMB || fp === FlightPhase.INITIAL_CLIMB) && !this.tookOffWithoutClearance && !this.atcClearedTakeoff) {
+        this.tookOffWithoutClearance = true;
+        console.log("[TrackingManager] ATC VIOLATION: Took off without clearance!");
+      }
+      if (snap.onGround && fp === FlightPhase.TAXI_IN && !this.landedWithoutClearance && !this.atcClearedLanding) {
+        this.landedWithoutClearance = true;
+        console.log("[TrackingManager] ATC VIOLATION: Landed without clearance!");
+      }
+      if (this.tookOffWithoutClearance) { atcScore -= 50; atcViolations++; }
+      if (this.landedWithoutClearance) { atcScore -= 50; atcViolations++; }
+      atcScore = Math.max(0, atcScore);
+
+      // ========== V5: SUIVI VOL — ATC MODE DETECTION ==========
+      // Update "ever" flags every tick
+      if (snap.atcClearedTakeoff) this.atcClearedTakeoffEver = true;
+      if (snap.atcClearedLanding) this.atcClearedLandingEver = true;
+      if (Math.abs(snap.atcDiffAlt) > 5) this.atcDiffNonZeroConsecutiveTicks++;
+      else this.atcDiffNonZeroConsecutiveTicks = 0;
+
+      // Check for native ATC detection every 5 ticks (~10s), lock once detected
+      if (!this.atcNativeDetected && this.tickCount % 5 === 0) {
+        if (snap.atcClearedIFR || this.atcClearedTakeoffEver || this.atcClearedLandingEver || this.atcDiffNonZeroConsecutiveTicks >= 3) {
+          this.atcMode = 'native';
+          this.atcNativeDetected = true;
+          console.log("[TrackingManager] ATC mode detected: NATIVE");
         }
-        if (onGround && phase === "taxi_in" && !this.landedWithoutClearance && !this.atcClearedLanding) {
-          this.landedWithoutClearance = true;
-          console.log("[TrackingManager] ATC VIOLATION: Landed without clearance!");
+      }
+
+      // Compute recommended altitude once (on first airborne tick)
+      if (this.recommendedAlt === 0 && !snap.onGround && totalDist > 0) {
+        const bearing = this.calculateBearing(this.originLat, this.originLon, this.destLat, this.destLon);
+        this.recommendedAlt = this.getRecommendedAltitude(totalDist, bearing);
+        console.log("[TrackingManager] Recommended altitude:", this.recommendedAlt, "ft (dist:", totalDist, "nm, bearing:", Math.round(bearing), "deg)");
+      }
+
+      // ========== V5: SUIVI VOL — COMPLIANCE TRACKING (every 3 ticks ~6s) ==========
+      const isCruise = fp === FlightPhase.CRUISE;
+      if (this.tickCount % 3 === 0) {
+        // Route compliance: always when airborne
+        if (!snap.onGround) {
+          let crossTrackM: number;
+          if (this.flightMode === 'VFR' && this.originLat !== 0 && this.destLat !== 0) {
+            crossTrackM = crossTrackDistanceM(snap.lat, snap.lon, this.originLat, this.originLon, this.destLat, this.destLon);
+          } else {
+            crossTrackM = Math.abs(snap.gpsCrossTrk);
+          }
+          const crossTrackNm = crossTrackM / 1852;
+          this.routeComplianceTicks++;
+          if (crossTrackNm <= 1.0) this.routeComplianceOk++;
         }
-        if (this.tookOffWithoutClearance) { atcScore -= 50; atcViolations++; }
-        if (this.landedWithoutClearance) { atcScore -= 50; atcViolations++; }
-        atcScore = Math.max(0, atcScore);
-      } catch (e) { /* ATC SimVars not available */ }
+
+        // Altitude compliance: CRUISE only
+        if (isCruise) {
+          this.altComplianceTicks++;
+          if (this.atcMode === 'native') {
+            // Native: use ATC diff (already in meters), OK if ≤ 91m (~300ft)
+            if (Math.abs(snap.atcDiffAlt) <= 91) this.altComplianceOk++;
+          } else {
+            // GPS fallback: compare altitude to recommended, OK if ≤ 152m (~500ft)
+            if (this.recommendedAlt > 0 && Math.abs(snap.altitude - this.recommendedAlt) <= 500) this.altComplianceOk++;
+          }
+        }
+
+        // Speed compliance: CRUISE only
+        if (isCruise && snap.designCruiseSpeed > 0) {
+          this.spdComplianceTicks++;
+          const spdThreshold = snap.designCruiseSpeed * 0.15;
+          if (Math.abs(snap.ias - snap.designCruiseSpeed) <= spdThreshold) this.spdComplianceOk++;
+        }
+      }
+
+      // ========== V6: WEATHER DIFFICULTY SAMPLING (every 15 ticks ~30s) ==========
+      if (this.tickCount % 15 === 0 && !snap.onGround) {
+        let wScore = 0;
+        // Vent
+        if (snap.windSpeed >= 25) wScore += 3;
+        else if (snap.windSpeed >= 15) wScore += 2;
+        else if (snap.windSpeed >= 8) wScore += 1;
+        // Visibilité
+        if (snap.visibility < 1600) wScore += 3;
+        else if (snap.visibility < 5000) wScore += 2;
+        else if (snap.visibility < 8000) wScore += 1;
+        // Précipitations (precipState: 2=none, 4=rain, 8=snow)
+        if (snap.precipState >= 4) wScore += 2;
+        if (snap.precipRate > 5) wScore += 1;
+        // Nuages
+        if (snap.inCloud) wScore += 1;
+        this.weatherScoreSamples.push(wScore);
+      }
+
+      // ========== V5: SUIVI VOL — UI VALUES ==========
+      let crossTrackMUI: number;
+      if (this.flightMode === 'VFR' && this.originLat !== 0 && this.destLat !== 0) {
+        crossTrackMUI = crossTrackDistanceM(snap.lat, snap.lon, this.originLat, this.originLon, this.destLat, this.destLon);
+      } else {
+        crossTrackMUI = Math.abs(snap.gpsCrossTrk);
+      }
+      const crossTrackNmUI = crossTrackMUI / 1852;
+      let suiviRouteStatus = "ok";
+      if (crossTrackNmUI > 3) suiviRouteStatus = "error";
+      else if (crossTrackNmUI > 1) suiviRouteStatus = "warning";
+
+      // Altitude target: native uses AP lock var, fallback uses recommended
+      let suiviAltTarget: number;
+      let suiviAltDeviation: boolean;
+      if (this.atcMode === 'native') {
+        let apAltLock = 0;
+        try { apAltLock = SimVar.GetSimVarValue("AUTOPILOT ALTITUDE LOCK VAR", "feet") as number || 0; } catch (e) { /* */ }
+        suiviAltTarget = apAltLock;
+        suiviAltDeviation = isCruise && apAltLock > 0 && Math.abs(snap.altitude - apAltLock) > 300;
+      } else {
+        suiviAltTarget = this.recommendedAlt;
+        suiviAltDeviation = isCruise && this.recommendedAlt > 0 && Math.abs(snap.altitude - this.recommendedAlt) > 500;
+      }
+
+      // Speed deviation for UI
+      const suiviSpdDeviation = isCruise && snap.designCruiseSpeed > 0 && Math.abs(snap.ias - snap.designCruiseSpeed) > snap.designCruiseSpeed * 0.15;
+
+      // Suivi vol alert
+      let suiviAlertMsg = "";
+      if (isCruise) {
+        const problems: string[] = [];
+        if (suiviAltDeviation) problems.push("Altitude non respectee");
+        if (suiviSpdDeviation) problems.push("Vitesse non respectee");
+        if (suiviRouteStatus === "error") problems.push("Ecart route important");
+        if (problems.length > 0) suiviAlertMsg = problems.join(". ") + ".";
+      } else if (suiviRouteStatus === "error") {
+        suiviAlertMsg = "Ecart route important.";
+      }
 
       // ========== CAN ACCELERATE ==========
-      const canAccel = phase === "cruise" && apMaster;
+      const canAccel = fp === FlightPhase.CRUISE && snap.apMaster;
 
       // ========== PAYLOAD VERIFICATION (500ft before landing) ==========
-      if (!this.payloadVerificationDone && radioAlt < 500 && !onGround && vs < 0) {
+      if (!this.payloadVerificationDone && snap.radioAlt < 500 && !snap.onGround && snap.verticalSpeed < 0) {
         this.payloadVerifiedLbs = this.callbacks.getTotalPayload();
         this.payloadVerificationDone = true;
         console.log("[TrackingManager] Payload verified at 500ft:", this.payloadVerifiedLbs, "lbs");
       }
 
       // ========== TOUCHDOWN DETECTION ==========
-      if (onGround && !this.wasOnGround) {
-        this.landingFpm = Math.round(vs);
+      if (snap.onGround && !this.wasOnGround) {
+        // Use PLANE TOUCHDOWN NORMAL VELOCITY (more reliable than instantaneous VS)
+        const touchdownFps = SimVar.GetSimVarValue("PLANE TOUCHDOWN NORMAL VELOCITY", "feet per second") as number || 0;
+        this.touchdownVS = Math.round(touchdownFps * 60); // fpm
+        this.landingFpm = this.touchdownVS;
         console.log("[TrackingManager] TOUCHDOWN DETECTED! FPM:", this.landingFpm);
         this.callbacks.onTouchdown(this.landingFpm);
       }
-      this.wasOnGround = onGround;
+      this.wasOnGround = snap.onGround;
 
       // ========== MISSION COMPLETION DETECTION ==========
       const currentAirport = this.callbacks.getClosestAirport();
-      if (parkingBrake && onGround && mission) {
+      if (snap.parkingBrake && snap.onGround && mission) {
         let atDestination = false;
         let detectionMethod = "";
 
@@ -752,17 +1129,121 @@ class TrackingManager {
           this.parkingBrakeWarningShown = true;
         }
       }
-      if (!parkingBrake) { this.parkingBrakeWarningShown = false; }
+      if (!snap.parkingBrake) { this.parkingBrakeWarningShown = false; }
+
+      // ========== V2: REAL-TIME GRADE ESTIMATION ==========
+      let estScoreGforce: number;
+      if (this.maxGForce <= 1.3)      estScoreGforce = 200;
+      else if (this.maxGForce <= 1.5) estScoreGforce = 180;
+      else if (this.maxGForce <= 1.8) estScoreGforce = 150;
+      else if (this.maxGForce <= 2.0) estScoreGforce = 120;
+      else if (this.maxGForce <= 2.5) estScoreGforce = 80;
+      else if (this.maxGForce <= 3.0) estScoreGforce = 40;
+      else                            estScoreGforce = 0;
+
+      let gforceAlert = "ok";
+      if (this.maxGForce > 2.0) gforceAlert = "critical";
+      else if (this.maxGForce > 1.5) gforceAlert = "warning";
+
+      const estScoreLanding = 450;
+      const estScoreDestination = 250;
+
+      let estScoreDistance = 100;
+      if (totalDist > 0 && distanceFlown > 0) {
+        const ratio = distanceFlown / totalDist;
+        if (ratio > 1.20) estScoreDistance = 20;
+        else if (ratio > 1.15) estScoreDistance = 40;
+        else if (ratio > 1.10) estScoreDistance = 60;
+        else if (ratio > 1.05) estScoreDistance = 80;
+      }
+
+      const estScoreTotal = estScoreLanding + estScoreGforce + estScoreDestination + estScoreDistance;
+      let estGrade: string;
+      if (estScoreTotal >= 950) estGrade = "S";
+      else if (estScoreTotal >= 850) estGrade = "A";
+      else if (estScoreTotal >= 750) estGrade = "B";
+      else if (estScoreTotal >= 650) estGrade = "C";
+      else if (estScoreTotal >= 500) estGrade = "D";
+      else if (estScoreTotal >= 350) estGrade = "E";
+      else estGrade = "F";
+
+      // ========== V2: CARGO FILL PERCENT ==========
+      const maxCargoKg = this.callbacks.getAircraftCargoCapacity();
+      const actualCargoKg = Math.round(this.callbacks.getTotalPayload() * 0.453592);
+      const cargoFillPct = maxCargoKg > 0 ? Math.min(100, Math.round((actualCargoKg / maxCargoKg) * 100)) : 0;
+
+      // ========== V2: ATC DEVIATIONS (UI) — now driven by V5 suivi vol ==========
+      const atcAssignedAlt = Math.round(suiviAltTarget);
+      const atcAltDeviation = suiviAltDeviation;
+      const atcSpdDeviation = suiviSpdDeviation;
+      const atcCruiseSpdUI = Math.round(snap.designCruiseSpeed);
+
+      // ========== V3: LIGHTS REQUIREMENTS + COMPLIANCE ==========
+      const isNightOrDusk = snap.timeOfDay >= 2;
+      const isDescendingForLights = snap.verticalSpeed < -300
+        || fp === FlightPhase.DESCENT
+        || fp === FlightPhase.APPROACH
+        || this.currentProgressPercent > 70;
+
+      const lightsResult = evaluateLightsStatus(
+        snap.onGround, isNightOrDusk, snap.altitude, isDescendingForLights,
+        { nav: snap.lightNav, strobe: snap.lightStrobe, beacon: snap.lightBeacon,
+          landing: snap.lightLanding, taxi: snap.lightTaxi }
+      );
+
+      const lightNavState = lightsResult.nav;
+      const lightStrobeState = lightsResult.strobe;
+      const lightBeaconState = lightsResult.beacon;
+      const lightLandingState = lightsResult.landing;
+      const lightTaxiState = lightsResult.taxi;
+      const missingCount = lightsResult.missing;
+      const unnecessaryCount = lightsResult.unnecessary;
+
+      // Compliance: correct = grey(0) or green(1), out of 5 total
+      const correctCount = allStates.filter(s => s === 0 || s === 1).length;
+      this.lightsComplianceSum += correctCount / 5;
+      this.lightsComplianceTicks++;
+
+      let lightsAlertMsg = "";
+      const lightsStatusColor = missingCount > 0 ? "red" : unnecessaryCount > 0 ? "orange" : "green";
+
+      if (missingCount > 0) {
+        const missing: string[] = [];
+        if (lightBeaconState === 2) missing.push("BEACON");
+        if (lightStrobeState === 2) missing.push("STROBE");
+        if (lightNavState === 2) missing.push("NAV");
+        if (lightLandingState === 2) missing.push("LANDING");
+        if (lightTaxiState === 2) missing.push("TAXI");
+        if (isNightOrDusk) {
+          lightsAlertMsg = `Vol de nuit: ${missing.join(", ")} requis.`;
+        } else if (snap.onGround) {
+          lightsAlertMsg = `Au sol: ${missing.join(", ")} requis.`;
+        } else {
+          lightsAlertMsg = `En vol: ${missing.join(", ")} requis.`;
+        }
+      } else if (unnecessaryCount > 0) {
+        const unnecessary: string[] = [];
+        if (lightBeaconState === 3) unnecessary.push("BEACON");
+        if (lightStrobeState === 3) unnecessary.push("STROBE");
+        if (lightNavState === 3) unnecessary.push("NAV");
+        if (lightLandingState === 3) unnecessary.push("LANDING");
+        if (lightTaxiState === 3) unnecessary.push("TAXI");
+        if (snap.onGround) {
+          lightsAlertMsg = `${unnecessary.join(", ")} non necessaire au roulage.`;
+        } else {
+          lightsAlertMsg = `${unnecessary.join(", ")} non necessaire en vol.`;
+        }
+      }
 
       // ========== NOTIFY UI STATE UPDATE ==========
       this.callbacks.onTrackingStateUpdate({
         distanceFlown: Math.round(distanceFlown),
         progressPercent: this.currentProgressPercent,
-        currentAltitude: Math.round(altitude),
+        currentAltitude: Math.round(snap.altitude),
         fuelPercent: fuelPct,
-        simRate,
+        simRate: snap.simulationRate,
         canAccelerate: canAccel,
-        apActive: apMaster,
+        apActive: snap.apMaster,
         realTime: this.formatTimeHMS(realTimeSeconds),
         simTime: this.formatTimeHMS(simTimeSeconds),
         timeRatio,
@@ -771,22 +1252,55 @@ class TrackingManager {
         bonusEco,
         bonusRealTime,
         cargoExpected: this.cargoExpectedKg,
-        cargoActual: Math.round(this.callbacks.getTotalPayload() * 0.453592),
+        cargoActual: actualCargoKg,
         fuelUsed: Math.round(fuelUsedKg),
         fuelMax: Math.round(fuelMaxKg),
         atcCompliance: atcScore,
         atcViolations,
         waypointsPassed: this.waypointsPassed,
-        flightPhaseId: phase,
+        flightPhaseId: phaseId,
         flightPhaseText: phaseText,
         flightPhaseColor: phaseColor,
+        // V2 fields
+        gradeEstimated: estGrade,
+        scoreEstimated: estScoreTotal,
+        scoreGforce: estScoreGforce,
+        gforceAlert,
+        cargoFillPercent: cargoFillPct,
+        atcAssignedAlt,
+        atcAltDeviation,
+        atcCruiseSpd: atcCruiseSpdUI,
+        atcSpdDeviation,
+        // V5: Suivi vol
+        suiviAtcMode: this.atcMode,
+        suiviCrossTrackNm: Math.round(crossTrackNmUI * 100) / 100,
+        suiviRouteStatus,
+        suiviInCruise: isCruise,
+        suiviAlert: suiviAlertMsg,
+        // V6: Weather
+        weatherScore: this.weatherScoreSamples.length > 0
+          ? Math.round(Math.min(
+              (this.weatherScoreSamples.reduce((a, b) => a + b, 0) / this.weatherScoreSamples.length) / 6,
+              1.0
+            ) * 100)
+          : 0,
+        // V3: Lights
+        lightNav: lightNavState,
+        lightStrobe: lightStrobeState,
+        lightBeacon: lightBeaconState,
+        lightLanding: lightLandingState,
+        lightTaxi: lightTaxiState,
+        lightsMissing: missingCount,
+        lightsUnnecessary: unnecessaryCount,
+        lightsStatusColor,
+        lightsAlert: lightsAlertMsg,
       });
 
       // Check checkpoints (V1.0)
       void this.checkCheckpoints();
 
     } catch (error) {
-      console.error("[TrackingManager] Error in V2.0 flight tracking:", error);
+      console.error("[TrackingManager] Error in V4 flight tracking:", error);
     }
   }
 

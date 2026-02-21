@@ -116,6 +116,30 @@ export const freeFlightState = {
   estimatedXp: Subject.create<number>(0),
   xpPerMinute: Subject.create<number>(1), // Base XP rate
 
+  // Live tracking UI (pushed by FlightTracker.tick + FreeFlightController.tick)
+  ffTrackingAirspeed: Subject.create<number>(0),
+  ffTrackingFuelPercent: Subject.create<number>(0),
+  ffTrackingMaxGForce: Subject.create<number>(1.0),
+  ffTrackingCurrentGForce: Subject.create<number>(1.0),
+  ffTrackingGForceAlert: Subject.create<boolean>(false),
+  ffTrackingOverspeed: Subject.create<boolean>(false),
+  ffTrackingScoreEstimated: Subject.create<number>(1000),
+  ffTrackingGradeEstimated: Subject.create<string>("A"),
+  ffTrackingSimRate: Subject.create<number>(1.0),
+  ffTrackingPhaseId: Subject.create<string>("idle"),
+  ffTrackingPhaseText: Subject.create<string>(""),
+  ffTrackingPhaseColor: Subject.create<string>("#9ca3af"),
+
+  // Lights (4-state: 0=grey, 1=green, 2=red, 3=orange)
+  ffTrackingLightNav: Subject.create<number>(0),
+  ffTrackingLightStrobe: Subject.create<number>(0),
+  ffTrackingLightBeacon: Subject.create<number>(0),
+  ffTrackingLightLanding: Subject.create<number>(0),
+  ffTrackingLightTaxi: Subject.create<number>(0),
+  ffTrackingLightsMissing: Subject.create<number>(0),
+  ffTrackingLightsUnnecessary: Subject.create<number>(0),
+  ffTrackingLightsStatusColor: Subject.create<string>("green"),
+
   // UI state
   showEndFlightConfirm: Subject.create<boolean>(false),
   positionBlocked: Subject.create<boolean>(false),
@@ -184,6 +208,28 @@ export function resetFreeFlightState(): void {
   freeFlightState.currentAirport.set(null);
   freeFlightState.estimatedXp.set(0);
   freeFlightState.error.set(null);
+
+  // Live tracking UI
+  freeFlightState.ffTrackingAirspeed.set(0);
+  freeFlightState.ffTrackingFuelPercent.set(0);
+  freeFlightState.ffTrackingMaxGForce.set(1.0);
+  freeFlightState.ffTrackingCurrentGForce.set(1.0);
+  freeFlightState.ffTrackingGForceAlert.set(false);
+  freeFlightState.ffTrackingOverspeed.set(false);
+  freeFlightState.ffTrackingScoreEstimated.set(1000);
+  freeFlightState.ffTrackingGradeEstimated.set("A");
+  freeFlightState.ffTrackingSimRate.set(1.0);
+  freeFlightState.ffTrackingPhaseId.set("idle");
+  freeFlightState.ffTrackingPhaseText.set("");
+  freeFlightState.ffTrackingPhaseColor.set("#9ca3af");
+  freeFlightState.ffTrackingLightNav.set(0);
+  freeFlightState.ffTrackingLightStrobe.set(0);
+  freeFlightState.ffTrackingLightBeacon.set(0);
+  freeFlightState.ffTrackingLightLanding.set(0);
+  freeFlightState.ffTrackingLightTaxi.set(0);
+  freeFlightState.ffTrackingLightsMissing.set(0);
+  freeFlightState.ffTrackingLightsUnnecessary.set(0);
+  freeFlightState.ffTrackingLightsStatusColor.set("green");
 
   // V2.0: Reset enhanced tracking states
   freeFlightState.ffArrivalIcao.set("");

@@ -5,7 +5,8 @@
  * - TrackingManager background tracking (anti-cheat: wear + fuel)
  * - FreeFlightManager (career: XP + grade + stats)
  *
- * Pre-condition: PositionService.isAtCorrectAirport() === true before starting.
+ * Free flight starts wherever the pilot is — no airport validation on engine start.
+ * PositionService is used only at landing (onSuccessfulLanding + getDetectedSimAirport).
  */
 import { PositionService } from "./PositionService";
 import { FleetRouter } from "./ServiceRouter";
@@ -17,6 +18,7 @@ import { isSoloMode } from "../state/GameModeState";
 import { authState } from "../state/AuthState";
 import { WearTearReaderService } from "./WearTearReaderService";
 import { ALL_SYSTEMS_V2 } from "../constants/WearConstants";
+
 
 // ═══════════════════════════════════════
 // HELPERS
@@ -73,8 +75,8 @@ class FlightTrackerClass {
 
   // Flight stats
   private wasFlying = false;
-  private flightStartTime = 0;
-  private flightMinutes = 0;
+  private lastTickTime = 0;
+  private flightMinutes = 0;  // airborne time only
   private maxGForce = 1.0;
   private landingFpm = 0;
   private hadOverspeed = false;
@@ -118,10 +120,6 @@ class FlightTrackerClass {
   start(aircraftId: string, aircraftReg: string): void {
     // Already armed for this aircraft — skip
     if (this.isActive && this.currentAircraftId === aircraftId) return;
-
-    // Note: position guard removed from start() — tick() handles blocking via:
-    // - freeFlightState.positionBlocked (line 186) for UI feedback
-    // - engine start block (line 192) to prevent flight when mismatched
 
     this.currentAircraftId = aircraftId;
     this.currentAircraftReg = aircraftReg;
@@ -179,26 +177,17 @@ class FlightTrackerClass {
     freeFlightState.groundSpeed.set(simVars.groundSpeed);
     freeFlightState.currentAltitude.set(simVars.altitude);
 
-    // ─── POSITION CHECK (update blocked status while idle) ───
-    if (!this.wasFlying) {
-      freeFlightState.positionBlocked.set(!PositionService.isAtCorrectAirport());
-    }
-
     // ─── ENGINE START DETECTION ───
+    // Free flight starts wherever the pilot is — no airport validation needed
     if (!this.wasFlying && simVars.engineRunning) {
-      // Block FreeFlight if not at correct airport
-      if (!PositionService.isAtCorrectAirport()) {
-        return;
-      }
-      freeFlightState.positionBlocked.set(false);
-
       this.wasFlying = true;
-      this.flightStartTime = now;
-      this.departureIcao = PositionService.getDbPosition();
+      this.lastTickTime = now;
+      this.departureIcao = positionState.simVarAirport.get() || "????";
       this.lastFuelGallons = simVars.fuelGallons;
       this.lastLat = simVars.lat;
       this.lastLon = simVars.lon;
 
+      freeFlightState.positionBlocked.set(false);
       freeFlightState.status.set("in_flight");
       freeFlightState.departureAirport.set(this.departureIcao);
 
@@ -208,14 +197,36 @@ class FlightTrackerClass {
 
     // ─── TRACKING (wasFlying = true) ───
     if (this.wasFlying) {
-      // Always update flight time (ground + air)
-      this.flightMinutes = (now - this.flightStartTime) / 60_000;
+      // Accumulate flight time (airborne only)
+      const deltaMin = (now - this.lastTickTime) / 60_000;
+      this.lastTickTime = now;
+      if (!simVars.onGround) {
+        this.flightMinutes += deltaMin;
+      }
 
       // Push live stats to UI
       freeFlightState.flightTimeMinutes.set(this.flightMinutes);
       freeFlightState.distanceFlownNm.set(this.distanceNm);
       freeFlightState.landingsCount.set(this.landingsCount);
       freeFlightState.estimatedXp.set(Math.round(this.flightMinutes * 2));
+
+      // Live tracking data for UI
+      freeFlightState.ffTrackingAirspeed.set(simVars.airspeed);
+      freeFlightState.ffTrackingFuelPercent.set(
+        simVars.fuelCapacity > 0 ? (simVars.fuelGallons / simVars.fuelCapacity) * 100 : 0
+      );
+      freeFlightState.ffTrackingMaxGForce.set(this.maxGForce);
+      freeFlightState.ffTrackingCurrentGForce.set(Math.abs(simVars.gForce));
+      freeFlightState.ffTrackingGForceAlert.set(this.maxGForce > 2.0);
+      freeFlightState.ffTrackingOverspeed.set(this.hadOverspeed);
+      freeFlightState.ffTrackingScoreEstimated.set(this.calculateLiveScore());
+      freeFlightState.ffTrackingGradeEstimated.set(this.calculateLiveGrade());
+
+      // Simplified flight phase
+      const phase = !simVars.engineRunning ? "idle"
+        : simVars.onGround ? "taxi"
+        : "flying";
+      freeFlightState.ffTrackingPhaseId.set(phase);
 
       // ─── AIRBORNE ───
       if (!simVars.onGround) {
@@ -308,6 +319,27 @@ class FlightTrackerClass {
         return;
       }
     }
+  }
+
+  // ═══════════════════════════════════════
+  // LIVE SCORE ESTIMATION
+  // ═══════════════════════════════════════
+
+  private calculateLiveScore(): number {
+    let score = 1000;
+    if (this.maxGForce > 2.5) score -= 100;
+    if (this.hadOverspeed) score -= 100;
+    return Math.max(0, score);
+  }
+
+  private calculateLiveGrade(): string {
+    const score = this.calculateLiveScore();
+    if (score >= 1200) return "S";
+    if (score >= 1000) return "A";
+    if (score >= 800) return "B";
+    if (score >= 600) return "C";
+    if (score >= 400) return "D";
+    return "F";
   }
 
   // ═══════════════════════════════════════
@@ -600,7 +632,7 @@ class FlightTrackerClass {
 
   private resetStats(): void {
     this.wasFlying = false;
-    this.flightStartTime = 0;
+    this.lastTickTime = 0;
     this.flightMinutes = 0;
     this.maxGForce = 1.0;
     this.landingFpm = 0;

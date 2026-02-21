@@ -9,7 +9,7 @@ import { Subject } from "@microsoft/msfs-sdk";
 // FLIGHT PLAN SOURCE TYPE
 // ═══════════════════════════════════════════════════════════
 
-export type FlightPlanSource = "gps";
+export type FlightPlanSource = "gps" | "vfr";
 
 // ═══════════════════════════════════════════════════════════
 // ANTI-CHEAT INFO TYPE
@@ -49,6 +49,7 @@ export interface MissionCreationStateType {
   fpValidated: Subject<boolean>;
   fpCanValidate: Subject<boolean>;
   fpSource: Subject<FlightPlanSource>;
+  fpFlightMode: Subject<'IFR' | 'VFR'>;
   fpRoute: Subject<string>;
 
   // Fuel management
@@ -83,6 +84,7 @@ export const missionCreationState: MissionCreationStateType = {
   fpValidated: Subject.create(false),
   fpCanValidate: Subject.create(false),
   fpSource: Subject.create<FlightPlanSource>("gps"),
+  fpFlightMode: Subject.create<'IFR' | 'VFR'>('IFR'),
   fpRoute: Subject.create(""),
 
   // Fuel management
@@ -108,4 +110,5 @@ export const resetMissionCreation = (): void => {
   missionCreationState.antiCheatInfo.set(null);
   missionCreationState.canCreateMissionFlag.set(false);
   missionCreationState.fpValidated.set(false);
+  missionCreationState.fpFlightMode.set('IFR');
 };
